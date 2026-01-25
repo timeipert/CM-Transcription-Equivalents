@@ -1,13 +1,13 @@
-# CM-TranskriptionSeq (Paleographic Analysis Tool)
+# CM Transcription Equivalents
 
-CM-TranskriptionSeq is a web-based platform designed for the paleographic analysis of medieval manuscript transcriptions. It allows researchers to visualize, categorize, and annotate "Token" evidence directly from digital scans.
+CM Transcription Equivalents is a web-based platform designed for the paleographic analysis of medieval manuscript transcriptions. It allows researchers to visualize, categorize, and annotate "Token" evidence directly from digital scans.
 
 ## 🚀 Features
 
 - **Paleographic Type Analysis**: Visualize abstract transcription patterns as dynamic SVGs.
 - **Interactive Annotation**: Zoom, pan, and draw bounding boxes on manuscript scans to identify tokens.
 - **Gallery Mode**: View all tokens of a specific type collected across different manuscripts.
-- **Evidence PDF Export**: Generate professional reports including high-quality cropped snippets of your annotations, labeled with manuscript signatures and folios.
+- **PDF Export**: Generate professional reports including high-quality cropped snippets of your annotations, labeled with manuscript signatures and folios.
 - **High Performance**: Optimized to handle large datasets (40MB+) smoothly using Vue 3 shallow reactivity and pre-computed indexing.
 
 ## 🛠️ Project Structure
