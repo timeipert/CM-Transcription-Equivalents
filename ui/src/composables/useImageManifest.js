@@ -7,7 +7,7 @@ async function loadManifest() {
     if (loaded.value) return;
 
     try {
-        const res = await fetch('/image_manifest.json');
+        const res = await fetch('image_manifest.json');
         const json = await res.json();
         manifest.value = new Set(json);
         loaded.value = true;
@@ -72,10 +72,10 @@ export function useImageManifest() {
     function getImageUrl(source, folio) {
         const path = findManifestPath(source, folio);
         if (path) {
-            if (path.startsWith('scans/')) return `/${path}`;
-            return `/scans/${path}`;
+            if (path.startsWith('scans/')) return path;
+            return `scans/${path}`;
         }
-        return `/scans/${source}/${folio}.jpg`;
+        return `scans/${source}/${folio}.jpg`;
     }
 
     /**
