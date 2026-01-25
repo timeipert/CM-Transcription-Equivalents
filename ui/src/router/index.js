@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import GlobalAnalysisView from '../views/GlobalAnalysisView.vue'
 import MyTablesView from '../views/MyTablesView.vue'
 import EditTableView from '../views/EditTableView.vue'
@@ -6,7 +6,7 @@ import SettingsView from '../views/SettingsView.vue'
 import PolygonManagerView from '../views/PolygonManagerView.vue'
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: createWebHashHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',

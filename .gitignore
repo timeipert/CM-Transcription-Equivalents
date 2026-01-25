@@ -1,0 +1,39 @@
+# GitHub Pages
+!docs/
+!docs/.nojekyll
+
+# Node / Frontend
+ui/node_modules/
+ui/dist/
+ui/.env*
+
+# Python / Scripts
+.venv/
+__pycache__/
+scripts/__pycache__/
+*.py[cod]
+*$py.class
+
+# Data & Raw Sources
+data/raw/
+transcription_cache.json
+transcription_equivalents.html
+
+# Distribution Data (DO NOT IGNORE for GH Pages)
+# ui/public/data.json
+# ui/public/image_manifest.json
+
+# Image Binaries (Ignore large folders)
+ui/public/scans/
+
+# Local Exports
+export/
+
+# Agentic / Antigrav
+.gemini/
+.agent/
+.antigravity/
+
+# OS Files
+.DS_Store
+Thumbs.db
