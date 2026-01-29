@@ -136,7 +136,13 @@ export function usePdfExport() {
                         const dataUrl = await cropSnippet(url, a.points);
                         if (dataUrl) {
                             addedAnnots.add(a.id);
-                            snippetFiles.push({ dataUrl, folio: f, customId: row.customId, pattern: row.pattern });
+                            snippetFiles.push({
+                                dataUrl,
+                                folio: f,
+                                customId: row.customId,
+                                pattern: row.pattern,
+                                variant: a.variant
+                            });
                         }
                     }
                 }
@@ -232,7 +238,9 @@ export function usePdfExport() {
                 // Labels
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(8);
-                const label = snip.customId ? `ID: ${snip.customId}` : 'No ID';
+                let label = snip.customId ? `ID: ${snip.customId}` : 'No ID';
+                if (snip.variant) label += `-${snip.variant}`;
+
                 doc.text(label, curX, curY + snippetH + 4);
 
                 doc.setFont("helvetica", "normal");

@@ -8,8 +8,8 @@ import { RouterLink, RouterView } from 'vue-router'
       <div class="nav-brand">CM Transcription Equivalents</div>
       <div class="nav-links">
         <RouterLink to="/" active-class="active">Overview</RouterLink>
-        <RouterLink to="/my-tables" active-class="active">Custom Tables</RouterLink>
-        <RouterLink to="/polygons" active-class="active">Manuscript Annotation</RouterLink>
+        <RouterLink to="/equivalents" active-class="active">Transcription Equivalents</RouterLink>
+        <RouterLink to="/polygons" active-class="active">Manuscript Annotations</RouterLink>
         <RouterLink to="/settings" active-class="active">Settings</RouterLink>
       </div>
     </nav>

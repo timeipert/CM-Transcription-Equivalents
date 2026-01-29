@@ -1,9 +1,43 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useSettingsStore } from '../stores/settings';
+import { useDataManagement } from '../composables/useDataManagement'; // Added
 import SvgPattern from '../components/SvgPattern.vue';
 
 const store = useSettingsStore();
+
+// Data Management
+const { exportData, importData } = useDataManagement();
+const fileInput = ref(null);
+const importMsg = ref("");
+const importStatus = ref(""); // 'success' or 'error'
+
+function doExport() {
+    exportData();
+}
+
+async function doImport(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    importMsg.value = "Importing...";
+    importStatus.value = "";
+    
+    try {
+        const result = await importData(file);
+        importMsg.value = `Success! Data imported (Label: ${result.label || 'None'}, Date: ${new Date(result.date).toLocaleString()}).`;
+        importStatus.value = "success";
+        
+        // Clear file input
+        event.target.value = null;
+        
+        // Clear msg after 5s
+        setTimeout(() => importMsg.value = "", 5000);
+    } catch (e) {
+        importMsg.value = `Error: ${e.message}`;
+        importStatus.value = "error";
+    }
+}
 
 // UI State for adding new ID mapping
 const newPattern = ref("");
@@ -21,6 +55,26 @@ function addMapping() {
 <template>
 <div class="settings-container">
     <h1>Global Settings</h1>
+
+    <div class="card section">
+        <h2>Data Backup</h2>
+        <p class="desc">Save and load your annotations from a JSON file.</p>
+        
+        <div class="setting-row">
+            <label>Backup Label (included in filename)</label>
+            <input v-model="store.backupLabel" placeholder="transcription_eqv" class="text-input">
+        </div>
+        
+        <div class="backup-actions">
+            <button @click="doExport" class="btn-primary">Export JSON</button>
+            
+            <div class="import-zone">
+                <input type="file" ref="fileInput" @change="doImport" accept=".json" style="display:none">
+                <button @click="$refs.fileInput.click()" class="btn-secondary">Import JSON</button>
+            </div>
+        </div>
+        <div v-if="importMsg" :class="['msg', importStatus]">{{ importMsg }}</div>
+    </div>
 
     <div class="card section">
         <h2>App Defaults</h2>
@@ -101,4 +155,16 @@ th { background: #f5f5f5; font-weight: 600; }
 .btn-sm { padding: 4px 10px; font-size: 0.8em; }
 .btn-danger { color: #d32f2f; border-color: #ef9a9a; background: #ffebee; }
 .btn-danger:hover { background: #ffcdd2; }
+
+/* Backup UI Styles */
+.backup-actions { display: flex; gap: 10px; margin-top: 15px; align-items: center; }
+.import-zone { display: inline-block; }
+.text-input { width: 100%; max-width: 300px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95rem; }
+.msg { margin-top: 10px; padding: 10px; border-radius: 4px; font-size: 0.9em; }
+.msg.success { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
+.msg.error { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
+.btn-secondary { background: white; color: #333; border: 1px solid #ccc; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+.btn-secondary:hover { background: #f5f5f5; }
+.btn-primary { background: #007bff; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; }
+.btn-primary:hover { background: #0056b3; }
 </style>

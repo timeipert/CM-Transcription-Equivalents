@@ -7,27 +7,56 @@ const props = defineProps(['selectedSource', 'selectedFolio']);
 const emits = defineEmits(['select']);
 
 const { sourceFolios, loading: dataLoading } = useTranscriptionData();
-const { manifest, hasImage, loaded: manifestLoaded } = useImageManifest();
+const { manifest, hasImage, loaded: manifestLoaded, getManifestStructure } = useImageManifest();
 
 // Tree Structure
 const tree = computed(() => {
-    if (!sourceFolios.value || !manifestLoaded.value) return {};
+    // We need at least one source of truth loaded.
+    // Ideally both, but if only manifest is loaded, we can show images without data.
+    if (!manifestLoaded.value) return {};
     
+    // 1. Get structure from Manifest
+    const manifestStruct = getManifestStructure();
+    
+    // 2. Get structure from Data (if loaded)
+    const dataStruct = sourceFolios.value || {};
+    
+    // 3. Merge
     const t = {};
-    const sourceKeys = Object.keys(sourceFolios.value).sort();
+    const allSources = new Set([
+        ...Object.keys(manifestStruct),
+        ...Object.keys(dataStruct)
+    ]);
     
-    for (const src of sourceKeys) {
-        const folios = sourceFolios.value[src]; // This is a Set
-        const availableFolios = [];
+    const sortedSources = Array.from(allSources).sort();
+    
+    for (const src of sortedSources) {
+        const foliosFromString = new Set();
         
-        for (const fol of folios) {
+        // Add from Data
+        if (dataStruct[src]) {
+            for (const f of dataStruct[src]) foliosFromString.add(f);
+        }
+        
+        // Add from Manifest
+        if (manifestStruct[src]) {
+            for (const f of manifestStruct[src]) foliosFromString.add(f);
+        }
+        
+        // Filter: Only keep folios that exist in Manifest (or satisfy hasImage)
+        // Actually, manifestStruct already implies hasImage is true.
+        // But dataStruct might have folios without images.
+        // We generally only want to show folios that HAVE images in this view (Polygon Manager).
+        
+        const validFolios = [];
+        for (const fol of foliosFromString) {
             if (hasImage(src, fol)) {
-                availableFolios.push(fol);
+                validFolios.push(fol);
             }
         }
         
-        if (availableFolios.length > 0) {
-            t[src] = availableFolios.sort();
+        if (validFolios.length > 0) {
+            t[src] = validFolios.sort(); // alpha sort
         }
     }
     return t;

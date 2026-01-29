@@ -1,9 +1,11 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router'; // Added
 import { useAnnotationsStore } from '../../stores/annotations';
 import { useImageManifest } from '../../composables/useImageManifest';
 import AnnotationCutout from '../AnnotationCutout.vue';
 import FolioAnnotator from '../FolioAnnotator.vue';
+import { compareFolios } from '../../utils/sorting';
 
 const props = defineProps({
     pattern: { type: String, required: true },
@@ -13,6 +15,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close']);
+const router = useRouter(); // Added
 
 const annotStore = useAnnotationsStore();
 const { hasImage, getImageUrl, getStandardSource, loaded: manifestLoaded } = useImageManifest();
@@ -42,11 +45,13 @@ const currentGalleryItems = computed(() => {
     for (const { std, f } of physicalPages) {
         const anns = annotStore.getAnnotations(std, f, props.pattern);
         for (const a of anns) {
+             // Reverted: Always show the item cutout itself
              list.push({
                  id: a.id,
                  source: std,
                  folio: f,
-                 points: a.points
+                 points: a.points, // Just the item
+                 regionId: a.regionId
              });
         }
     }
@@ -72,7 +77,7 @@ const availablePages = computed(() => {
          }
      });
      
-     return Array.from(uniquePages.values()).sort((a,b) => a.label.localeCompare(b.label));
+     return Array.from(uniquePages.values()).sort((a,b) => compareFolios(a.label, b.label));
 });
 
 // Helper for UI
@@ -103,6 +108,28 @@ function removeAnnot(id, source, folio) {
         annotStore.removeAnnotation(std, folio, props.pattern, id);
     }
 }
+
+function goToRegion(item) {
+    if (!item.regionId) return;
+    router.push({
+        path: '/polygons',
+        query: {
+            source: item.source,
+            folio: item.folio,
+            region: item.regionId
+        }
+    });
+}
+
+// Snippet Modal
+import SnippetDetailModal from '../SnippetDetailModal.vue';
+const selectedSnippet = ref(null);
+
+function openSnippet(item) {
+    const anns = annotStore.getAnnotations(item.source, item.folio, props.pattern);
+    const full = anns.find(a => a.id === item.id);
+    selectedSnippet.value = { ...item, pattern: props.pattern, linkData: full?.linkData };
+}
 </script>
 
 <template>
@@ -116,11 +143,24 @@ function removeAnnot(id, source, folio) {
             <div class="modal-body gallery-body">
                 <div class="scroll-area">
                     <div class="cutouts-grid">
-                        <div v-for="item in currentGalleryItems" :key="item.id" class="cutout-container">
-                            <AnnotationCutout 
-                                :source="item.source" :folio="item.folio" :points="item.points"
-                            />
-                             <button @click="removeAnnot(item.id, item.source, item.folio)" class="btn-del" title="Delete">&times;</button>
+                        <div v-for="item in currentGalleryItems" :key="item.id" 
+                             class="cutout-wrapper-cell">
+                             
+                             <div class="cutout-container" @click="openSnippet(item)">
+                                <AnnotationCutout 
+                                    :source="item.source" 
+                                    :folio="item.folio" 
+                                    :points="item.points"
+                                />
+                                <button @click.stop="removeAnnot(item.id, item.source, item.folio)" class="btn-del" title="Delete">&times;</button>
+                             </div>
+                             
+                             <button v-if="item.regionId" 
+                                     class="btn-line-link" 
+                                     @click="goToRegion(item)">
+                                 Line View &rarr;
+                             </button>
+                             
                         </div>
                     </div>
                     <div v-if="currentGalleryItems.length===0" class="no-cutouts">
@@ -150,6 +190,7 @@ function removeAnnot(id, source, folio) {
         </div>
     </div>
 
+
     <!-- Nested Annotator Modal -->
     <div v-if="showAnnotator" class="modal" style="z-index: 1100;">
         <div class="modal-content annot-modal">
@@ -165,6 +206,13 @@ function removeAnnot(id, source, folio) {
             </div>
         </div>
     </div>
+    
+    <!-- Snippet Detail Modal -->
+    <SnippetDetailModal 
+        :visible="!!selectedSnippet"
+        :annotation="selectedSnippet"
+        @close="selectedSnippet = null"
+    />
 </template>
 
 <style scoped>

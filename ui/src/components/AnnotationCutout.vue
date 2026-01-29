@@ -7,7 +7,10 @@ const props = defineProps({
     folio: String,
     points: String, // "x,y x,y..." in % (0-100)
     width: { type: Number, default: 150 },
-    height: { type: Number, default: 100 }
+    height: { type: Number, default: 100 },
+    padding: { type: Number, default: 0.3 }, // Context factor
+    clip: { type: Boolean, default: false }, // Whether to hard-clip to poly
+    overlays: { type: Array, default: () => [] } // [{ points, color? }]
 });
 
 const { getImageUrl } = useImageManifest();
@@ -15,22 +18,20 @@ const imgUrl = computed(() => getImageUrl(props.source, props.folio));
 
 const polyPoints = computed(() => {
     if (!props.points) return "";
-    // Points are "x,y x,y". Already 0-100.
-    // SVG image will be mapped to 0-100 space.
     return props.points;
 });
 
 const viewBox = computed(() => {
     if (!props.points) return "0 0 100 100";
     
-    // Parse points to find bbox
+    // Parse points
     const pts = props.points.split(' ')
         .filter(s => s.trim().length > 0)
         .map(p => {
             const [x, y] = p.split(',').map(parseFloat);
             return { x, y };
         })
-        .filter(p => !isNaN(p.x) && !isNaN(p.y)); // Safety check
+        .filter(p => !isNaN(p.x) && !isNaN(p.y));
 
     if (pts.length === 0) return "0 0 100 100";
     
@@ -44,9 +45,9 @@ const viewBox = computed(() => {
     let w = maxX - minX;
     let h = maxY - minY;
     
-    // Add larger padding (context)
-    const padX = Math.max(w * 0.3, 2);
-    const padY = Math.max(h * 0.3, 2);
+    // Dynamic padding
+    const padX = Math.max(w * props.padding, 2);
+    const padY = Math.max(h * props.padding, 2);
     
     // Expand box
     const vbX = Math.max(0, minX - padX);
@@ -74,10 +75,29 @@ const clipId = computed(() => `clip-${props.source}-${props.folio}-${Math.abs(pr
             :href="imgUrl" 
             x="0" y="0" width="100" height="100" 
             preserveAspectRatio="none"
-            :clip-path="`url(#${clipId})`"
+            :clip-path="clip ? `url(#${clipId})` : undefined"
         />
         
-        <!-- Optional: Draw polygon outline -->
+        <!-- Overlays (Items on the line) -->
+        <polygon v-for="(ov, idx) in overlays" :key="idx"
+            :points="ov.points"
+            fill="rgba(0, 255, 0, 0.3)"
+            stroke="#00cc00"
+            stroke-width="0.5"
+            vector-effect="non-scaling-stroke"
+        />
+        
+        <!-- ID Labels in Cutout -->
+        <g v-for="(ov, idx) in overlays" :key="'lbl-'+idx">
+             <!-- Simple logic to find top-left of point string -->
+             <text :x="ov.points.split(' ')[0].split(',')[0]" 
+                   :y="ov.points.split(' ')[0].split(',')[1] - 2" 
+                   fill="black" font-size="6" font-weight="bold" stroke="white" stroke-width="0.5">
+                 {{ ov.id }}
+             </text>
+        </g>
+        
+        <!-- Region Outline -->
         <polygon 
             :points="polyPoints" 
             fill="none" 

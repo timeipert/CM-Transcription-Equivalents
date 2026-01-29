@@ -1,7 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import GlobalAnalysisView from '../views/GlobalAnalysisView.vue'
-import MyTablesView from '../views/MyTablesView.vue'
-import EditTableView from '../views/EditTableView.vue'
+import TranscriptionEquivalentsView from '../views/TranscriptionEquivalentsView.vue'
+import ManuscriptAnnotationsView from '../views/ManuscriptAnnotationsView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import PolygonManagerView from '../views/PolygonManagerView.vue'
 
@@ -14,14 +14,14 @@ const router = createRouter({
       component: GlobalAnalysisView
     },
     {
-      path: '/my-tables',
-      name: 'my-tables',
-      component: MyTablesView
+      path: '/equivalents',
+      name: 'equivalents',
+      component: TranscriptionEquivalentsView
     },
     {
-      path: '/table/:id?',
-      name: 'edit-table',
-      component: EditTableView
+      path: '/annotations/:id?',
+      name: 'annotations',
+      component: ManuscriptAnnotationsView
     },
     {
       path: '/settings',

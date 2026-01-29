@@ -30,12 +30,12 @@ export function renderSvg(pattern, glyphs, isGroup) {
 
     while (i < p.length) {
         const char = p[i];
-        if (char === '[') {
+        if (char === '[' || char === '{') {
             inGroup = true;
             i++;
             continue;
         }
-        if (char === ']') {
+        if (char === ']' || char === '}') {
             inGroup = false;
             i++;
             continue;
@@ -116,12 +116,12 @@ export function renderSvg(pattern, glyphs, isGroup) {
 
     // Draw Brackets
     for (const g of groupBrackets) {
-        if (g.startX === g.endX) continue;
+        // Allow single-item groups by adding padding
         const bx1 = g.startX;
         const bx2 = g.endX;
         const by = g.y + yOffset - 12;
-        const xStart = bx1 - 2;
-        const xEnd = bx2 + 2;
+        const xStart = bx1 - 4; // Increased padding
+        const xEnd = bx2 + 4;   // Increased padding
         const brWidth = xEnd - xStart;
 
         const pathD = `M ${xStart} ${by} l 0 -3 a 3 3 0 0 1 3 -3 l ${brWidth - 6} 0 a 3 3 0 0 1 3 3 l 0 3`;

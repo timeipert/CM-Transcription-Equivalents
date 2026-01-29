@@ -49,5 +49,14 @@ export const usePersonalTablesStore = defineStore('personalTables', () => {
         }
     }
 
-    return { tables, createTable, getTable, updateTable, deleteTable }
+    function getOrCreateTableForSource(sourceName) {
+        const existing = tables.value.find(t => t.source === sourceName)
+        if (existing) return existing.id
+
+        const id = createTable(sourceName) // Use source name as table name
+        updateTable(id, { source: sourceName })
+        return id
+    }
+
+    return { tables, createTable, getTable, updateTable, deleteTable, getOrCreateTableForSource }
 })

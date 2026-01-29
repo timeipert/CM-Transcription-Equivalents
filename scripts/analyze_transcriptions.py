@@ -286,10 +286,10 @@ def analyze_single_source(corpus_path):
                              if is_group: parts.append("[")
                              parts.append("*" + get_suffix(grp[0]["type"], grp[0]["liquescent"]))
                          else:
+                             if is_group: parts.append("[")
                              if prev_last_note is not None:
                                  link_dir = get_direction(prev_last_note["pitch"], grp[0]["pitch"])
                                  parts.append(link_dir + get_suffix(grp[0]["type"], grp[0]["liquescent"]))
-                             if is_group: parts.append("[")
                          
                          if len(grp) >= 2:
                              for k in range(len(grp)-1):

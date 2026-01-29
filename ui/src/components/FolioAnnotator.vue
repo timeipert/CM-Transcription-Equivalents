@@ -3,7 +3,9 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 
 const props = defineProps({
     imageUrl: { type: String, required: true },
-    existingPoints: { type: String, default: "" } 
+    existingPoints: { type: String, default: "" },
+    cropRect: { type: Object, default: null }, // { x, y, w, h } in %
+    overlays: { type: Array, default: () => [] } // [{ id, points, color }]
 });
 
 const emit = defineEmits(['save']);
@@ -40,7 +42,7 @@ function getRelativeCoords(e) {
 
 function onMouseDown(e) {
     if (e.button === 1 || (e.button === 0 && e.altKey)) {
-        startPan(e);
+        startPan(e); // Allow pan in all modes
         return;
     }
     if (e.button === 0) {
@@ -91,7 +93,7 @@ const boxRect = computed(() => {
 function finishPolygon() {
     if (!dragStart.value || !dragCurrent.value) return;
     const b = boxRect.value;
-    if (b.w < 0.5 || b.h < 0.5) {
+    if (b.w < 0.1 || b.h < 0.1) {
         alert("Box too small");
         return;
     }
@@ -119,8 +121,8 @@ function onWheel(e) {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     let newScale = scale.value * delta;
-    if (newScale < 1) newScale = 1;
-    if (newScale > 10) newScale = 10;
+    if (newScale < 0.1) newScale = 0.1; // Allow zooming out more
+    if (newScale > 50) newScale = 50;
     scale.value = newScale;
 }
 function startPan(e) {
@@ -137,16 +139,34 @@ function endPan() {
     isPanning.value = false;
 }
 
-const contentStyle = computed(() => ({
-    transform: `translate(${translateX.value}px, ${translateY.value}px) scale(${scale.value})`,
-    transformOrigin: '0 0'
-}));
+const contentStyle = computed(() => {
+    if (props.cropRect) {
+        const { x, y, w, h } = props.cropRect;
+        const top = y;
+        const right = 100 - (x + w);
+        const bottom = 100 - (y + h);
+        const left = x;
+        
+        const s = 100 / w; // Base scale to fit width
+        
+        return {
+             // Combine User Transform (translate/scale) + Base Crop Transform (scale/translate)
+             transform: `translate(${translateX.value}px, ${translateY.value}px) scale(${scale.value}) scale(${s}) translate(-${x}%, -${y}%)`,
+             transformOrigin: '0 0',
+             clipPath: `inset(${top}% ${right}% ${bottom}% ${left}%)`
+        };
+    }
+    return {
+        transform: `translate(${translateX.value}px, ${translateY.value}px) scale(${scale.value})`,
+        transformOrigin: '0 0'
+    };
+});
 </script>
 
 <template>
 <div class="annotator-container">
     <div class="toolbar">
-        <span class="hint">Draw a Box. <b>Save</b> to finish. <b>Alt+Drag</b> or Scroll to Zoom/Pan.</span>
+        <span class="hint">Draw a Box. <b>Save</b> to finish. <span v-if="!cropRect"><b>Alt+Drag</b> or Scroll to Zoom/Pan.</span></span>
         <div class="actions">
              <button @click="undo" :disabled="!dragStart" class="btn-secondary">Reset</button>
              <button @click="finishPolygon" class="btn-primary" :disabled="!dragStart">Save Selection</button>
@@ -166,10 +186,33 @@ const contentStyle = computed(() => ({
              
              <!-- Drawing Layer -->
              <svg class="drawing-layer" viewBox="0 0 100 100" preserveAspectRatio="none">
+                 <!-- Existing Overlays -->
+                 <polygon v-for="ov in overlays" :key="ov.id"
+                          :points="ov.points"
+                          fill="rgba(0, 255, 0, 0.2)"
+                          stroke="#00ff00"
+                          stroke-width="0.3"
+                          vector-effect="non-scaling-stroke" 
+                 />
+                 
+                 <!-- ID Labels -->
+                 <g v-for="ov in overlays" :key="'label-' + ov.id">
+                     <rect :x="getRectFromPoints(ov.points).x" 
+                           :y="getRectFromPoints(ov.points).y - 3" 
+                           width="10" height="3" fill="rgba(0,0,0,0.6)" rx="0.5" />
+                     <text :x="getRectFromPoints(ov.points).x + 0.5" 
+                           :y="getRectFromPoints(ov.points).y - 0.8" 
+                           fill="white" font-size="2" font-family="monospace">
+                         {{ ov.id ? ov.id.substring(0,6) : '?' }}
+                     </text>
+                 </g>
+                 
                  <!-- Current Box Draft -->
                  <rect v-if="dragStart && dragCurrent" 
                        :x="boxRect.x" :y="boxRect.y" :width="boxRect.w" :height="boxRect.h"
-                       fill="rgba(0,123,255,0.2)" stroke="#007bff" stroke-width="0.3" 
+                       fill="rgba(0,123,255,0.2)"
+                       stroke="#007bff"
+                       stroke-width="0.3" 
                        vector-effect="non-scaling-stroke"/>
              </svg>
          </div>

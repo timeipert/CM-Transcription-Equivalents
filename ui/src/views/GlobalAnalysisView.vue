@@ -7,11 +7,97 @@ import SvgPattern from '../components/SvgPattern.vue'; // Keep for group headers
 const settings = useSettingsStore();
 
 import { useTranscriptionData } from '../composables/useTranscriptionData';
-
-
+import { useAnnotationsStore } from '../stores/annotations';
+import { useImageManifest } from '../composables/useImageManifest';
+import AnnotationCutout from '../components/AnnotationCutout.vue';
+import { useRouter } from 'vue-router';
+import { compareFolios } from '../utils/sorting';
 
 // Use Composable
 const { rawData, patStats, glyphs, manifests, overallMax, loading } = useTranscriptionData();
+const annotStore = useAnnotationsStore();
+const { getStandardSource } = useImageManifest();
+const router = useRouter();
+
+// ... existing code ...
+
+// In template replace v-model="snippetSize" with v-model="settings.snippetSize"
+// And snippetSize usage with settings.snippetSize
+
+// ...
+// In Template:
+/*
+<div class="header-controls">
+    <label class="size-slider">
+        Size: <input type="range" min="40" max="200" v-model="snippetSize" />
+    </label>
+    <label class="size-slider">
+        Context: <input type="range" min="0.1" max="1.0" step="0.1" v-model="snippetPadding" />
+    </label>
+    <span class="close" @click="showModal=false">&times;</span>
+</div>
+*/
+
+// In Table:
+/*
+ <AnnotationCutout 
+     :source="getStandardSource(modalContent.source, row[1])"
+     :folio="row[1]"
+     :points="getLinkedAnnot(row).points"
+     :width="snippetSize"
+     :height="snippetSize * 0.6"
+     :padding="Number(snippetPadding)"
+ />
+*/
+
+function getLinkedAnnot(row) {
+    if (!modalContent.value) return null;
+    const { source, pattern } = modalContent.value;
+    const folio = row[1];
+    
+    // Normalize source for store lookup
+    // "source" here is the raw key from rawData (e.g. "Aa 13")
+    // annotStore uses standard key (e.g. "Aa 13 (Scan)") if remapped.
+    const stdSource = getStandardSource(source, folio);
+    
+    const anns = annotStore.getAnnotations(stdSource, folio, pattern);
+    const sysId = row.join('|');
+    return anns.find(a => a.linkData && a.linkData.sysId === sysId);
+}
+
+// ... existing code ...
+// in Template:
+
+// 1. Add size control to header
+/*
+<div class="modal-header">
+    <h2>{{ modalTitle }}</h2>
+    <div class="header-controls">
+         <label class="size-slider">
+             Size: <input type="range" min="30" max="150" v-model="snippetSize" />
+         </label>
+        <span class="close" @click="showModal=false">&times;</span>
+    </div>
+</div>
+*/
+
+// 2. Add Cutout to table
+/*
+ <td>
+     <div v-if="getLinkedAnnot(row)" class="snippet-cell">
+         <AnnotationCutout 
+             :source="getStandardSource(modalContent.source, row[1])"
+             :folio="row[1]"
+             :points="getLinkedAnnot(row).points"
+             :width="snippetSize"
+             :height="snippetSize * 0.6"
+         />
+         <button class="btn-xs-link link-overlay" @click="goToPolygon(row[1])">✏️</button>
+     </div>
+ </td>
+*/
+
+// 3. Add styles
 
 // State
 const colSort = ref('freq'); // freq, alpha, length
@@ -24,9 +110,12 @@ const rowsPerPage = 50;
 const expandedGroups = ref(new Set());
 
 // Modal State
+// Modal State
 const showModal = ref(false);
 const modalTitle = ref('');
 const modalContent = ref(null); // content array
+const modalSortCol = ref('folio');
+const modalSortDir = ref(1); // 1 = asc, -1 = desc
 
 // Helpers
 function getBasicType(pattern) {
@@ -112,7 +201,7 @@ const visibleCols = computed(() => {
         cols.push({ type: 'group', name: g, label: g, expanded: isExpanded });
 
         if (isExpanded) {
-            const sortedVars = [...variants].sort();
+            const sortedVars = [...variants].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
             for (const v of sortedVars) {
                  if (hideEmpty.value) {
                      // check if empty across all sources?
@@ -211,9 +300,105 @@ function onCellClick(source, pattern) {
     if (data && data.length > 0) {
         // [doc, fol, line, syl, notes]
         modalTitle.value = `Source: ${source} | Pattern: ${pattern} (${data.length})`;
-        modalContent.value = { pattern, rows: data };
+        modalContent.value = { source, pattern, rows: data };
         showModal.value = true;
     }
+}
+
+function isLinked(row) {
+    if (!modalContent.value) return false;
+    const { source, pattern } = modalContent.value;
+    const folio = row[1];
+    
+    // We need standard source for annot store?
+    // FolioAnnotator uses `getStandardSource(props.source, ...)`
+    // Here we have the key from rawData (e.g. "Aa 13").
+    // Usually this matches unless manifest remapping happens.
+    // Let's assume rawData key is usable for now, or import getStandardSource if needed.
+    // Actually, annot store keys are just strings.
+    
+    const anns = annotStore.getAnnotations(source, folio, pattern);
+    const sysId = row.join('|');
+    return anns.some(a => a.linkData && a.linkData.sysId === sysId);
+}
+
+function goToPolygon(folio) {
+    if (!modalContent.value) return;
+    const { source } = modalContent.value;
+    router.push({
+        path: '/polygons',
+        query: { source, folio }
+    });
+}
+
+// Modal Sorting
+const sortedModalRows = computed(() => {
+    if (!modalContent.value) return [];
+    
+    // Rows: [doc, fol, line, syl, notes]
+    const rows = [...modalContent.value.rows];
+    const colIdxMap = { 'doc': 0, 'folio': 1, 'line': 2, 'syl': 3, 'notes': 4 };
+    const idx = colIdxMap[modalSortCol.value] ?? 1;
+    
+    rows.sort((a, b) => {
+        const va = a[idx];
+        const vb = b[idx];
+        
+        // Custom Folio Sort
+        if (modalSortCol.value === 'folio') {
+            return compareFolios(va, vb) * modalSortDir.value;
+        }
+        
+        // Default Sort
+        if (va < vb) return -1 * modalSortDir.value;
+        if (va > vb) return 1 * modalSortDir.value;
+        return 0;
+    });
+    
+    return rows;
+});
+
+function sortModal(col) {
+    if (modalSortCol.value === col) {
+        modalSortDir.value *= -1;
+    } else {
+        modalSortCol.value = col;
+        modalSortDir.value = 1; // reset to asc
+    }
+}
+
+// Deep Linking
+import { useRoute } from 'vue-router';
+const route = useRoute();
+
+onMounted(() => {
+    // Check for Deep Link
+    if (route.query.openSource && route.query.openPattern) {
+        // Wait for data? rawData is shallowRef, might be empty initially if not loaded.
+        // But useTranscriptionData handles loading.
+        // We might need to watch `loading`.
+        const tryOpen = () => {
+             if (loading.value) {
+                 // Watch once?
+                 const unwatch = watch(loading, (l) => {
+                     if (!l) {
+                         onCellClick(route.query.openSource, route.query.openPattern);
+                         unwatch();
+                     }
+                 });
+             } else {
+                 onCellClick(route.query.openSource, route.query.openPattern);
+             }
+        };
+        tryOpen();
+    }
+});
+import { watch } from 'vue'; // Ensure watch is imported
+
+function isHighlighted(row) {
+    if (!route.query.highlightId) return false;
+    const sysId = row.join('|');
+    return sysId === route.query.highlightId;
 }
 
 </script>
@@ -324,7 +509,15 @@ function onCellClick(source, pattern) {
         <div class="modal-content">
             <div class="modal-header">
                 <h2>{{ modalTitle }}</h2>
-                <span class="close" @click="showModal=false">&times;</span>
+                <div class="header-controls">
+                    <label class="size-slider">
+                        Size: <input type="range" min="40" max="250" v-model="settings.snippetSize" />
+                    </label>
+                    <label class="size-slider">
+                        Context: <input type="range" min="0.1" max="1.5" step="0.1" v-model="settings.snippetPadding" />
+                    </label>
+                    <span class="close" @click="showModal=false">&times;</span>
+                </div>
             </div>
             <div class="modal-body">
                 <div class="modal-text">
@@ -335,16 +528,34 @@ function onCellClick(source, pattern) {
                      <table v-if="modalContent">
                          <thead>
                              <tr>
-                                 <th>Doc</th><th>Folio</th><th>Line</th><th>Syllable</th><th>Notes</th>
+                                 <th @click="sortModal('doc')">Doc ↕</th>
+                                 <th @click="sortModal('folio')">Folio ↕</th>
+                                 <th @click="sortModal('line')">Line ↕</th>
+                                 <th @click="sortModal('syl')">Syllable ↕</th>
+                                 <th @click="sortModal('notes')">Notes ↕</th>
+                                 <th :style="{width: settings.snippetSize + 'px'}">Img</th>
                              </tr>
                          </thead>
                          <tbody>
-                             <tr v-for="(row, idx) in modalContent.rows" :key="idx">
+                             <tr v-for="(row, idx) in sortedModalRows" :key="idx" :class="{'highlighted-row': isHighlighted(row)}">
                                  <td>{{ row[0] }}</td>
                                  <td>{{ row[1] }}</td>
                                  <td>{{ row[2] }}</td>
                                  <td>{{ row[3] }}</td>
                                  <td>{{ row[4] }}</td>
+                                 <td class="img-cell">
+                                     <div v-if="getLinkedAnnot(row)" class="snippet-cell" :style="{width: settings.snippetSize + 'px', height: (settings.snippetSize*0.6) + 'px'}">
+                                         <AnnotationCutout 
+                                             :source="getStandardSource(modalContent.source, row[1])"
+                                             :folio="row[1]"
+                                             :points="getLinkedAnnot(row).points"
+                                             :width="settings.snippetSize"
+                                             :height="settings.snippetSize * 0.6"
+                                             :padding="Number(settings.snippetPadding)"
+                                         />
+                                         <div class="link-overlay" @click="goToPolygon(row[1])">✏️</div>
+                                     </div>
+                                 </td>
                              </tr>
                          </tbody>
                      </table>
@@ -356,6 +567,27 @@ function onCellClick(source, pattern) {
 </template>
 
 <style scoped>
+/* Add highlight style */
+.highlighted-row {
+    background-color: #fef08a !important; /* Soft yellow */
+    animation: flash 2s;
+}
+@keyframes flash {
+    0% { background-color: #fde047; }
+    100% { background-color: #fef08a; }
+}
+
+.header-controls { display: flex; align-items: center; gap: 20px; }
+.size-slider { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: #555; }
+.snippet-cell { position: relative; border: 1px solid #ddd; border-radius: 4px; overflow: hidden; background: #eee; }
+.link-overlay { 
+    position: absolute; top: 0; right: 0; bottom: 0; left: 0; 
+    background: rgba(0,0,0,0.3); color: white; display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity 0.2s; cursor: pointer; font-size: 1.2rem;
+}
+.snippet-cell:hover .link-overlay { opacity: 1; }
+.img-cell { padding: 4px; }
+
 /* CSS Port from HTML */
 .controls {
     padding: 12px;
@@ -475,7 +707,7 @@ tr:hover td { background: #f0f0f0 !important; }
     border-radius: 8px;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    /* overflow: hidden; Removed per user request */
 }
 .modal-header {
     padding: 15px;
@@ -483,9 +715,13 @@ tr:hover td { background: #f0f0f0 !important; }
     display: flex;
     justify-content: space-between;
 }
-.modal-text {
+.modal-body {
     flex: 1;
-    overflow: auto;
+    overflow: auto; /* Allow scrolling */
+    min-height: 0;
+}
+.modal-text {
+    /* flex: 1; overflow: auto; Removed wrapper scroll to rely on body */
     padding: 20px;
 }
 .close {
