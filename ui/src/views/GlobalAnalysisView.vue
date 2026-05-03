@@ -305,19 +305,15 @@ function onCellClick(source, pattern) {
     }
 }
 
+const showOnlyLinked = ref(false);
+
 function isLinked(row) {
     if (!modalContent.value) return false;
     const { source, pattern } = modalContent.value;
     const folio = row[1];
     
-    // We need standard source for annot store?
-    // FolioAnnotator uses `getStandardSource(props.source, ...)`
-    // Here we have the key from rawData (e.g. "Aa 13").
-    // Usually this matches unless manifest remapping happens.
-    // Let's assume rawData key is usable for now, or import getStandardSource if needed.
-    // Actually, annot store keys are just strings.
-    
-    const anns = annotStore.getAnnotations(source, folio, pattern);
+    const stdSource = getStandardSource(source, folio);
+    const anns = annotStore.getAnnotations(stdSource, folio, pattern);
     const sysId = row.join('|');
     return anns.some(a => a.linkData && a.linkData.sysId === sysId);
 }
@@ -336,7 +332,12 @@ const sortedModalRows = computed(() => {
     if (!modalContent.value) return [];
     
     // Rows: [doc, fol, line, syl, notes]
-    const rows = [...modalContent.value.rows];
+    let rows = [...modalContent.value.rows];
+    
+    if (showOnlyLinked.value) {
+        rows = rows.filter(r => isLinked(r));
+    }
+    
     const colIdxMap = { 'doc': 0, 'folio': 1, 'line': 2, 'syl': 3, 'notes': 4 };
     const idx = colIdxMap[modalSortCol.value] ?? 1;
     
@@ -511,6 +512,9 @@ function isHighlighted(row) {
                 <h2>{{ modalTitle }}</h2>
                 <div class="header-controls">
                     <label class="size-slider">
+                        <input type="checkbox" v-model="showOnlyLinked" /> Show Only Linked
+                    </label>
+                    <label class="size-slider">
                         Size: <input type="range" min="40" max="250" v-model="settings.snippetSize" />
                     </label>
                     <label class="size-slider">
@@ -552,6 +556,7 @@ function isHighlighted(row) {
                                              :width="settings.snippetSize"
                                              :height="settings.snippetSize * 0.6"
                                              :padding="Number(settings.snippetPadding)"
+                                             :hideLabel="true"
                                          />
                                          <div class="link-overlay" @click="goToPolygon(row[1])">✏️</div>
                                      </div>

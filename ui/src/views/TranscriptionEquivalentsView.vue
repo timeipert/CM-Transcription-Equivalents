@@ -27,9 +27,13 @@ const manuscripts = computed(() => {
         const table = store.tables.find(t => t.source === sourceName);
         return {
             name: sourceName,
-            annotated: !!table,
+            annotated: !!table && table.rows.length > 0,
             patternCount: table ? table.rows.length : 0
         };
+    }).sort((a, b) => {
+        if (a.annotated && !b.annotated) return -1;
+        if (!a.annotated && b.annotated) return 1;
+        return a.name.localeCompare(b.name);
     });
 });
 
@@ -65,7 +69,8 @@ function openManuscript(sourceName) {
             <tbody>
                 <tr v-for="ms in manuscripts" :key="ms.name" 
                     @click="openManuscript(ms.name)"
-                    class="ms-row">
+                    class="ms-row"
+                    :class="{ 'greyed-out': !ms.annotated }">
                     <td>
                         <span class="ms-name">{{ ms.name }}</span>
                     </td>
@@ -127,4 +132,5 @@ function openManuscript(sourceName) {
 .ms-row:hover .btn-sm { border-color: #3b82f6; color: #3b82f6; }
 
 .loading, .empty-state { padding: 60px; text-align: center; color: #94a3b8; font-style: italic; }
+.greyed-out { opacity: 0.5; filter: grayscale(100%); }
 </style>

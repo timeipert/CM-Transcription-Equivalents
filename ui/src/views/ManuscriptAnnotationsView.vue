@@ -16,7 +16,7 @@ const route = useRoute();
 const router = useRouter();
 
 // Data
-const { rawData, glyphs, loading: dataLoading } = useTranscriptionData();
+const { rawData, glyphs, loading: dataLoading, patStats } = useTranscriptionData();
 const { generatePdf } = usePdfExport();
 
 const tableId = route.params.id;
@@ -25,6 +25,7 @@ const loading = ref(true); // Table loading state
 
 // Selection State
 const searchTerm = ref("");
+const patternSort = ref('freq'); // freq, alpha, length
 
 // Setup Data & Table
 watch(dataLoading, (val) => {
@@ -49,6 +50,17 @@ function initTable() {
 // Computed Data
 const sources = computed(() => Object.keys(rawData.value || {}).sort());
 
+// Global base stats for sorting
+const baseStats = computed(() => {
+    const stats = {};
+    if (!patStats.value) return stats;
+    for (const [pat, data] of Object.entries(patStats.value)) {
+        const base = pat.split(' ')[0];
+        stats[base] = (stats[base] || 0) + data.count;
+    }
+    return stats;
+});
+
 const availablePatterns = computed(() => {
     if (!table.value || !table.value.source) return [];
     if (!rawData.value) return [];
@@ -57,15 +69,40 @@ const availablePatterns = computed(() => {
     const srcData = rawData.value[table.value.source];
     if (!srcData) return [];
     
-    let pats = Object.keys(srcData);
+    // Group by base pattern
+    const baseSet = new Set();
+    for (const pat of Object.keys(srcData)) {
+        baseSet.add(pat.split(' ')[0]);
+    }
     
-    // Filter
+    let pats = Array.from(baseSet);
+    
+    // Search Filtering
     if (searchTerm.value) {
         const lower = searchTerm.value.toLowerCase();
         pats = pats.filter(p => p.toLowerCase().includes(lower));
     }
-    pats.sort();
-    return pats.slice(0, 100);
+    
+    // Sorting
+    if (patternSort.value === 'alpha') {
+        pats.sort();
+    } else if (patternSort.value === 'length') {
+        pats.sort((a, b) => {
+            if (a.length !== b.length) return a.length - b.length;
+            return a.localeCompare(b);
+        });
+    } else if (patternSort.value === 'freq') {
+        pats.sort((a, b) => {
+            if (a === "(Start)") return -1;
+            if (b === "(Start)") return 1;
+            const countA = baseStats.value[a] || 0;
+            const countB = baseStats.value[b] || 0;
+            if (countA !== countB) return countB - countA;
+            return a.localeCompare(b);
+        });
+    }
+    
+    return pats;
 });
 
 // Selection Logic
@@ -133,6 +170,18 @@ function openGallery(row) {
     showGallery.value = true;
 }
 
+function onGallerySelect(p) {
+    showGallery.value = false;
+    router.push({ 
+        name: 'polygons', 
+        query: { 
+            source: p.d, 
+            folio: p.f, 
+            highlight: p.pat 
+        } 
+    });
+}
+
 </script>
 
 <template>
@@ -159,7 +208,14 @@ function openGallery(row) {
             </div>
             
             <div class="field-group" v-if="table.source">
-                 <label>Add Patterns</label>
+                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <label style="margin-bottom: 0;">Add Patterns</label>
+                    <select v-model="patternSort" style="padding: 2px; font-size: 11px; border-radius: 4px;">
+                        <option value="freq">Frequency</option>
+                        <option value="alpha">Alphabetical</option>
+                        <option value="length">Length</option>
+                    </select>
+                 </div>
                  <input v-model="searchTerm" placeholder="Search patterns..." class="search-input" />
                  
                  <div class="pattern-list">
@@ -167,7 +223,6 @@ function openGallery(row) {
                           class="pattern-item" 
                           :class="{selected: isSelected(pat)}"
                           @click="togglePattern(pat)">
-                         <span class="check">{{ isSelected(pat) ? '☑' : '☐' }}</span>
                          <span class="pat-name">{{ pat }}</span>
                          <span class="pat-visual">
                             <PatternDisplay :pattern="pat" :glyphs="glyphs" />
@@ -209,7 +264,11 @@ function openGallery(row) {
                         <td>
                             <div style="display:flex; gap:10px; align-items:center; justify-content:center;">
                                 <span v-if="table.source && rawData[table.source]">
-                                    {{ rawData[table.source][row.pattern]?.length || 0 }}
+                                    {{ 
+                                        Object.keys(rawData[table.source])
+                                            .filter(k => k === row.pattern || k.startsWith(row.pattern + ' '))
+                                            .reduce((sum, k) => sum + rawData[table.source][k].length, 0)
+                                    }}
                                 </span>
                                 <button class="btn-sm" @click="openGallery(row)">Gallery</button>
                             </div>
@@ -229,7 +288,7 @@ function openGallery(row) {
         :pattern="galleryPattern"
         :sourceData="rawData[table.source]"
         :sourceName="table.source"
-
+        @select="onGallerySelect"
         @close="showGallery=false"
     />
 </div>
@@ -279,8 +338,6 @@ function openGallery(row) {
 }
 .pattern-item:hover { background: #f1f5f0; }
 .pattern-item.selected { background: #eff6ff; border-left: 3px solid #3b82f6; }
-.check { font-size: 1.1rem; color: #94a3b8; }
-.selected .check { color: #3b82f6; }
 
 .preview-panel { flex: 1; padding: 32px; overflow-y: auto; }
 .preview-panel h3 { margin-top: 0; color: #1e293b; font-weight: 700; }

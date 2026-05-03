@@ -68,21 +68,22 @@ def analyze_single_source(corpus_path):
         
         if hasattr(doc, "meta") and doc.meta:
             if isinstance(doc.meta, dict):
-                initial_folio = doc.meta.get("foliostart", "")
-                initial_line_str = doc.meta.get("zeilenstart", "0")
+                initial_folio = doc.meta.get("initial_folio", "")
+                initial_line_str = doc.meta.get("initial_line", "0")
             else:
-                initial_folio = getattr(doc.meta, "foliostart", "")
-                initial_line_str = getattr(doc.meta, "zeilenstart", "0")
+                initial_folio = getattr(doc.meta, "initial_folio", "")
+                initial_line_str = getattr(doc.meta, "initial_line", "0")
         
         # Try to parse line start
         try:
-            line_counter = int(initial_line_str)
+            line_start_val = int(initial_line_str)
+            line_counter = line_start_val if line_start_val > 0 else 1
         except ValueError:
-            line_counter = 0
+            line_counter = 1
 
         current_context = {
             "folio": str(initial_folio),
-            "line": str(initial_line_str),
+            "line": str(initial_line_str) if initial_line_str != "0" else "1",
             "syllable": ""
         }
 
@@ -91,17 +92,13 @@ def analyze_single_source(corpus_path):
             node_type = getattr(node, "kind", None)
             if isinstance(node, dict): node_type = node.get("kind")
             
+            old_folio = current_context["folio"]
+            
             # Update Context
             # Div/Section labels MIGHT override or supplement, but keeping meta as base
             if hasattr(node, "label") or (isinstance(node, dict) and "label" in node):
                 val = getattr(node, "label", node.get("label")) if isinstance(node, dict) else getattr(node, "label", "")
                 if val: current_context["folio"] = str(val)
-            
-            # Line context if available (ZeileContainer)
-            # Increment line counter on ZeileContainer
-            if node_type == "ZeileContainer":
-                 line_counter += 1
-                 current_context["line"] = str(line_counter)
             
             # Check for Syllable
             if node_type == "Syllable":
@@ -126,28 +123,32 @@ def analyze_single_source(corpus_path):
 
             elif node_type == "FolioChange":
                 # Update folio context
-                if hasattr(node, "folio"):
-                    current_context["folio"] = node.folio
-                elif hasattr(node, "text"):
-                    current_context["folio"] = node.text
-                # Reset line count on folio change? Usually yes.
-                # current_context["line"] = "1" 
+                if isinstance(node, dict):
+                    if "folio" in node: current_context["folio"] = str(node["folio"])
+                    elif "text" in node: current_context["folio"] = str(node["text"])
+                else:
+                    if hasattr(node, "folio"): current_context["folio"] = str(node.folio)
+                    elif hasattr(node, "text"): current_context["folio"] = str(node.text)
+
+            # Reset line count on explicit FolioChange OR if the folio string changed (e.g. via label)
+            if node_type == "FolioChange" or current_context["folio"] != old_folio:
+                line_counter = 1
+                current_context["line"] = "1"
 
             elif node_type == "LineChange":
                 # Update line context - user says "count for the line".
                 # If it has an explicit number, use it. Otherwise increment.
                 if hasattr(node, "n") and node.n:
                     current_context["line"] = str(node.n)
+                    try: line_counter = int(node.n)
+                    except: pass
                 elif hasattr(node, "line") and node.line:
                     current_context["line"] = str(node.line)
+                    try: line_counter = int(node.line)
+                    except: pass
                 else:
-                    # Increment existing integer-like line or append
-                    try:
-                        val = int(current_context["line"])
-                        current_context["line"] = str(val + 1)
-                    except:
-                        # If line was "7" or "7r", and now we just increment?
-                        pass
+                    line_counter += 1
+                    current_context["line"] = str(line_counter)
             
             # elif node_type == "ZeileContainer": # This is handled above now
             #     # Fallback/Supplemental: increment line count if we rely on containers

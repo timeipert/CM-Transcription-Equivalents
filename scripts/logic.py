@@ -21,8 +21,11 @@ def get_suffix(note_type, is_liquescent):
     
     if t == "Oriscus": s += "O"
     elif t == "Quilisma": s += "Q"
-    elif t == "Liquescent": s += "L" 
     elif t == "Strophicus": s += "S"
+    elif t == "Ascending": s += "LA"
+    elif t == "Descending": s += "LD"
+    elif t == "Liquescent": s += "L"
     
-    if l and "L" not in s: s += "L" 
+    if l and "L" not in s: 
+        s += "L"
     return s

@@ -107,8 +107,8 @@ export function renderSvg(pattern, glyphs, isGroup) {
     if (curGroup) groupBrackets.push(curGroup);
 
     const width = Math.max((points.length) * xStep + 10, 20);
-    const topBuffer = 40;
-    const bottomBuffer = 20;
+    const topBuffer = 24; // Increased to prevent bracket clipping
+    const bottomBuffer = 8;
     const height = (maxY - minY) * yStep + topBuffer + bottomBuffer;
     const yOffset = -minY * yStep + topBuffer;
 
@@ -139,13 +139,12 @@ export function renderSvg(pattern, glyphs, isGroup) {
         else if (special.includes("Q")) gInfo = glyphs["quilisma"];
         else if (special.includes("S")) gInfo = glyphs["strophicus"];
 
-        if (special.includes("L")) {
-            const type = pt.token.type;
-            if (type === 'u') gInfo = glyphs["ascending"];
-            else if (type === 'd') gInfo = glyphs["descending"];
-            else {
-                scale = 0.65; // Increased
-            }
+        if (special.includes("LA")) {
+            gInfo = glyphs["ascending"];
+        } else if (special.includes("LD")) {
+            gInfo = glyphs["descending"];
+        } else if (special.includes("L")) {
+            scale = 0.65; // Normal liquescence: just make the note smaller
         }
 
         // Fallback if glyph missing

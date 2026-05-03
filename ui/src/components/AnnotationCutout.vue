@@ -10,11 +10,17 @@ const props = defineProps({
     height: { type: Number, default: 100 },
     padding: { type: Number, default: 0.3 }, // Context factor
     clip: { type: Boolean, default: false }, // Whether to hard-clip to poly
-    overlays: { type: Array, default: () => [] } // [{ points, color? }]
+    overlays: { type: Array, default: () => [] }, // [{ points, color? }]
+    hideLabel: { type: Boolean, default: false }
 });
 
-const { getImageUrl } = useImageManifest();
-const imgUrl = computed(() => getImageUrl(props.source, props.folio));
+const { getImageUrl, getIiifThumbnailUrl } = useImageManifest();
+// Use IIIF thumbnail (downsized full page) for snippets.
+// This is much faster than full res, but keeps the aspect ratio correct
+// so that our SVG/CSS cropping math works perfectly.
+const imgUrl = computed(() => {
+    return getIiifThumbnailUrl(props.source, props.folio, 1200); 
+});
 
 const polyPoints = computed(() => {
     if (!props.points) return "";
@@ -90,11 +96,11 @@ const clipId = computed(() => `clip-${props.source}-${props.folio}-${Math.abs(pr
         <!-- ID Labels in Cutout -->
         <g v-for="(ov, idx) in overlays" :key="'lbl-'+idx">
              <!-- Simple logic to find top-left of point string -->
-             <text :x="ov.points.split(' ')[0].split(',')[0]" 
-                   :y="ov.points.split(' ')[0].split(',')[1] - 2" 
-                   fill="black" font-size="6" font-weight="bold" stroke="white" stroke-width="0.5">
-                 {{ ov.id }}
-             </text>
+              <text :x="ov.points.split(' ')[0].split(',')[0]" 
+                    :y="ov.points.split(' ')[0].split(',')[1] - 2" 
+                    fill="#4f46e5" font-size="6" font-weight="900" stroke="white" stroke-width="1" paint-order="stroke">
+                  {{ ov.displayId || (ov.id ? String(ov.id).substring(0,4) : "?") }}
+              </text>
         </g>
         
         <!-- Region Outline -->
@@ -107,7 +113,7 @@ const clipId = computed(() => `clip-${props.source}-${props.folio}-${Math.abs(pr
             opacity="0.8"
         />
     </svg>
-    <div class="label">{{ folio }}</div>
+    <div v-if="!hideLabel" class="label">{{ folio }}</div>
 </div>
 </template>
 

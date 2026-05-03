@@ -104,7 +104,7 @@ function goToEditor() {
                 </div>
                 <div class="pattern-badge">
                    <PatternDisplay :pattern="annotation.pattern" :glyphs="glyphs" />
-                   <span>{{ annotation.pattern }}</span>
+                   <span>{{ annotation.pattern }} {{ annotation.variant || '' }}</span>
                 </div>
             </div>
 

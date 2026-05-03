@@ -1,24 +1,30 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import ManagerSidebar from '../components/manager/ManagerSidebar.vue';
 import ManagerWorkspace from '../components/manager/ManagerWorkspace.vue';
 
 const selectedSource = ref(null);
 const selectedFolio = ref(null);
-const initialRegionId = ref(null); // Added
+const initialRegionId = ref(null);
+const highlightPattern = ref(null);
 const route = useRoute();
 
-onMounted(() => {
-    if (route.query.source) selectedSource.value = route.query.source;
-    if (route.query.folio) selectedFolio.value = route.query.folio;
-    if (route.query.region) initialRegionId.value = route.query.region; // Added
-});
+const updateFromQuery = () => {
+    selectedSource.value = route.query.source || null;
+    selectedFolio.value = route.query.folio || null;
+    initialRegionId.value = route.query.region || null;
+    highlightPattern.value = route.query.highlight || null;
+};
+
+onMounted(updateFromQuery);
+watch(() => route.query, updateFromQuery, { deep: true });
 
 function onSelect({ source, folio }) {
     selectedSource.value = source;
     selectedFolio.value = folio;
-    initialRegionId.value = null; // Reset when manual navigation
+    initialRegionId.value = null;
+    highlightPattern.value = null; // Clear when navigating away
 }
 </script>
 
@@ -33,6 +39,7 @@ function onSelect({ source, folio }) {
         :source="selectedSource" 
         :folio="selectedFolio"
         :initialRegionId="initialRegionId" 
+        :highlightPattern="highlightPattern"
     />
 </div>
 </template>

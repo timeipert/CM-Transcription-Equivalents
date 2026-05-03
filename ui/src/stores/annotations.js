@@ -23,6 +23,15 @@ export const useAnnotationsStore = defineStore('annotations', () => {
             annotations.value = data.annotations || {}
             regions.value = data.regions || {}
             regionItems.value = data.regionItems || {}
+            
+            // Ensure all legacy annotations have IDs
+            let fallbackId = 0;
+            for (const key in annotations.value) {
+                annotations.value[key] = annotations.value[key].map(a => {
+                    if (!a.id) return { ...a, id: `migrated-${Date.now()}-${fallbackId++}` };
+                    return a;
+                });
+            }
         } catch (e) {
             console.error("Error loading annotations", e)
         }
@@ -31,7 +40,15 @@ export const useAnnotationsStore = defineStore('annotations', () => {
         const v1 = localStorage.getItem('annotations')
         if (v1) {
             try {
-                annotations.value = JSON.parse(v1)
+                const v1Data = JSON.parse(v1)
+                let fallbackId = 0;
+                for (const key in v1Data) {
+                    v1Data[key] = v1Data[key].map(a => {
+                        if (!a.id) return { ...a, id: `migrated-${Date.now()}-${fallbackId++}` };
+                        return a;
+                    });
+                }
+                annotations.value = v1Data;
             } catch (e) { }
         }
     }
@@ -101,6 +118,30 @@ export const useAnnotationsStore = defineStore('annotations', () => {
         }
     }
 
+    function updateAnnotation(source, folio, pattern, id, updates) {
+        // 1. Try Legacy
+        const key = `${source}_${folio}_${pattern}`
+        if (annotations.value[key]) {
+            const item = annotations.value[key].find(a => a.id === id)
+            if (item) {
+                Object.assign(item, updates);
+                return;
+            }
+        }
+
+        // 2. Try Regions
+        const pageRegions = getRegions(source, folio);
+        for (const r of pageRegions) {
+            if (regionItems.value[r.id]) {
+                const item = regionItems.value[r.id].find(i => i.id === id);
+                if (item) {
+                    Object.assign(item, updates);
+                    return;
+                }
+            }
+        }
+    }
+
     // --- Region Actions ---
 
     function getRegions(source, folio) {
@@ -157,6 +198,7 @@ export const useAnnotationsStore = defineStore('annotations', () => {
         getAnnotations,
         addAnnotation,
         removeAnnotation,
+        updateAnnotation,
         getRegions,
         addRegion,
         removeRegion,

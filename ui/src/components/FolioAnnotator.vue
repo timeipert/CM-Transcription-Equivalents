@@ -40,6 +40,21 @@ function getRelativeCoords(e) {
     return { x, y };
 }
 
+function getRectFromPoints(pointsStr) {
+    if (!pointsStr) return { x: 0, y: 0, w: 0, h: 0 };
+    const parts = pointsStr.split(' ');
+    let minX = 100, minY = 100, maxX = 0, maxY = 0;
+    for (const p of parts) {
+        if (!p.trim()) continue;
+        const [x, y] = p.split(',').map(Number);
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+    }
+    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
 function onMouseDown(e) {
     if (e.button === 1 || (e.button === 0 && e.altKey)) {
         startPan(e); // Allow pan in all modes
@@ -94,7 +109,8 @@ function finishPolygon() {
     if (!dragStart.value || !dragCurrent.value) return;
     const b = boxRect.value;
     if (b.w < 0.1 || b.h < 0.1) {
-        alert("Box too small");
+        dragStart.value = null;
+        dragCurrent.value = null;
         return;
     }
     
@@ -196,16 +212,19 @@ const contentStyle = computed(() => {
                  />
                  
                  <!-- ID Labels -->
-                 <g v-for="ov in overlays" :key="'label-' + ov.id">
-                     <rect :x="getRectFromPoints(ov.points).x" 
-                           :y="getRectFromPoints(ov.points).y - 3" 
-                           width="10" height="3" fill="rgba(0,0,0,0.6)" rx="0.5" />
-                     <text :x="getRectFromPoints(ov.points).x + 0.5" 
-                           :y="getRectFromPoints(ov.points).y - 0.8" 
-                           fill="white" font-size="2" font-family="monospace">
-                         {{ ov.id ? ov.id.substring(0,6) : '?' }}
-                     </text>
-                 </g>
+                  <g v-for="ov in overlays" :key="'label-' + ov.id">
+                      <rect :x="getRectFromPoints(ov.points).x - 0.2" 
+                            :y="getRectFromPoints(ov.points).y - 3.2" 
+                            :width="Math.max(6, (ov.displayId || '').length * 1.5)" 
+                            height="3.5" 
+                            fill="rgba(79, 70, 229, 0.9)" 
+                            rx="0.4" />
+                      <text :x="getRectFromPoints(ov.points).x + 0.3" 
+                            :y="getRectFromPoints(ov.points).y - 0.6" 
+                            fill="white" font-size="2.2" font-family="Inter, sans-serif" font-weight="bold">
+                          {{ ov.displayId || (ov.id ? String(ov.id).substring(0,4) : '?') }}
+                      </text>
+                  </g>
                  
                  <!-- Current Box Draft -->
                  <rect v-if="dragStart && dragCurrent" 

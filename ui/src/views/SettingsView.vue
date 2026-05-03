@@ -7,34 +7,54 @@ import SvgPattern from '../components/SvgPattern.vue';
 const store = useSettingsStore();
 
 // Data Management
-const { exportData, importData } = useDataManagement();
+const { exportData, importData, clearAllData } = useDataManagement();
 const fileInput = ref(null);
 const importMsg = ref("");
 const importStatus = ref(""); // 'success' or 'error'
+
+function doClearAll() {
+    if (confirm("Are you sure you want to delete ALL your local annotations, regions, and tables? This cannot be undone! Make sure you export a JSON backup first.")) {
+        clearAllData();
+        importMsg.value = "All data has been removed.";
+        importStatus.value = "success";
+        setTimeout(() => importMsg.value = "", 4000);
+    }
+}
 
 function doExport() {
     exportData();
 }
 
 async function doImport(event) {
-    const file = event.target.files[0];
-    if (!file) return;
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
     
     importMsg.value = "Importing...";
     importStatus.value = "";
     
     try {
-        const result = await importData(file);
-        importMsg.value = `Success! Data imported (Label: ${result.label || 'None'}, Date: ${new Date(result.date).toLocaleString()}).`;
-        importStatus.value = "success";
+        const results = await importData(files);
+        const successes = results.filter(r => r.success);
+        const errors = results.filter(r => !r.success);
+
+        if (errors.length === 0) {
+            importMsg.value = `Success! ${successes.length} file(s) imported seamlessly.`;
+            importStatus.value = "success";
+        } else if (successes.length === 0) {
+            importMsg.value = `Error: All files failed to import. (${errors[0].error})`;
+            importStatus.value = "error";
+        } else {
+            importMsg.value = `Partial success: ${successes.length} imported, ${errors.length} failed (e.g. ${errors[0].error}).`;
+            importStatus.value = "error"; // Show as error color since something failed
+        }
         
         // Clear file input
         event.target.value = null;
         
-        // Clear msg after 5s
-        setTimeout(() => importMsg.value = "", 5000);
+        // Clear msg after 8s
+        setTimeout(() => importMsg.value = "", 8000);
     } catch (e) {
-        importMsg.value = `Error: ${e.message}`;
+        importMsg.value = `Critical Error: ${e.message}`;
         importStatus.value = "error";
     }
 }
@@ -69,9 +89,12 @@ function addMapping() {
             <button @click="doExport" class="btn-primary">Export JSON</button>
             
             <div class="import-zone">
-                <input type="file" ref="fileInput" @change="doImport" accept=".json" style="display:none">
+                <input type="file" ref="fileInput" @change="doImport" accept=".json" multiple style="display:none">
                 <button @click="$refs.fileInput.click()" class="btn-secondary">Import JSON</button>
             </div>
+            
+            <div style="flex: 1"></div>
+            <button @click="doClearAll" class="btn-danger btn-secondary" style="border-color: #ef9a9a;">Remove All Data</button>
         </div>
         <div v-if="importMsg" :class="['msg', importStatus]">{{ importMsg }}</div>
     </div>
