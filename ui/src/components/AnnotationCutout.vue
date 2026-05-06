@@ -11,15 +11,29 @@ const props = defineProps({
     padding: { type: Number, default: 0.3 }, // Context factor
     clip: { type: Boolean, default: false }, // Whether to hard-clip to poly
     overlays: { type: Array, default: () => [] }, // [{ points, color? }]
-    hideLabel: { type: Boolean, default: false }
+    hideLabel: { type: Boolean, default: false },
+    highlightId: { type: [String, Number], default: null },
+    useFullRes: { type: Boolean, default: false }
 });
 
-const { getImageUrl, getIiifThumbnailUrl } = useImageManifest();
-// Use IIIF thumbnail (downsized full page) for snippets.
-// This is much faster than full res, but keeps the aspect ratio correct
-// so that our SVG/CSS cropping math works perfectly.
+const emit = defineEmits(['zoom-item']);
+
+const { getImageUrl, getIiifThumbnailUrl, getIiifRegionUrl } = useImageManifest();
+
+const vbCoords = computed(() => {
+    const parts = viewBox.value.split(' ').map(parseFloat);
+    return { x: parts[0], y: parts[1], w: parts[2], h: parts[3] };
+});
+
 const imgUrl = computed(() => {
-    return getIiifThumbnailUrl(props.source, props.folio, 1200); 
+    if (props.useFullRes) {
+        const { x, y, w, h } = vbCoords.value;
+        // Clamp and format for IIIF pct:
+        const region = `pct:${Math.max(0, x).toFixed(2)},${Math.max(0, y).toFixed(2)},${Math.min(100 - x, w).toFixed(2)},${Math.min(100 - y, h).toFixed(2)}`;
+        const url = getIiifRegionUrl(props.source, props.folio, region, "1600"); // Request 1600px width for zoom
+        if (url) return url;
+    }
+    return getIiifThumbnailUrl(props.source, props.folio, 1600); // Increased thumb size for general lists too
 });
 
 const polyPoints = computed(() => {
@@ -52,17 +66,42 @@ const viewBox = computed(() => {
     let h = maxY - minY;
     
     // Dynamic padding
-    const padX = Math.max(w * props.padding, 2);
-    const padY = Math.max(h * props.padding, 2);
+    const padX = Math.max(w * props.padding, 1);
+    const padYTop = props.hideLabel ? Math.max(h * props.padding, 1) : Math.max(h * props.padding, 5); 
+    const padYBottom = Math.max(h * props.padding, 1);
     
     // Expand box
     const vbX = Math.max(0, minX - padX);
-    const vbY = Math.max(0, minY - padY);
+    const vbY = Math.max(0, minY - padYTop);
     const vbW = Math.min(100, w + padX*2);
-    const vbH = Math.min(100, h + padY*2);
-    
+    const vbH = Math.min(100, h + padYTop + padYBottom);
     return `${vbX} ${vbY} ${vbW} ${vbH}`;
 });
+
+const layerStyle = computed(() => ({
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: `${props.width}px`,
+    height: `${props.height}px`,
+    pointerEvents: 'none',
+    overflow: 'hidden'
+}));
+
+function getLabelStyle(ov) {
+    if (!ov.points) return {};
+    const [vbX, vbY, vbW, vbH] = viewBox.value.split(' ').map(parseFloat);
+    const pts = ov.points.split(' ')[0].split(',');
+    const xPercent = (parseFloat(pts[0]) - vbX) / vbW;
+    const yPercent = (parseFloat(pts[1]) - vbY) / vbH;
+
+    return {
+        position: 'absolute',
+        left: `${xPercent * 100}%`,
+        top: `${yPercent * 100}%`,
+        transform: 'translate(-50%, -100%) translateY(-2px)'
+    };
+}
 
 // Unique ID for clip path to avoid conflicts
 const clipId = computed(() => `clip-${props.source}-${props.folio}-${Math.abs(props.points.hashCode ? props.points.hashCode() : 0)}-${Math.random().toString(36).substr(2,5)}`);
@@ -76,10 +115,13 @@ const clipId = computed(() => `clip-${props.source}-${props.folio}-${Math.abs(pr
                 <polygon :points="polyPoints" />
             </clipPath>
         </defs>
-        <!-- Map image to 100x100 space so % coords work -->
+        <!-- Map image to correct space -->
         <image 
             :href="imgUrl" 
-            x="0" y="0" width="100" height="100" 
+            :x="useFullRes ? vbCoords.x : 0" 
+            :y="useFullRes ? vbCoords.y : 0" 
+            :width="useFullRes ? vbCoords.w : 100" 
+            :height="useFullRes ? vbCoords.h : 100" 
             preserveAspectRatio="none"
             :clip-path="clip ? `url(#${clipId})` : undefined"
         />
@@ -87,58 +129,110 @@ const clipId = computed(() => `clip-${props.source}-${props.folio}-${Math.abs(pr
         <!-- Overlays (Items on the line) -->
         <polygon v-for="(ov, idx) in overlays" :key="idx"
             :points="ov.points"
-            fill="rgba(0, 255, 0, 0.3)"
-            stroke="#00cc00"
-            stroke-width="0.5"
+            :fill="ov.id === highlightId ? 'rgba(37, 99, 235, 0.4)' : 'rgba(0, 255, 0, 0.1)'"
+            :stroke="ov.id === highlightId ? '#2563eb' : '#00cc00'"
+            :stroke-width="ov.id === highlightId ? '1.5' : '0.3'"
             vector-effect="non-scaling-stroke"
+            class="interactive-poly"
+            :class="{ 'highlighted-poly': ov.id === highlightId }"
+            @click="emit('zoom-item', ov)"
         />
-        
-        <!-- ID Labels in Cutout -->
-        <g v-for="(ov, idx) in overlays" :key="'lbl-'+idx">
-             <!-- Simple logic to find top-left of point string -->
-              <text :x="ov.points.split(' ')[0].split(',')[0]" 
-                    :y="ov.points.split(' ')[0].split(',')[1] - 2" 
-                    fill="#4f46e5" font-size="6" font-weight="900" stroke="white" stroke-width="1" paint-order="stroke">
-                  {{ ov.displayId || (ov.id ? String(ov.id).substring(0,4) : "?") }}
-              </text>
-        </g>
         
         <!-- Region Outline -->
         <polygon 
             :points="polyPoints" 
             fill="none" 
-            stroke="red" 
-            stroke-width="1" 
+            stroke="#cbd5e1" 
+            stroke-width="0.5" 
             vector-effect="non-scaling-stroke" 
             opacity="0.8"
         />
     </svg>
+
+    <!-- Elegant HTML Labels Overlay -->
+    <div class="html-labels-layer" :style="layerStyle">
+        <div v-for="(ov, idx) in overlays" :key="'lbl-'+idx" 
+             class="html-label"
+             :class="{ 'highlighted-label': ov.id === highlightId }"
+             :style="getLabelStyle(ov)"
+             @click="emit('zoom-item', ov)">
+            {{ ov.displayId || (ov.id ? String(ov.id).substring(0,4) : "?") }}
+        </div>
+    </div>
     <div v-if="!hideLabel" class="label">{{ folio }}</div>
 </div>
 </template>
 
 <style scoped>
 .cutout-wrapper {
+    position: relative;
     display: inline-flex;
     flex-direction: column;
     align-items: center;
     background: #fff;
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
     overflow: hidden;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
     transition: all 0.2s ease;
-    cursor: zoom-in;
 }
-.cutout-wrapper:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    border-color: #007bff;
-}
+
 .cutout-svg {
     background: #fdfdfd;
     display: block;
+    overflow: visible;
 }
+
+.html-labels-layer {
+    z-index: 10;
+}
+
+.html-label {
+    background: white;
+    border: 1px solid black;
+    color: black;
+    padding: 1px 4px;
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    border-radius: 2px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    cursor: pointer;
+}
+.html-label:hover {
+    background: #000;
+    color: #fff;
+    z-index: 20;
+}
+.highlighted-label {
+    background: #2563eb !important;
+    color: white !important;
+    border-color: #1e3a8a !important;
+    z-index: 30;
+    transform: translate(-50%, -100%) translateY(-2px) scale(1.2);
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.highlighted-poly {
+    filter: drop-shadow(0 0 4px rgba(37, 99, 235, 0.8));
+    animation: pulse-blue 1.5s infinite;
+}
+
+@keyframes pulse-blue {
+    0% { fill-opacity: 0.4; }
+    50% { fill-opacity: 0.7; }
+    100% { fill-opacity: 0.4; }
+}
+
+.interactive-poly {
+    cursor: pointer;
+}
+.interactive-poly:hover {
+    fill: rgba(0, 255, 0, 0.3);
+}
+
 .label {
     width: 100%;
     text-align: center;

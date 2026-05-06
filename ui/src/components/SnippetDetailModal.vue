@@ -5,6 +5,8 @@ import AnnotationCutout from './AnnotationCutout.vue';
 import PatternDisplay from './PatternDisplay.vue';
 import { useTranscriptionData } from '../composables/useTranscriptionData';
 import { useAnnotationsStore } from '../stores/annotations';
+import { usePersonalTablesStore } from '../stores/personalTables';
+import { useSettingsStore } from '../stores/settings';
 import { useImageManifest } from '../composables/useImageManifest';
 
 const props = defineProps({
@@ -17,6 +19,8 @@ const router = useRouter();
 const route = useRoute();
 const { glyphs } = useTranscriptionData();
 const annotStore = useAnnotationsStore();
+const tableStore = usePersonalTablesStore();
+const settings = useSettingsStore();
 const { getStandardSource } = useImageManifest();
 
 // Reactive check against store to ensure latest link status
@@ -43,6 +47,31 @@ const textData = computed(() => {
         syl: parts[3],
         notes: parts[4]
     };
+});
+
+// Full variant ID logic
+const fullDisplayId = computed(() => {
+    const ann = liveAnnotation.value;
+    if (!ann) return '?';
+    
+    // 1. Resolve Base Ref ID
+    const basePat = ann.pattern.split(' ')[0];
+    const table = tableStore.tables.find(t => t.source === ann.source);
+    const localId = table?.rows.find(r => r.pattern === basePat)?.customId;
+    const globalId = settings.getGlobalId(basePat);
+    const refId = localId || globalId || ann.linkData?.sysId?.split('|')[0] || String(ann.id).substring(0,4);
+    
+    // 2. Resolve Variant
+    let variant = ann.variant || '';
+    const trans = ann.linkData?.transcription || '';
+    if (!variant && trans && trans.length > basePat.length && trans.startsWith(basePat)) {
+        variant = trans.substring(basePat.length).trim();
+    }
+    if (!variant && ann.pattern.includes(' ')) {
+        variant = ann.pattern.split(' ')[1];
+    }
+    
+    return variant ? `${refId}${variant}` : refId;
 });
 
 function updateVariant(val) {
@@ -104,7 +133,8 @@ function goToEditor() {
                 </div>
                 <div class="pattern-badge">
                    <PatternDisplay :pattern="annotation.pattern" :glyphs="glyphs" />
-                   <span>{{ annotation.pattern }} {{ annotation.variant || '' }}</span>
+                   <span class="ref-id-badge">{{ fullDisplayId }}</span>
+                   <span class="pattern-text">{{ annotation.pattern }}</span>
                 </div>
             </div>
 
@@ -198,10 +228,11 @@ function goToEditor() {
 }
 .pattern-badge {
     background: rgba(255,255,255,0.1); color: white;
-    padding: 4px 12px; border-radius: 20px;
-    display: flex; align-items: center; gap: 8px; font-size: 0.9rem;
-    font-family: monospace;
+    padding: 6px 16px; border-radius: 20px;
+    display: flex; align-items: center; gap: 12px; font-size: 0.95rem;
 }
+.ref-id-badge { font-family: monospace; font-weight: 800; color: #60a5fa; }
+.pattern-text { font-family: monospace; opacity: 0.8; font-size: 0.8rem; }
 
 .info-section { padding: 20px; color: #334155; }
 

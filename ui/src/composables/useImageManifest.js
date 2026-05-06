@@ -179,6 +179,16 @@ export function useImageManifest() {
     }
 
     /**
+     * Returns a IIIF Image API URL for a specific region.
+     * regionStr: "x,y,w,h" or "pct:x,y,w,h"
+     */
+    function getIiifRegionUrl(source, folio, regionStr, width = "full") {
+        const iiifMatch = fuzzyMatchIiifFolio(source, folio);
+        if (!iiifMatch || !iiifMatch.serviceUrl) return null;
+        return `${iiifMatch.serviceUrl}/${regionStr}/${width}/0/default.jpg`;
+    }
+
+    /**
      * Returns the base IIIF source key for physical manuscripts.
      */
     function getStandardSource(source, folio) {
@@ -270,6 +280,7 @@ export function useImageManifest() {
         hasImage,
         getImageUrl,
         getIiifThumbnailUrl,
+        getIiifRegionUrl,
         getStandardSource,
         getStandardFolio,
         getManifestStructure,

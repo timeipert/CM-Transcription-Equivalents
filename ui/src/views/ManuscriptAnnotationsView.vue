@@ -191,6 +191,9 @@ function onGallerySelect(p) {
     <div class="editor-header">
         <h2 class="table-title">{{ table.name }}</h2>
         <div class="actions">
+            <label class="publish-toggle" title="Make this manuscript visible in the Public Notation Overview">
+                <input type="checkbox" v-model="table.isPublished" /> Published
+            </label>
             <button @click="saveTable" class="btn-primary">{{ saveStatus }}</button>
             <button @click="doPdf" class="btn-secondary" :disabled="isProducingPdf">
                 {{ isProducingPdf ? 'Exporting...' : 'Export PDF' }}
@@ -307,7 +310,15 @@ function onGallerySelect(p) {
     padding: 4px 8px; color: #1e293b; border-radius: 4px; transition: border-color 0.2s;
 }
 .title-input:hover, .title-input:focus { border-color: #e2e8f0; background: #f1f5f9; outline: none; }
-.actions { display: flex; gap: 12px; }
+.actions { display: flex; gap: 12px; align-items: center; }
+
+.publish-toggle {
+    display: flex; align-items: center; gap: 6px; font-weight: 600; color: #475569;
+    padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc;
+    cursor: pointer; transition: all 0.2s;
+}
+.publish-toggle:hover { background: #f1f5f9; border-color: #94a3b8; }
+.publish-toggle input { margin: 0; cursor: pointer; }
 
 .editor-body { flex: 1; display: flex; min-height: 0; }
 

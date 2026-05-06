@@ -1,16 +1,21 @@
 <script setup>
-import { RouterLink, RouterView } from 'vue-router'
+import { computed } from 'vue';
+import { RouterLink, RouterView, useRoute } from 'vue-router'
+
+const route = useRoute();
+const isPublic = computed(() => route.path.startsWith('/public'));
 </script>
 
 <template>
   <div class="app-shell">
-    <nav class="top-nav">
+    <nav v-if="!isPublic" class="top-nav">
       <div class="nav-brand">CM Transcription Equivalents</div>
       <div class="nav-links">
         <RouterLink to="/" active-class="active">Overview</RouterLink>
         <RouterLink to="/equivalents" active-class="active">Transcription Equivalents</RouterLink>
         <RouterLink to="/polygons" active-class="active">Manuscript Annotations</RouterLink>
         <RouterLink to="/settings" active-class="active">Settings</RouterLink>
+        <a href="/#/public" target="_blank" class="public-ext-link">Public</a>
       </div>
     </nav>
     
@@ -59,6 +64,16 @@ import { RouterLink, RouterView } from 'vue-router'
   color: rgb(244, 244, 244);
   background: rgba(255, 255, 255, 0.2);
   font-weight: 600;
+}
+
+.public-ext-link {
+  margin-left: 40px !important;
+  color: #60a5fa !important;
+  font-weight: 700 !important;
+}
+.public-ext-link:hover {
+  color: #93c5fd !important;
+  background: rgba(96, 165, 250, 0.1) !important;
 }
 
 .main-content {

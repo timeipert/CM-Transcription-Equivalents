@@ -4,6 +4,8 @@ import TranscriptionEquivalentsView from '../views/TranscriptionEquivalentsView.
 import ManuscriptAnnotationsView from '../views/ManuscriptAnnotationsView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import PolygonManagerView from '../views/PolygonManagerView.vue'
+import PublicManuscriptsView from '../views/PublicManuscriptsView.vue'
+import PublicNotationView from '../views/PublicNotationView.vue'
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -32,6 +34,16 @@ const router = createRouter({
       path: '/polygons',
       name: 'polygons',
       component: PolygonManagerView
+    },
+    {
+      path: '/public',
+      name: 'public_directory',
+      component: PublicManuscriptsView
+    },
+    {
+      path: '/public/:source',
+      name: 'public_notation',
+      component: PublicNotationView
     }
   ]
 })

@@ -1,31 +1,43 @@
-# CM Transcription Equivalents
+# CM-Transcription-Equivalents
 
-CM Transcription Equivalents is a web-based platform designed for the paleographic analysis of medieval manuscript transcriptions. It allows researchers to visualize, categorize, and annotate "Token" evidence directly from digital scans.
+A research tool for mapping notation patterns in chant transcriptions to their physical graphical realizations in medieval manuscripts. The application provides an interface to manage transcription equivalents, annotate manuscript scans using IIIF, and generate public documentation for notation systems.
 
-## 🚀 Features
+## Core Functionalities
 
-- **Paleographic Type Analysis**: Visualize abstract transcription patterns as dynamic SVGs.
-- **Interactive Annotation**: Zoom, pan, and draw bounding boxes on manuscript scans to identify tokens.
-- **Gallery Mode**: View all tokens of a specific type collected across different manuscripts.
-- **PDF Export**: Generate professional reports including high-quality cropped snippets of your annotations, labeled with manuscript signatures and folios.
-- **High Performance**: Optimized to handle large datasets (40MB+) smoothly using Vue 3 shallow reactivity and pre-computed indexing.
+### 1. Pattern Analysis & Equivalents Management
+* **Transcription Analysis**: Aggregates pattern frequencies from transcription datasets.
+* **Equivalents Table**: A central workspace to assign stable reference identifiers (Ref IDs) and notes to graphical patterns. This allows for a standardized numbering system across different manuscript sources.
+* **Global & Local IDs**: Supports global identifiers for patterns across the entire project and manuscript-specific overrides.
 
-## 🛠️ Project Structure
+### 2. Manuscript Annotation (Polygon Editor)
+* **IIIF Integration**: Direct access to high-resolution manuscript pages via IIIF manifests.
+* **Line Region Definition**: Draw and name specific line regions (e.g., "Line 1", "Line 2") on the manuscript scans.
+* **Transcription Linking**: Link graphical signs on the scan to specific occurrences in the transcription data.
+* **Variant Support**: Handle and display variants (e.g., "10a", "10b") by extracting suffixes from linked transcriptions or manual classification.
 
-- `/ui`: The Vue.js (Vite) frontend application.
-  - `/src/composables`: Core logic for data handling, PDF generation, and image manifest resolution.
-  - `/src/stores`: Pinia stores for user-defined tables and annotations.
-  - `/src/components`: UI components for annotation and display.
-- `/scripts`: Python utilities for processing raw XML/Excel data into the `data.json` format used by the UI.
-- `/public`: Static assets including `data.json`, `image_manifest.json`, and manuscript `scans/`.
+### 3. Public Documentation (Notationsdokumentation)
+* **Manuscript Directory**: A sortable index of all annotated manuscripts.
+* **Patterns & Equivalents Index**: A summary table listing all assigned Ref IDs and their physical occurrences (Folio/Line) in the manuscript.
+* **Manuscript Line Gallery**: A visual gallery of manuscript lines with interactive HTML labels overlaid on the scans.
+* **Bidirectional Navigation**: 
+    * Clicking an occurrence in the table jumps to the corresponding line in the gallery and pulses the specific annotation.
+    * Clicking a label in the gallery scrolls the page to the relevant row in the pattern table.
+* **Detail Magnifier**: Click on any annotation snippet to open a high-resolution modal for close-up study.
 
-## ⚙️ Setup
+## Technical Implementation
+* **Frontend**: Built with Vue 3 (Composition API) and Vite.
+* **State Management**: Uses Pinia for managing annotation data, IIIF manifests, and user settings.
+* **Rendering**: Custom SVG/HTML hybrid renderer for high-quality labels and interactive polygons on manuscript images.
+* **Data Handling**: Currently utilizes browser `localStorage` for personal data persistence.
+* **Scripts**: Includes Python utilities (`scripts/`) for pre-processing transcription data and calculating pattern statistics.
+
+## Installation & Setup
 
 ### Prerequisites
-- Node.js (v16+)
-- Python 3.9+ (for data processing)
+* **Node.js** (v18 or higher)
+* **Python 3.10+** (for transcription analysis scripts)
 
-### Installation
+### Frontend (User Interface)
 1. Navigate to the `ui` directory:
    ```bash
    cd ui
@@ -34,31 +46,32 @@ CM Transcription Equivalents is a web-based platform designed for the paleograph
    ```bash
    npm install
    ```
-3. Run the development server:
+3. Start the development server:
    ```bash
    npm run dev
    ```
+4. Build for production:
+   ```bash
+   npm run build
+   ```
+   *Note: The production build is output to the `docs/` directory at the project root for easy hosting on GitHub Pages.*
 
-### Running Tests
-To verify the core paleographic processing logic:
+### Analysis Scripts
+To run the transcription analysis scripts, ensure you have the required Python libraries installed:
 ```bash
-python3 tests/test_logic.py
+pip install monodikit pandas
+```
+Run the analyzer:
+```bash
+python scripts/analyze_transcriptions.py
 ```
 
-## 🗺️ Data Workflow
+## Project Structure
+* `/ui`: The Vue 3 application.
+* `/docs`: Production build for hosting (GitHub Pages).
+* `/scripts`: Python utilities for transcription processing.
+* `/glyphs`: Pattern rendering assets.
+* `/export`: (Excluded) Raw data exports from CM.
 
-This tool operates on a "Schema-First" principle:
-1. **Extraction**: Python scripts in `/scripts` process transcription data into a standardized JSON format.
-2. **Indexing**: The UI builds a "Standard Signature" index based on physical folders in `/public/scans`.
-3. **Annotation**: User selections are saved to LocalStorage (via Pinia) and mapped to the physical signatures, allowing data to be shared across any transcription variant.
-
-## 🚀 Deployment (GitHub Pages)
-
-This project is configured to deploy from the `docs/` folder:
-1.  In your GitHub Repository, go to **Settings > Pages**.
-2.  Set **Source** to "Deploy from a branch".
-3.  Set **Branch** to `main` (or your default branch) and the folder to `/docs`.
-4.  Click **Save**.
-5.  To update the site, run `npm run build` in the `ui` folder and commit the changes in `docs/`.
-6.  The `.nojekyll` file in `docs/` ensures that GitHub Pages correctly serves the built assets.
-
+## Current Project Status
+This tool is designed for personal research and small-scale collaborative documentation. Data is stored locally in the browser. Future versions may include a backend integration for multi-user access and centralized data storage.

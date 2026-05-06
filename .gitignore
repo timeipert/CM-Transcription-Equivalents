@@ -15,7 +15,8 @@ scripts/__pycache__/
 *$py.class
 
 # Data & Raw Sources
-data/raw/
+data/
+export/
 transcription_cache.json
 transcription_equivalents.html
 
@@ -25,9 +26,6 @@ transcription_equivalents.html
 
 # Image Binaries (Ignore large folders)
 ui/public/scans/
-
-# Local Exports
-export/
 
 # Agentic / Antigrav
 .gemini/

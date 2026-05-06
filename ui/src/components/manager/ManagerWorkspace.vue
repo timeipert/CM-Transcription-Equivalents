@@ -312,14 +312,29 @@ const activeRegionItems = computed(() => {
         for (const key in annotStore.annotations) {
             if (key.startsWith(prefix)) {
                 const pattern = key.substring(prefix.length);
-                for (const a of annotStore.annotations[key]) {
-                     const localId = patternCustomIdMap.value[pattern];
-                     const globalId = settings.getGlobalId(pattern);
+                 for (const a of annotStore.annotations[key]) {
+                     const basePat = getBasePattern(pattern);
+                     const localId = patternCustomIdMap.value[basePat];
+                     const globalId = settings.getGlobalId(basePat);
                      const refId = localId || globalId;
+                     
                      let dId = refId;
                      if (!dId) dId = a.linkData?.sysId ? a.linkData.sysId.split('|')[0] : String(a.id).substring(0,4);
                      
-                     items.push({ ...a, pattern, displayId: dId });
+                     // Variant logic
+                     let variant = a.variant || '';
+                     const trans = a.linkData?.transcription || '';
+                     if (!variant && trans && trans.length > basePat.length && trans.startsWith(basePat)) {
+                         variant = trans.substring(basePat.length).trim();
+                     }
+                     // If pattern itself has a variant (legacy)
+                     if (!variant && pattern.includes(' ')) {
+                         variant = pattern.split(' ')[1];
+                     }
+
+                     if (variant) dId = `${dId}${variant}`;
+
+                     items.push({ ...a, pattern, displayId: dId, variant });
                 }
             }
         }
@@ -328,8 +343,9 @@ const activeRegionItems = computed(() => {
     
     const items = annotStore.getRegionItems(activeRegion.value.id);
     return items.map(item => {
-        const localId = patternCustomIdMap.value[item.pattern];
-        const globalId = settings.getGlobalId(item.pattern);
+        const basePat = getBasePattern(item.pattern);
+        const localId = patternCustomIdMap.value[basePat];
+        const globalId = settings.getGlobalId(basePat);
         const refId = localId || globalId;
         
         let dId = refId;
@@ -337,9 +353,18 @@ const activeRegionItems = computed(() => {
              dId = item.linkData?.sysId ? item.linkData.sysId.split('|')[0] : String(item.id).substring(0,4);
         }
         
+        // Variant logic
+        let variant = item.variant || '';
+        const trans = item.linkData?.transcription || '';
+        if (!variant && trans && trans.length > basePat.length && trans.startsWith(basePat)) {
+            variant = trans.substring(basePat.length).trim();
+        }
+        if (variant) dId = `${dId}${variant}`;
+
         return {
             ...item,
-            displayId: dId
+            displayId: dId,
+            variant
         };
     });
 });
@@ -635,7 +660,10 @@ function openSnippet(item) {
                             <div v-for="item in activeRegionItems" :key="item.id" 
                                  class="item-row"
                                  @click="openSnippet(item)">
-                                <span class="pat-tag">{{ item.pattern }} {{ item.variant || '' }}</span>
+                                <span class="pat-tag">
+                                    <span class="d-id">{{ item.displayId }}</span>
+                                    <span class="p-name">{{ item.pattern }}</span>
+                                </span>
                                 <span v-if="item.linkData && item.linkData.sysId" class="link-icon">🔗</span>
                                 <button @click.stop="deleteItem(item)" class="btn-xs delete-item">x</button>
                             </div>
@@ -809,8 +837,8 @@ function openSnippet(item) {
     width: 320px; background: #fdfdfd; border-right: 1px solid #e2e8f0; 
     display: flex; flex-direction: column; height: 100%;
 }
-.tool-section { padding: 15px; border-bottom: 1px solid #eee; display: flex; flex-direction: column; flex: 4; overflow: hidden; }
-.items-section { padding: 15px; border-bottom: 1px solid #eee; display: flex; flex-direction: column; flex: 1; overflow: hidden; background: #f8fafc; }
+.tool-section { padding: 15px; border-bottom: 1px solid #eee; display: flex; flex-direction: column; flex: 3; overflow: hidden; }
+.items-section { padding: 15px; border-bottom: 1px solid #eee; display: flex; flex-direction: column; flex: 2; overflow: hidden; background: #f8fafc; min-height: 200px; }
 
 .variant-controls { margin-bottom: 10px; padding: 10px; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; }
 .active-label { display: block; font-weight: bold; margin-bottom: 5px; color: #3b82f6; text-align: center; font-size: 1.1em; }
@@ -828,9 +856,12 @@ function openSnippet(item) {
 .pat-option.active { background: #eff6ff; border-left: 3px solid #3b82f6; }
 
 .items-list { overflow-y: auto; flex: 1; margin-top: 10px; }
-.item-row { background: white; padding: 8px; margin-bottom: 6px; border-radius: 4px; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
-.pat-tag { font-weight: 500; font-family: monospace; }
-.link-icon { font-size: 12px; }
+.item-row { background: white; padding: 8px; margin-bottom: 6px; border-radius: 4px; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: all 0.2s; }
+.item-row:hover { border-color: #3b82f6; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+.pat-tag { display: flex; align-items: center; gap: 8px; font-family: monospace; }
+.d-id { font-weight: 800; color: #2563eb; font-size: 13px; }
+.p-name { color: #64748b; font-size: 11px; }
+.link-icon { font-size: 12px; opacity: 0.7; }
 
 /* Buttons & Utils */
 .btn-primary { background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }
