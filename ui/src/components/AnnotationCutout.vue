@@ -13,7 +13,8 @@ const props = defineProps({
     overlays: { type: Array, default: () => [] }, // [{ points, color? }]
     hideLabel: { type: Boolean, default: false },
     highlightId: { type: [String, Number], default: null },
-    useFullRes: { type: Boolean, default: false }
+    useFullRes: { type: Boolean, default: false },
+    starredIds: { type: Object, default: () => new Set() }
 });
 
 const emit = defineEmits(['zoom-item']);
@@ -156,6 +157,7 @@ const clipId = computed(() => `clip-${props.source}-${props.folio}-${Math.abs(pr
              :class="{ 'highlighted-label': ov.id === highlightId }"
              :style="getLabelStyle(ov)"
              @click="emit('zoom-item', ov)">
+            <span v-if="starredIds.has(ov.id)" class="star-badge">★</span>
             {{ ov.displayId || (ov.id ? String(ov.id).substring(0,4) : "?") }}
         </div>
     </div>
@@ -206,6 +208,8 @@ const clipId = computed(() => `clip-${props.source}-${props.folio}-${Math.abs(pr
     color: #fff;
     z-index: 20;
 }
+.star-badge { color: #f59e0b; margin-right: 2px; }
+
 .highlighted-label {
     background: #2563eb !important;
     color: white !important;

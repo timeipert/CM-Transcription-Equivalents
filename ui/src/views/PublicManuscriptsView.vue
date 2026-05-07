@@ -2,15 +2,24 @@
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { usePersonalTablesStore } from '../stores/personalTables';
+import { useAnnotationsStore } from '../stores/annotations';
 
 const tableStore = usePersonalTablesStore();
+const annotStore = useAnnotationsStore();
 const router = useRouter();
 
 const sortBy = ref('source');
 const sortOrder = ref(1); // 1 for asc, -1 for desc
 
 const sortedTables = computed(() => {
-    const list = [...tableStore.tables.filter(t => t.isPublished)];
+    const list = [...tableStore.tables.filter(t => {
+        if (!t.isPublished) return false;
+        // Only show if there are ANY real annotations for this source
+        const prefix = t.source + '_';
+        return Object.keys(annotStore.regions).some(k => 
+            k.startsWith(prefix) && annotStore.regions[k].length > 0
+        );
+    })];
     list.sort((a, b) => {
         let valA, valB;
         if (sortBy.value === 'source') {

@@ -127,14 +127,12 @@ function isSelected(pat) {
     return table.value.rows.some(r => r.pattern === pat);
 }
 
-// Saving & PDF
-const saveStatus = ref("Save");
-
-function saveTable() {
-    store.updateTable(tableId, table.value);
-    saveStatus.value = "Saved!";
-    setTimeout(() => saveStatus.value = "Save", 2000);
-}
+// Auto-save logic
+watch(table, (newVal) => {
+    if (newVal && !loading.value) {
+        store.updateTable(tableId, JSON.parse(JSON.stringify(newVal)));
+    }
+}, { deep: true });
 
 const isProducingPdf = ref(false);
 async function doPdf() {
@@ -194,7 +192,7 @@ function onGallerySelect(p) {
             <label class="publish-toggle" title="Make this manuscript visible in the Public Notation Overview">
                 <input type="checkbox" v-model="table.isPublished" /> Published
             </label>
-            <button @click="saveTable" class="btn-primary">{{ saveStatus }}</button>
+            <span class="auto-save-hint">Changes saved automatically</span>
             <button @click="doPdf" class="btn-secondary" :disabled="isProducingPdf">
                 {{ isProducingPdf ? 'Exporting...' : 'Export PDF' }}
             </button>
@@ -401,6 +399,8 @@ function onGallerySelect(p) {
     border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; color: #475569;
 }
 .btn-sm:hover { border-color: #3b82f6; color: #3b82f6; }
+
+.auto-save-hint { font-size: 11px; color: #94a3b8; font-style: italic; }
 
 .empty-msg { padding: 60px; text-align: center; color: #94a3b8; font-style: italic; }
 </style>

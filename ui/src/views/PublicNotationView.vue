@@ -8,6 +8,7 @@ import { useSettingsStore } from '../stores/settings';
 import { useTranscriptionData } from '../composables/useTranscriptionData';
 import PatternDisplay from '../components/PatternDisplay.vue';
 import AnnotationCutout from '../components/AnnotationCutout.vue';
+import { useImageManifest } from '../composables/useImageManifest';
 
 const route = useRoute();
 const router = useRouter();
@@ -15,7 +16,8 @@ const tableStore = usePersonalTablesStore();
 const annotStore = useAnnotationsStore();
 const iiifStore = useIiifStore();
 const settings = useSettingsStore();
-const { glyphs } = useTranscriptionData();
+const { glyphs, rawData } = useTranscriptionData();
+const { hasImage } = useImageManifest();
 
 const source = route.params.source;
 
@@ -30,6 +32,7 @@ function handleZoom(item) {
     zoomedItem.value = item;
     isZoomOpen.value = true;
 }
+
 
 function scrollToLine(regionId, annId) {
     const el = document.getElementById(`line-${regionId}`);
@@ -51,6 +54,27 @@ function scrollToPattern(pattern) {
         highlightedPattern.value = pattern;
         setTimeout(() => highlightedPattern.value = null, 2000);
     }
+}
+
+const starredIdsSet = computed(() => {
+    const set = new Set();
+    for (const sid of tableStore.starredItems) {
+        if (sid.startsWith(source + '|')) {
+            const parts = sid.split('|');
+            set.add(parts[parts.length - 1]); // the ann.id
+        }
+    }
+    return set;
+});
+
+function toggleStar(item) {
+    const sid = `${source}|${item.folio}|${item.pattern}|${item.id}`;
+    tableStore.toggleStarred(sid);
+}
+
+function isStarred(item) {
+    const sid = `${source}|${item.folio}|${item.pattern}|${item.id}`;
+    return tableStore.starredItems.has(sid);
 }
 
 onMounted(async () => {
@@ -84,59 +108,95 @@ function getBasePattern(p) {
     return p.split(' ')[0];
 }
 
-// Extract all lines and their contents for this manuscript
+// Extract all lines from both transcription data AND annotations
 const manuscriptLines = computed(() => {
-    const lines = [];
-    const prefix = source + '_';
+    const linesMap = {}; // "folio|lineName" -> { ... }
     
-    // Sort logic for folios could be complex, simple string sort for now
+    // 1. Process all raw transcription occurrences
+    const rawDataForSource = rawData.value[source];
+    if (rawDataForSource) {
+        for (const [pattern, instances] of Object.entries(rawDataForSource)) {
+            for (const inst of instances) {
+                const [doc, fol, lineName] = inst;
+                const key = `${fol}|${lineName}`;
+                if (!linesMap[key]) {
+                    linesMap[key] = { 
+                        folio: fol, 
+                        lineName, 
+                        items: [], 
+                        regionId: null, 
+                        points: null 
+                    };
+                }
+                
+                const basePat = getBasePattern(pattern);
+                const baseRefId = patternRefMap.value[basePat] || '-';
+                let variant = (pattern.length > basePat.length) ? pattern.substring(basePat.length).trim() : '';
+                const displayId = variant ? `${baseRefId}${variant}` : baseRefId;
+
+                linesMap[key].items.push({
+                    id: inst.join('|'), // Stable ID from transcription
+                    pattern,
+                    displayId,
+                    variant,
+                    folio: fol,
+                    lineName,
+                    syl: inst[3],
+                    notes: inst[4],
+                    isVirtual: true
+                });
+            }
+        }
+    }
+
+    // 2. Overlay with real annotations (polygons)
+    const prefix = source + '_';
     for (const [key, pageRegions] of Object.entries(annotStore.regions)) {
         if (!key.startsWith(prefix)) continue;
         const folio = key.substring(prefix.length);
         
         for (const r of pageRegions) {
-            const items = annotStore.regionItems[r.id] || [];
+            const lKey = `${folio}|${r.name}`;
+            if (!linesMap[lKey]) {
+                linesMap[lKey] = { folio, lineName: r.name, items: [], regionId: r.id, points: r.points };
+            } else {
+                linesMap[lKey].regionId = r.id;
+                linesMap[lKey].points = r.points;
+            }
             
-            // Only include lines that have patterns annotated
-            if (items.length === 0) continue;
-            
-            // Map items to include their display Ref ID and context
-            const enrichedItems = items.map(item => {
-                const basePat = getBasePattern(item.pattern);
-                const baseRefId = patternRefMap.value[basePat] || item.linkData?.sysId?.split('|')[0] || '?';
+            // If real polygons exist, we might want to prioritize them or merge
+            const realItems = annotStore.regionItems[r.id] || [];
+            if (realItems.length > 0) {
+                // Merge real items into the list (avoid duplicates if possible, or just append)
+                // For now, let's just use real items if they exist for this line
+                const enrichedReal = realItems.map(ri => {
+                    const basePat = getBasePattern(ri.pattern);
+                    const baseRefId = patternRefMap.value[basePat] || ri.linkData?.sysId?.split('|')[0] || '-';
+                    let variant = ri.variant || '';
+                    if (!variant && ri.pattern.includes(' ')) variant = ri.pattern.split(' ')[1];
+                    const displayId = variant ? `${baseRefId}${variant}` : baseRefId;
+                    
+                    // Extract syl/notes from linkData if present
+                    let syl = '', notes = '';
+                    if (ri.linkData?.sysId) {
+                        const p = ri.linkData.sysId.split('|');
+                        syl = p[3] || '';
+                        notes = p[4] || '';
+                    }
+
+                    return { ...ri, displayId, folio, regionId: r.id, syl, notes };
+                });
                 
-                // Variant logic: extract from linkData.transcription if it has a suffix
-                let variant = item.variant || '';
-                const trans = item.linkData?.transcription || '';
-                if (!variant && trans && trans.length > basePat.length && trans.startsWith(basePat)) {
-                    variant = trans.substring(basePat.length).trim();
-                }
-                if (!variant && item.pattern.includes(' ')) {
-                    variant = item.pattern.split(' ')[1];
-                }
-
-                const displayId = variant ? `${baseRefId}${variant}` : baseRefId;
-
-                return { 
-                    ...item, 
-                    displayId,
-                    variant,
-                    folio, // ATTACH FOLIO HERE
-                    regionId: r.id
-                };
-            });
-
-            lines.push({
-                regionId: r.id,
-                folio,
-                lineName: r.name,
-                points: r.points,
-                items: enrichedItems
-            });
+                // Replace virtual items with real ones for this specific line if polygons exist
+                linesMap[lKey].items = enrichedReal;
+            }
         }
     }
     
-    // Attempt basic numeric sort if possible
+    // Filter: Only include lines that actually HAVE polygons/annotations
+    const lines = Object.values(linesMap).filter(l => l.points && l.items.length > 0);
+    
+    // Sort by Folio and Line
     lines.sort((a, b) => {
         if (a.folio !== b.folio) return a.folio.localeCompare(b.folio, undefined, { numeric: true });
         return a.lineName.localeCompare(b.lineName, undefined, { numeric: true });
@@ -148,14 +208,15 @@ const manuscriptLines = computed(() => {
 // For the Patterns table: map pattern -> { variant -> Set({ label, regionId, annId }) }
 const patternOccurrences = computed(() => {
     const map = {};
-    for (const line of manuscriptLines.value) {
+    const lines = manuscriptLines.value || [];
+    for (const line of lines) {
         const lineLabel = `${line.folio} / ${line.lineName}`;
-        for (const item of line.items) {
+        for (const item of line.items || []) {
+            if (!item || !item.pattern) continue;
             if (!map[item.pattern]) map[item.pattern] = {};
             const vKey = item.variant || '_base';
             if (!map[item.pattern][vKey]) map[item.pattern][vKey] = new Set();
             
-            // Store specific annotation ID for precise highlighting
             map[item.pattern][vKey].add({ 
                 label: lineLabel, 
                 regionId: line.regionId,
@@ -204,8 +265,8 @@ const patternOccurrences = computed(() => {
                     <table class="pattern-table">
                         <thead>
                             <tr>
-                                <th style="width: 60px">Ref ID</th>
-                                <th>Pattern</th>
+                                <th style="width: 70px">Ref ID</th>
+                                <th style="width: 140px">Pattern</th>
                                 <th>Occurrences</th>
                             </tr>
                         </thead>
@@ -222,7 +283,7 @@ const patternOccurrences = computed(() => {
                                     <PatternDisplay :pattern="row.pattern" :glyphs="glyphs" />
                                 </td>
                                 <td class="occurrences-cell">
-                                    <div v-if="patternOccurrences[row.pattern]" class="variant-groups">
+                                    <div v-if="patternOccurrences?.[row.pattern]" class="variant-groups">
                                         <div v-for="(locs, variant) in patternOccurrences[row.pattern]" :key="variant" class="variant-group">
                                             <div class="variant-header" v-if="variant !== '_base'">
                                                 Variant {{ variant }}
@@ -245,11 +306,12 @@ const patternOccurrences = computed(() => {
             </div>
         </section>
 
-        <!-- Section 2: Manuscript Lines Gallery -->
+        <!-- Section 2: Manuscript Line Gallery -->
         <section class="section lines-section">
             <div class="section-header">
                 <h2>Manuscript Line Gallery</h2>
-                <span class="badge">{{ manuscriptLines.length }} Lines</span>
+                <span class="badge">{{ manuscriptLines.length }} Entries</span>
+                <span class="hint">Includes all transcription occurrences and annotated polygons</span>
             </div>
 
             <div v-if="manuscriptLines.length === 0" class="empty-msg">
@@ -257,10 +319,10 @@ const patternOccurrences = computed(() => {
             </div>
 
             <div class="lines-list">
-            <div v-for="line in manuscriptLines" :key="line.regionId" 
-                 :id="`line-${line.regionId}`"
+            <div v-for="line in manuscriptLines" :key="line.regionId || (line.folio + line.lineName)" 
+                 :id="`line-${line.regionId || (line.folio + line.lineName)}`"
                  class="line-card"
-                 :class="{ 'line-highlight': highlightedLineId === line.regionId }">
+                 :class="{ 'line-highlight': highlightedLineId === (line.regionId || (line.folio + line.lineName)) }">
                 <div class="line-header">
                     <h3>
                         <span class="fol">{{ line.folio }}</span>
@@ -276,9 +338,9 @@ const patternOccurrences = computed(() => {
                     </div>
                 </div>
                     
-                    <div class="line-image">
-                    <div class="line-image">
+                    <div class="line-content">
                         <AnnotationCutout 
+                            v-if="hasImage(source, line.folio) && line.points"
                             :source="source" 
                             :folio="line.folio" 
                             :points="line.points"
@@ -289,9 +351,9 @@ const patternOccurrences = computed(() => {
                             :hideLabel="true"
                             :overlays="line.items"
                             :highlightId="highlightedAnnotationId"
+                            :starredIds="starredIdsSet"
                             @zoom-item="handleZoom"
                         />
-                    </div>
                     </div>
                 </div>
             </div>
@@ -305,6 +367,9 @@ const patternOccurrences = computed(() => {
                 <button class="close-btn" @click="isZoomOpen = false">&times;</button>
                 
                 <div class="zoom-header">
+                    <button class="star-toggle-btn" :class="{active: isStarred(zoomedItem)}" @click="toggleStar(zoomedItem)">
+                        {{ isStarred(zoomedItem) ? '★ Starred' : '☆ Star' }}
+                    </button>
                     <button class="ref-pill clickable" @click="scrollToPattern(zoomedItem.pattern); isZoomOpen = false">
                         {{ zoomedItem.displayId }}
                     </button>
@@ -467,23 +532,8 @@ const patternOccurrences = computed(() => {
     border: 1px solid #e2e8f0;
 }
 
-.pattern-table th {
-    background: #f8fafc;
-    padding: 8px 12px;
-    text-align: left;
-    font-weight: 600;
-    color: #64748b;
-    border-bottom: 2px solid #e2e8f0;
-    text-transform: uppercase;
-    font-size: 0.75rem;
-    letter-spacing: 0.05em;
-}
-
-.pattern-table td {
-    padding: 6px 12px;
-    border-bottom: 1px solid #f1f5f9;
-    vertical-align: middle;
-}
+.pattern-table th { background: #f8fafc; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; padding: 10px; }
+.pattern-table td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; }
 
 .ref-id { color: #2563eb; font-family: 'JetBrains Mono', monospace; font-size: 1rem; font-weight: 700; }
 
@@ -539,8 +589,9 @@ const patternOccurrences = computed(() => {
     overflow: hidden;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     border: 1px solid #e2e8f0;
-    padding-bottom: 10px;
 }
+.faded { opacity: 0.5; pointer-events: none; }
+
 
 .line-header {
     padding: 10px 15px;
@@ -619,6 +670,41 @@ const patternOccurrences = computed(() => {
 }
 
 .zoom-caption { color: #64748b; font-weight: 600; font-size: 0.9rem; margin: 0; }
+
+/* Optimized High-Density Virtual Gallery */
+.v-line-row {
+    background: white; border: 1px solid #e2e8f0; border-radius: 8px; 
+    margin-bottom: 16px; display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.v-line-header { background: #f8fafc; padding: 8px 16px; border-bottom: 1px solid #e2e8f0; }
+.v-line-info { display: flex; justify-content: space-between; align-items: center; }
+.v-fol-line { font-weight: 800; font-size: 0.8rem; color: #475569; font-family: monospace; }
+.v-status-badges { display: flex; gap: 6px; }
+.v-badge { font-size: 0.6rem; padding: 2px 8px; border-radius: 10px; font-weight: 700; text-transform: uppercase; }
+.v-badge.warn { background: #fef2f2; color: #ef4444; border: 1px solid #fee2e2; }
+.v-badge.info { background: #eff6ff; color: #3b82f6; border: 1px solid #dbeafe; }
+
+.v-tokens-list { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; background: #fff; }
+.v-token-compact {
+    border: 1px solid #f1f5f9; border-radius: 6px; background: #fff;
+    padding: 6px 10px; min-width: 90px; transition: all 0.2s;
+    display: flex; flex-direction: column;
+}
+.v-token-compact.starred { background: #fffbeb; border-color: #f59e0b; }
+.v-token-main { display: flex; flex-direction: column; gap: 4px; }
+.v-token-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
+.v-token-id { font-size: 0.7rem; font-weight: 800; color: #94a3b8; font-family: monospace; }
+.v-token-star { background: none; border: none; cursor: pointer; font-size: 1rem; color: #cbd5e1; padding: 0; line-height: 1; }
+.v-token-compact.starred .v-token-star { color: #f59e0b; }
+
+.v-token-meta { margin-top: 4px; border-top: 1px solid #f1f5f9; padding-top: 4px; }
+.v-syl { font-size: 0.75rem; font-weight: 800; color: #1e293b; display: block; }
+.v-pitch { font-size: 0.65rem; color: #64748b; font-family: monospace; display: block; }
+
+
+.hint { font-size: 0.8rem; color: #94a3b8; font-style: italic; }
+
 
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }

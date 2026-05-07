@@ -19,7 +19,11 @@ const router = useRouter();
 
 const annotStore = useAnnotationsStore();
 const iiifStore = useIiifStore();
+const tableStore = usePersonalTablesStore();
 const { hasImage, getImageUrl, getStandardSource, getStandardFolio, loaded: manifestLoaded } = useImageManifest();
+
+import { usePersonalTablesStore } from '../../stores/personalTables';
+
 
 const iiifLoading = ref(false);
 
@@ -74,7 +78,14 @@ watch([() => props.visible, () => iiifStore.parsedData, () => props.pattern], as
         for (const [fullPat, occs] of chunk) {
             if (fullPat === base || fullPat.startsWith(base + ' ')) {
                 for (const o of occs) {
-                    gathered.push({ source: o[0], folio: o[1], line: o[2], pattern: fullPat });
+                    gathered.push({ 
+                        source: o[0], 
+                        folio: o[1], 
+                        line: o[2], 
+                        pattern: fullPat,
+                        syl: o[3] || '',
+                        notes: o[4] || ''
+                    });
                 }
             }
         }
@@ -269,6 +280,32 @@ function openSnippet(item) {
     const full = anns.find(a => a.id === item.id);
     selectedSnippet.value = { ...item, pattern: props.pattern, linkData: full?.linkData };
 }
+
+// Starring Logic
+function toggleStar(item) {
+    const sid = `${props.sourceName}|${item.folio}|${item.pattern}|${item.id || item.sysId}`;
+    tableStore.toggleStarred(sid);
+}
+
+function isStarred(item) {
+    const sid = `${props.sourceName}|${item.folio}|${item.pattern}|${item.id || item.sysId}`;
+    return tableStore.starredItems.has(sid);
+}
+
+const virtualLines = computed(() => {
+    const map = {};
+    for (const o of allOccurrences.value) {
+        const key = `${o.folio}|${o.line}`;
+        if (!map[key]) map[key] = { folio: o.folio, line: o.line, items: [] };
+        map[key].items.push({
+            ...o,
+            sysId: [o.source, o.folio, o.line, o.syl, o.notes].join('|') // more unique
+        });
+    }
+    // Sort
+    return Object.values(map).sort((a,b) => compareFolios(a.folio, b.folio));
+});
+
 </script>
 
 <template>
@@ -286,6 +323,7 @@ function openSnippet(item) {
                         <span>Loading personal snippets...</span>
                     </div>
                     <div v-else class="cutouts-grid">
+                        <!-- Real Snippets -->
                         <div v-for="item in currentGalleryItems" :key="item.id" 
                              class="cutout-wrapper-cell">
                              
@@ -294,8 +332,12 @@ function openSnippet(item) {
                                     :source="item.source" 
                                     :folio="item.folio" 
                                     :points="item.points"
+                                    :starredIds="tableStore.starredItems"
                                 />
                                 <div class="item-label">{{ item.pattern }} {{ item.variant || '' }}</div>
+                                <button class="star-btn" @click.stop="toggleStar(item)">
+                                    {{ isStarred(item) ? '★' : '☆' }}
+                                </button>
                                 <button @click.stop="removeAnnot(item.id, item.source, item.folio)" class="btn-del" title="Delete">&times;</button>
                              </div>
                              
@@ -304,11 +346,40 @@ function openSnippet(item) {
                                      @click="goToRegion(item)">
                                  Line View &rarr;
                              </button>
-                             
                         </div>
+                        
+                        <!-- Virtual Gallery (when no real snippets) -->
+                        <template v-if="currentGalleryItems.length === 0">
+                            <div v-for="line in virtualLines" :key="line.folio + line.line" class="v-line-row">
+                                <div class="v-line-info">
+                                    <span class="v-loc">{{ line.folio }} / {{ line.line }}</span>
+                                    <button v-if="hasImage(props.sourceName, line.folio)" 
+                                            class="v-row-annot-btn" 
+                                            @click="startAnnotating({d: props.sourceName, f: line.folio})">
+                                        Annotate Line
+                                    </button>
+                                </div>
+                                <div class="v-tokens-list">
+                                    <div v-for="item in line.items" :key="item.sysId" 
+                                         class="v-token-compact" 
+                                         :class="{starred: isStarred(item)}">
+                                        <div class="v-token-content">
+                                            <div class="v-token-top">
+                                                <span class="v-token-syl">{{ item.syl || '—' }}</span>
+                                                <button class="v-token-star" @click="toggleStar(item)">
+                                                    {{ isStarred(item) ? '★' : '☆' }}
+                                                </button>
+                                            </div>
+                                            <div class="v-token-pitch">{{ item.notes || '—' }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
                     </div>
-                    <div v-if="currentGalleryItems.length===0" class="no-cutouts">
-                        <span>No annotations yet for this pattern.</span>
+                    
+                    <div v-if="currentGalleryItems.length===0 && virtualLines.length===0" class="no-cutouts">
+                        <span>No occurrences found for this pattern.</span>
                     </div>
                 </div>
                 
@@ -481,7 +552,44 @@ function openSnippet(item) {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+
+.star-btn {
+    position: absolute; top: 4px; left: 4px; background: rgba(255,255,255,0.8);
+    border: none; border-radius: 4px; padding: 2px 4px; cursor: pointer;
+    font-size: 14px; color: #cbd5e1; z-index: 10;
+}
+.star-btn:hover { color: #f59e0b; }
+
+/* Compact Virtual Gallery Styles */
+.v-line-row {
+    background: white; border: 1px solid #e2e8f0; border-radius: 6px; 
+    margin-bottom: 12px; display: flex; flex-direction: column; overflow: hidden;
+    grid-column: 1 / -1;
+}
+.v-line-info {
+    background: #f8fafc; padding: 6px 12px; border-bottom: 1px solid #e2e8f0;
+    display: flex; justify-content: space-between; align-items: center;
+}
+.v-loc { font-weight: 800; font-size: 0.75rem; color: #64748b; font-family: monospace; }
+.v-row-annot-btn { 
+    font-size: 0.65rem; background: #3b82f6; color: white; border: none; 
+    border-radius: 4px; padding: 2px 8px; cursor: pointer; font-weight: 600;
+}
+.v-tokens-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; }
+.v-token-compact {
+    border: 1px solid #f1f5f9; border-radius: 4px; background: #fff;
+    padding: 4px 8px; min-width: 80px; transition: all 0.2s;
+}
+.v-token-compact.starred { background: #fffbeb; border-color: #f59e0b; }
+.v-token-content { display: flex; flex-direction: column; gap: 2px; }
+.v-token-top { display: flex; justify-content: space-between; align-items: center; gap: 4px; }
+.v-token-syl { font-size: 0.75rem; font-weight: 800; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v-token-star { background: none; border: none; cursor: pointer; font-size: 0.85rem; color: #cbd5e1; padding: 0; line-height: 1; }
+.v-token-compact.starred .v-token-star { color: #f59e0b; }
+.v-token-pitch { font-size: 0.65rem; color: #64748b; font-family: monospace; }
+
 .faded { opacity: 0.5; pointer-events: none; }
+
 
 .page-filter {
     padding: 4px 10px;

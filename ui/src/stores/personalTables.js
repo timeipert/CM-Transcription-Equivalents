@@ -3,21 +3,37 @@ import { ref, watch } from 'vue'
 
 export const usePersonalTablesStore = defineStore('personalTables', () => {
     const tables = ref([])
+    const starredItems = ref(new Set()) // "source|folio|pattern|id"
 
     // Load from local storage
     const stored = localStorage.getItem('personalTables')
     if (stored) {
         try {
-            tables.value = JSON.parse(stored)
+            const data = JSON.parse(stored)
+            tables.value = data.tables || data // handle legacy
+            if (data.starredItems) starredItems.value = new Set(data.starredItems)
         } catch (e) {
             console.error("Failed to parse local storage", e)
         }
     }
 
     // Sync to local storage
-    watch(tables, (newVal) => {
-        localStorage.setItem('personalTables', JSON.stringify(newVal))
+    watch([tables, starredItems], () => {
+        const data = {
+            tables: tables.value,
+            starredItems: Array.from(starredItems.value)
+        }
+        localStorage.setItem('personalTables', JSON.stringify(data))
     }, { deep: true })
+
+    function toggleStarred(id) {
+        if (starredItems.value.has(id)) {
+            starredItems.value.delete(id)
+        } else {
+            starredItems.value.add(id)
+        }
+        starredItems.value = new Set(starredItems.value) // trigger reactivity
+    }
 
     function createTable(name) {
         const id = Date.now().toString()
@@ -58,5 +74,5 @@ export const usePersonalTablesStore = defineStore('personalTables', () => {
         return id
     }
 
-    return { tables, createTable, getTable, updateTable, deleteTable, getOrCreateTableForSource }
+    return { tables, starredItems, toggleStarred, createTable, getTable, updateTable, deleteTable, getOrCreateTableForSource }
 })
