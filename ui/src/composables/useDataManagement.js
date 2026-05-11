@@ -1,11 +1,13 @@
 import { useSettingsStore } from '../stores/settings';
 import { useAnnotationsStore } from '../stores/annotations';
 import { usePersonalTablesStore } from '../stores/personalTables';
+import { useIiifStore } from '../stores/iiif';
 
 export function useDataManagement() {
     const settings = useSettingsStore();
     const annotStore = useAnnotationsStore();
     const tablesStore = usePersonalTablesStore();
+    const iiifStore = useIiifStore();
 
     function exportData() {
         const data = {
@@ -21,8 +23,8 @@ export function useDataManagement() {
                     globalDisplayIds: settings.globalDisplayIds,
                     autoFillIds: settings.autoFillIds,
                     displayMode: settings.displayMode
-                    // Exclude UI ephemeral settings like snippetSize
-                }
+                },
+                iiifLinks: iiifStore.links
             }
         };
 
@@ -104,6 +106,9 @@ export function useDataManagement() {
                 if (json.content.regionItems) {
                     annotStore.regionItems = { ...annotStore.regionItems, ...json.content.regionItems };
                 }
+                if (json.content.iiifLinks) {
+                    iiifStore.links = { ...iiifStore.links, ...json.content.iiifLinks };
+                }
                 // Do not overwrite settings during a merge, as these are global to the local user.
 
                 results.push({ success: true, fileName: file.name, label: json.label, date: json.date });
@@ -119,6 +124,7 @@ export function useDataManagement() {
         annotStore.annotations = {};
         annotStore.regions = {};
         annotStore.regionItems = {};
+        iiifStore.links = {};
         // Optionally clear settings like globalDisplayIds if desired, but usually data means the user-generated tables/annotations.
     }
 

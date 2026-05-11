@@ -15,7 +15,7 @@ const isPublic = computed(() => route.path.startsWith('/public'));
         <RouterLink to="/equivalents" active-class="active">Transcription Equivalents</RouterLink>
         <RouterLink to="/polygons" active-class="active">Manuscript Annotations</RouterLink>
         <RouterLink to="/settings" active-class="active">Settings</RouterLink>
-        <a href="/#/public" target="_blank" class="public-ext-link">Public</a>
+        <RouterLink to="/public" target="_blank" class="public-ext-link">Public</RouterLink>
       </div>
     </nav>
     
