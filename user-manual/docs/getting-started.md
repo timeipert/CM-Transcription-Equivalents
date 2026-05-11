@@ -1,20 +1,27 @@
 # Getting Started
 
-Welcome to the **CM Transcription Equivalents** user manual. This tool is designed for researchers mapping medieval chant notation patterns to physical manuscript scans.
+Welcome to the **CM Transcription Equivalents** user manual.
 
 ## What is this tool?
-It's a research-focused application that bridges the gap between digital transcriptions and physical manuscript evidence.
+**CM Transcription Equivalents** is a specialized, lightweight research application designed specifically for **musicologists** working with medieval chant manuscripts and digital transcriptions. 
+
+When analyzing chant repertoires, scholars often need to bridge the gap between abstract melodic data (e.g., modern transcriptions, MEI data, Volpiano) and the physical graphical reality of the medieval manuscript. This tool allows you to:
+1. Identify and categorize reoccurring neume patterns in your transcription data.
+2. Link those abstract patterns directly to specific ink strokes on high-resolution IIIF manuscript scans.
+3. Establish a standard typology (Reference IDs) for graphical signs across different manuscript sources.
+4. Generate interactive, public-facing documentation of your notation analysis.
 
 ## Prerequisites
 - A modern web browser (Chrome, Firefox, Safari).
-- Access to IIIF manifests for the manuscripts you wish to annotate.
-- Transcription data in the expected JSON/CSV format.
+- Access to IIIF manifests for the manuscripts you wish to annotate (usually provided by library archives).
+- Transcription data in a supported JSON format (exported from your primary transcription environment).
 
 ## Installation
 The tool is primarily a web application. You can run it locally:
-1. Clone the repository.
-2. Navigate to the `ui` directory.
-3. Run `npm install`.
-4. Run `npm run dev`.
+1. Clone the repository to your local machine.
+2. Navigate to the `ui` directory in your terminal.
+3. Run `npm install` to install dependencies.
+4. Run `npm run dev` to start the local development server.
+5. Open the provided `localhost` URL in your browser.
 
-Next, let's look at the [Core Workflow](./workflow).
+Next, read about the [Conventions & Terminology](./conventions) used in this application.

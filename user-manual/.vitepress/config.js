@@ -13,15 +13,16 @@ export default defineConfig({
         text: 'Introduction',
         items: [
           { text: 'Getting Started', link: '/docs/getting-started' },
+          { text: 'Conventions & Terminology', link: '/docs/conventions' },
           { text: 'Core Workflow', link: '/docs/workflow' }
         ]
       },
       {
-        text: 'Features',
+        text: 'Features & Usage',
         items: [
-          { text: 'Pattern Analysis', link: '/docs/features#pattern-analysis' },
-          { text: 'Manuscript Annotation', link: '/docs/features#manuscript-annotation' },
-          { text: 'Public Documentation', link: '/docs/features#public-documentation' }
+          { text: 'Equivalents Management', link: '/docs/equivalents' },
+          { text: 'Manuscript Annotation', link: '/docs/annotation' },
+          { text: 'Public Documentation', link: '/docs/public-view' }
         ]
       }
     ],
