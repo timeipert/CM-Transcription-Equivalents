@@ -57,12 +57,47 @@ export function useDataManagement() {
         });
     }
 
-    async function importData(files) {
+    function extractSourcesFromContent(content) {
+        const sources = new Set();
+        (content.personalTables || []).forEach(t => sources.add(t.source));
+        Object.keys(content.iiifLinks || {}).forEach(s => sources.add(s));
+        
+        // Extract from regions (key is Source_Folio)
+        Object.keys(content.regions || {}).forEach(key => {
+            const parts = key.split('_');
+            if (parts.length > 1) {
+                // Assuming Folio is the last part, the rest is Source
+                parts.pop();
+                sources.add(parts.join('_'));
+            }
+        });
+        
+        // Extract from annotations (key is Source_Folio_Pattern)
+        Object.keys(content.annotations || {}).forEach(key => {
+            const parts = key.split('_');
+            if (parts.length > 2) {
+                parts.pop(); // Pattern
+                parts.pop(); // Folio
+                sources.add(parts.join('_'));
+            }
+        });
+        
+        return Array.from(sources);
+    }
+
+    async function analyzeImportFiles(files) {
         if (!Array.isArray(files) && !(files instanceof FileList)) {
-            files = [files]; // fallback for single file
+            files = [files];
         }
 
         const results = [];
+        // Gather all local sources for comparison
+        const localSourcesSet = new Set(extractSourcesFromContent({
+            personalTables: tablesStore.tables,
+            iiifLinks: iiifStore.links,
+            regions: annotStore.regions,
+            annotations: annotStore.annotations
+        }));
 
         for (const file of Array.from(files)) {
             try {
@@ -71,52 +106,152 @@ export function useDataManagement() {
                     throw new Error("Invalid backup file format");
                 }
 
-                // 1. Check for overlapping manuscripts in personal tables
-                const localSources = new Set(tablesStore.tables.map(t => t.source));
-                const importedSources = new Set((json.content.personalTables || []).map(t => t.source));
-                const overlapSources = [...importedSources].filter(s => localSources.has(s));
+                const importedSources = extractSourcesFromContent(json.content);
+                const newSources = [];
+                const overlapSources = [];
 
-                // 2. Check for overlapping keys in annotations and regions
-                const localAnnotKeys = Object.keys(annotStore.annotations || {});
-                const importedAnnotKeys = Object.keys(json.content.annotations || {});
-                const overlapAnnots = importedAnnotKeys.filter(k => localAnnotKeys.includes(k) && annotStore.annotations[k].length > 0 && json.content.annotations[k].length > 0);
-
-                const localRegionKeys = Object.keys(annotStore.regions || {});
-                const importedRegionKeys = Object.keys(json.content.regions || {});
-                const overlapRegions = importedRegionKeys.filter(k => localRegionKeys.includes(k) && annotStore.regions[k].length > 0 && json.content.regions[k].length > 0);
-
-                if (overlapSources.length > 0 || overlapAnnots.length > 0 || overlapRegions.length > 0) {
-                    const msgParts = [];
-                    if (overlapSources.length > 0) msgParts.push(`Sources (${overlapSources.join(', ')})`);
-                    if (overlapAnnots.length > 0) msgParts.push(`${overlapAnnots.length} annotations`);
-                    if (overlapRegions.length > 0) msgParts.push(`${overlapRegions.length} regions`);
-                    throw new Error(`Overlapping data detected: ${msgParts.join('; ')}`);
+                for (const src of importedSources) {
+                    if (localSourcesSet.has(src)) overlapSources.push(src);
+                    else newSources.push(src);
                 }
 
-                // Restore Stores safely (Merge instead of overwrite)
-                if (json.content.personalTables) {
-                    tablesStore.tables = [...tablesStore.tables, ...json.content.personalTables];
-                }
-                if (json.content.annotations) {
-                    annotStore.annotations = { ...annotStore.annotations, ...json.content.annotations };
-                }
-                if (json.content.regions) {
-                    annotStore.regions = { ...annotStore.regions, ...json.content.regions };
-                }
-                if (json.content.regionItems) {
-                    annotStore.regionItems = { ...annotStore.regionItems, ...json.content.regionItems };
-                }
-                if (json.content.iiifLinks) {
-                    iiifStore.links = { ...iiifStore.links, ...json.content.iiifLinks };
-                }
-                // Do not overwrite settings during a merge, as these are global to the local user.
-
-                results.push({ success: true, fileName: file.name, label: json.label, date: json.date });
+                results.push({ 
+                    success: true, 
+                    fileName: file.name, 
+                    parsed: json, 
+                    newSources, 
+                    overlapSources 
+                });
             } catch (err) {
                 results.push({ success: false, fileName: file.name, error: err.message });
             }
         }
         return results;
+    }
+
+    function removeLocalDataForSource(source) {
+        // Remove from personalTables
+        tablesStore.tables = tablesStore.tables.filter(t => t.source !== source);
+        
+        // Remove from iiifLinks
+        if (iiifStore.links[source]) {
+            delete iiifStore.links[source];
+            // Trigger reactivity by re-assigning
+            iiifStore.links = { ...iiifStore.links };
+        }
+
+        const prefix = source + '_';
+
+        // Remove from annotations
+        const newAnnots = { ...annotStore.annotations };
+        for (const key in newAnnots) {
+            if (key.startsWith(prefix)) delete newAnnots[key];
+        }
+        annotStore.annotations = newAnnots;
+
+        // Remove from regions & regionItems
+        const newRegions = { ...annotStore.regions };
+        const newRegionItems = { ...annotStore.regionItems };
+        for (const key in newRegions) {
+            if (key.startsWith(prefix)) {
+                // delete its items
+                const regionList = newRegions[key];
+                for (const r of regionList) {
+                    delete newRegionItems[r.id];
+                }
+                delete newRegions[key];
+            }
+        }
+        annotStore.regions = newRegions;
+        annotStore.regionItems = newRegionItems;
+    }
+
+    function filterJsonContentForSources(content, allowedSources) {
+        const allowedSet = new Set(allowedSources);
+        const filtered = {
+            personalTables: [],
+            annotations: {},
+            regions: {},
+            regionItems: {},
+            iiifLinks: {}
+        };
+
+        if (content.personalTables) {
+            filtered.personalTables = content.personalTables.filter(t => allowedSet.has(t.source));
+        }
+        if (content.iiifLinks) {
+            for (const src in content.iiifLinks) {
+                if (allowedSet.has(src)) filtered.iiifLinks[src] = content.iiifLinks[src];
+            }
+        }
+
+        const keptRegionIds = new Set();
+        
+        if (content.regions) {
+            for (const key in content.regions) {
+                const src = allowedSources.find(s => key.startsWith(s + '_'));
+                if (src) {
+                    filtered.regions[key] = content.regions[key];
+                    content.regions[key].forEach(r => keptRegionIds.add(r.id));
+                }
+            }
+        }
+
+        if (content.regionItems) {
+            for (const rId in content.regionItems) {
+                if (keptRegionIds.has(rId)) {
+                    filtered.regionItems[rId] = content.regionItems[rId];
+                }
+            }
+        }
+
+        if (content.annotations) {
+            for (const key in content.annotations) {
+                const src = allowedSources.find(s => key.startsWith(s + '_'));
+                if (src) {
+                    filtered.annotations[key] = content.annotations[key];
+                }
+            }
+        }
+
+        return filtered;
+    }
+
+    function executeImport(parsedJson, choices) {
+        // choices: { [source]: 'overwrite' | 'skip' }
+        const importedSources = extractSourcesFromContent(parsedJson.content);
+        const allowedSources = [];
+
+        for (const src of importedSources) {
+            if (choices[src] === 'skip') {
+                continue;
+            } else if (choices[src] === 'overwrite') {
+                removeLocalDataForSource(src);
+                allowedSources.push(src);
+            } else {
+                // New source (no choice needed, automatically allowed)
+                allowedSources.push(src);
+            }
+        }
+
+        const filteredContent = filterJsonContentForSources(parsedJson.content, allowedSources);
+
+        // Merge into stores
+        if (filteredContent.personalTables.length > 0) {
+            tablesStore.tables = [...tablesStore.tables, ...filteredContent.personalTables];
+        }
+        if (Object.keys(filteredContent.annotations).length > 0) {
+            annotStore.annotations = { ...annotStore.annotations, ...filteredContent.annotations };
+        }
+        if (Object.keys(filteredContent.regions).length > 0) {
+            annotStore.regions = { ...annotStore.regions, ...filteredContent.regions };
+        }
+        if (Object.keys(filteredContent.regionItems).length > 0) {
+            annotStore.regionItems = { ...annotStore.regionItems, ...filteredContent.regionItems };
+        }
+        if (Object.keys(filteredContent.iiifLinks).length > 0) {
+            iiifStore.links = { ...iiifStore.links, ...filteredContent.iiifLinks };
+        }
     }
 
     function clearAllData() {
@@ -125,8 +260,7 @@ export function useDataManagement() {
         annotStore.regions = {};
         annotStore.regionItems = {};
         iiifStore.links = {};
-        // Optionally clear settings like globalDisplayIds if desired, but usually data means the user-generated tables/annotations.
     }
 
-    return { exportData, importData, clearAllData };
+    return { exportData, analyzeImportFiles, executeImport, clearAllData };
 }

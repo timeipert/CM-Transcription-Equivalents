@@ -1,16 +1,21 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useSettingsStore } from '../stores/settings';
-import { useDataManagement } from '../composables/useDataManagement'; // Added
+import { useDataManagement } from '../composables/useDataManagement';
 import SvgPattern from '../components/SvgPattern.vue';
 
 const store = useSettingsStore();
 
 // Data Management
-const { exportData, importData, clearAllData } = useDataManagement();
+const { exportData, analyzeImportFiles, executeImport, clearAllData } = useDataManagement();
 const fileInput = ref(null);
 const importMsg = ref("");
 const importStatus = ref(""); // 'success' or 'error'
+
+// Merge Modal State
+const showMergeModal = ref(false);
+const pendingAnalysis = ref(null);
+const mergeChoices = ref({});
 
 function doClearAll() {
     if (confirm("Are you sure you want to delete ALL your local annotations, regions, and tables? This cannot be undone! Make sure you export a JSON backup first.")) {
@@ -29,34 +34,62 @@ async function doImport(event) {
     const files = event.target.files;
     if (!files || files.length === 0) return;
     
-    importMsg.value = "Importing...";
+    importMsg.value = "Analyzing file...";
     importStatus.value = "";
     
     try {
-        const results = await importData(files);
-        const successes = results.filter(r => r.success);
-        const errors = results.filter(r => !r.success);
-
-        if (errors.length === 0) {
-            importMsg.value = `Success! ${successes.length} file(s) imported seamlessly.`;
-            importStatus.value = "success";
-        } else if (successes.length === 0) {
-            importMsg.value = `Error: All files failed to import. (${errors[0].error})`;
+        const results = await analyzeImportFiles(files);
+        // We handle only the first file for simplicity in conflict resolution
+        const result = results[0];
+        
+        if (!result.success) {
+            importMsg.value = `Error: ${result.error}`;
             importStatus.value = "error";
-        } else {
-            importMsg.value = `Partial success: ${successes.length} imported, ${errors.length} failed (e.g. ${errors[0].error}).`;
-            importStatus.value = "error"; // Show as error color since something failed
+            return;
         }
-        
-        // Clear file input
-        event.target.value = null;
-        
-        // Clear msg after 8s
-        setTimeout(() => importMsg.value = "", 8000);
+
+        if (result.overlapSources.length > 0) {
+            // Need conflict resolution
+            pendingAnalysis.value = result;
+            mergeChoices.value = {};
+            result.overlapSources.forEach(src => mergeChoices.value[src] = 'skip');
+            showMergeModal.value = true;
+            importMsg.value = "Merge resolution required.";
+            importStatus.value = "";
+        } else {
+            // No overlaps, execute immediately
+            executeImport(result.parsed, {});
+            importMsg.value = "Success! Data imported seamlessly.";
+            importStatus.value = "success";
+            setTimeout(() => importMsg.value = "", 4000);
+        }
     } catch (e) {
         importMsg.value = `Critical Error: ${e.message}`;
         importStatus.value = "error";
+    } finally {
+        event.target.value = null; // Clear input
     }
+}
+
+function confirmMerge() {
+    try {
+        executeImport(pendingAnalysis.value.parsed, mergeChoices.value);
+        showMergeModal.value = false;
+        importMsg.value = "Success! Data imported and merged.";
+        importStatus.value = "success";
+        setTimeout(() => importMsg.value = "", 4000);
+    } catch(e) {
+        importMsg.value = `Merge Error: ${e.message}`;
+        importStatus.value = "error";
+        showMergeModal.value = false;
+    }
+}
+
+function cancelMerge() {
+    showMergeModal.value = false;
+    importMsg.value = "Import cancelled.";
+    importStatus.value = "";
+    setTimeout(() => importMsg.value = "", 4000);
 }
 
 // UI State for adding new ID mapping
@@ -151,6 +184,48 @@ function addMapping() {
             <div v-else class="empty">No global ID preferences set</div>
         </div>
     </div>
+
+    <!-- Merge Conflict Modal -->
+    <div v-if="showMergeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Merge Conflict Resolution</h3>
+                <span class="close" @click="cancelMerge">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p>The imported file contains data for manuscripts that already exist in your workspace.</p>
+                
+                <div v-if="pendingAnalysis.newSources.length > 0" class="merge-section">
+                    <h4>New Manuscripts (Will be imported safely)</h4>
+                    <div class="new-sources-list">
+                        <span v-for="src in pendingAnalysis.newSources" :key="src" class="badge">{{ src }}</span>
+                    </div>
+                </div>
+
+                <div class="merge-section">
+                    <h4>Overlapping Manuscripts</h4>
+                    <p class="desc">Choose whether to overwrite your local data with the imported data, or skip importing these specific manuscripts.</p>
+                    <div class="conflict-list">
+                        <div v-for="src in pendingAnalysis.overlapSources" :key="src" class="conflict-item">
+                            <span class="src-name">{{ src }}</span>
+                            <div class="conflict-actions">
+                                <label class="radio-label" :class="{selected: mergeChoices[src]==='skip'}">
+                                    <input type="radio" :name="'merge_'+src" value="skip" v-model="mergeChoices[src]"> Skip
+                                </label>
+                                <label class="radio-label overwrite" :class="{selected: mergeChoices[src]==='overwrite'}">
+                                    <input type="radio" :name="'merge_'+src" value="overwrite" v-model="mergeChoices[src]"> Overwrite Local
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button @click="cancelMerge" class="btn-secondary">Cancel</button>
+                <button @click="confirmMerge" class="btn-primary">Confirm Import</button>
+            </div>
+        </div>
+    </div>
 </div>
 </template>
 
@@ -190,4 +265,29 @@ th { background: #f5f5f5; font-weight: 600; }
 .btn-secondary:hover { background: #f5f5f5; }
 .btn-primary { background: #007bff; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; }
 .btn-primary:hover { background: #0056b3; }
+
+/* Modal Styles */
+.modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+.modal-content { background: white; border-radius: 8px; width: 600px; max-width: 90vw; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; }
+.modal-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+.modal-header h3 { margin: 0; }
+.close { font-size: 24px; cursor: pointer; color: #888; }
+.close:hover { color: #000; }
+.modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+.modal-footer { padding: 20px; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 10px; background: #fafafa; }
+
+.merge-section { margin-top: 20px; padding: 15px; border: 1px solid #eee; border-radius: 6px; background: #fafafa; }
+.merge-section h4 { margin-top: 0; margin-bottom: 10px; color: #333; }
+.new-sources-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.badge { background: #e3f2fd; color: #1976d2; padding: 4px 10px; border-radius: 20px; font-size: 0.85em; font-weight: 500; }
+
+.conflict-list { display: flex; flex-direction: column; gap: 10px; }
+.conflict-item { display: flex; justify-content: space-between; align-items: center; background: white; padding: 12px 15px; border-radius: 6px; border: 1px solid #e0e0e0; }
+.src-name { font-weight: bold; color: #333; }
+.conflict-actions { display: flex; gap: 10px; }
+.radio-label { display: flex; align-items: center; gap: 5px; cursor: pointer; padding: 6px 12px; border-radius: 4px; border: 1px solid #ddd; background: #f9f9f9; transition: all 0.2s; font-size: 0.9em; }
+.radio-label:hover { background: #f0f0f0; }
+.radio-label.selected { background: #e8f5e9; border-color: #81c784; color: #2e7d32; font-weight: 500; }
+.radio-label.overwrite.selected { background: #ffebee; border-color: #e57373; color: #c62828; }
+.radio-label input { margin: 0; }
 </style>
