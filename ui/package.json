@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "build:manual": "npm --prefix ../user-manual run build && rm -rf public/manual && cp -r ../user-manual/.vitepress/dist public/manual",
+    "predev": "npm run build:manual",
+    "prebuild": "npm run build:manual",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"

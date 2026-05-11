@@ -15,6 +15,7 @@ const isPublic = computed(() => route.path.startsWith('/public'));
         <RouterLink to="/equivalents" active-class="active">Transcription Equivalents</RouterLink>
         <RouterLink to="/polygons" active-class="active">Manuscript Annotations</RouterLink>
         <RouterLink to="/settings" active-class="active">Settings</RouterLink>
+        <a href="/manual/" target="_blank" class="manual-link">User Manual</a>
         <RouterLink to="/public" target="_blank" class="public-ext-link">Public</RouterLink>
       </div>
     </nav>
@@ -74,6 +75,15 @@ const isPublic = computed(() => route.path.startsWith('/public'));
 .public-ext-link:hover {
   color: #93c5fd !important;
   background: rgba(96, 165, 250, 0.1) !important;
+}
+
+.manual-link {
+  color: #4ade80 !important;
+  font-weight: 600 !important;
+}
+.manual-link:hover {
+  color: #86efac !important;
+  background: rgba(74, 222, 128, 0.1) !important;
 }
 
 .main-content {
