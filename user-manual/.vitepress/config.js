@@ -22,6 +22,7 @@ export default defineConfig({
         items: [
           { text: 'Equivalents Management', link: '/docs/equivalents' },
           { text: 'Manuscript Annotation', link: '/docs/annotation' },
+          { text: 'Settings & Data Backup', link: '/docs/settings-and-data' },
           { text: 'Public Documentation', link: '/docs/public-view' }
         ]
       }

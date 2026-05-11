@@ -12,6 +12,10 @@ Before you can annotate, you need to add a manuscript to your workspace.
 4. **Crucially**, provide the valid **IIIF Manifest URL** for the manuscript.
 5. The tool will parse the manifest and load the image viewer.
 
+::: info 💡 Suggestion for Future Documentation
+*[Consider inserting a brief screen recording here demonstrating how to find a IIIF Manifest URL on a library site (like Gallica or e-codices) and pasting it into the application.]*
+:::
+
 ## Drawing Line Regions
 
 Annotations are organized by "Lines". Before drawing individual neumes, you must define the physical lines on the page.
@@ -29,6 +33,11 @@ Once lines are defined, you can annotate individual graphical shapes (neumes).
 1. Select a Line Region you created.
 2. Switch to the **Polygon** drawing tool in the toolbar.
 3. Click to drop points around the perimeter of the specific neume you want to capture. Close the shape by clicking the first point again.
+
+::: info 💡 Suggestion for Future Documentation
+*[Consider inserting an animated GIF or short video here showing the precise click-by-click process of drawing a polygon around a complex neume shape.]*
+:::
+
 4. The **Transcription Linking** panel will open.
 5. The panel displays occurrences from your transcription data that are mapped to this manuscript.
 6. Select the exact occurrence that corresponds to the shape you just drew.

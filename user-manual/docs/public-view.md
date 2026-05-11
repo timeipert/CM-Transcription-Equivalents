@@ -28,6 +28,11 @@ This is the showcase feature.
 
 ### Bidirectional Navigation
 The public view is highly interconnected:
+
+::: info 💡 Suggestion for Future Documentation
+*[A screen recording demonstrating this bidirectional linking would be highly effective. Show a user clicking a row in the table, the page automatically scrolling down, and the corresponding shape pulsing on the manuscript scan.]*
+:::
+
 - **Table to Gallery**: Clicking an occurrence listed in the Equivalents Table instantly scrolls the page to the visual gallery, bringing the specific manuscript line into view, and briefly animating the polygon to draw the user's eye to the exact spot on the page.
 - **Gallery to Table**: Clicking an interactive label on the manuscript scan itself will scroll the user back up to the exact row in the Equivalents Table, allowing them to see how many other times that specific shape occurs.
 
