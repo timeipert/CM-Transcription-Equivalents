@@ -3,6 +3,7 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: "CM Transcription Equivalents",
   description: "User Manual & Documentation",
+  base: '/manual/',
   themeConfig: {
     nav: [
       { text: 'Home', link: '/' },

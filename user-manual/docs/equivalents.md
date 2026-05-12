@@ -1,40 +1,38 @@
 # Equivalents Management
 
-The **Equivalents Management** view is the control center for your transcription analysis. This is where you establish the formal link between an abstract musical concept (the transcription pattern) and its physical identifier (the Ref ID).
+The **Transcription Equivalents** view is where you organize and map abstract transcription patterns to your standardized Reference IDs for each specific manuscript.
 
-## Understanding the Table
+## Selecting a Manuscript
 
-When you open the Equivalents view, you will see a large data table.
+The Equivalents view opens with a master list of all **Manuscript Sources** extracted from your transcription datasets. 
 
-- **Pattern**: The transcription data sequence (e.g., a Volpiano string like `1---c--d---3`).
-- **Occurrences**: How many times this exact pattern appears across all your loaded transcription datasets.
-- **Global ID**: The project-wide Reference ID assigned to this pattern.
-- **Local IDs**: A list of manuscript-specific overrides, if any.
-- **Notes**: A text field for your personal observations about this pattern.
+1. Browse or search for the specific manuscript you want to manage.
+2. Check the status column to see if a manuscript has been "annotated" (has assigned patterns) or is "Not Started".
+3. Click on a manuscript row or its "Edit" button to open the Pattern Editor for that specific source.
 
-## Assigning Global IDs
+## The Pattern Editor
 
-To categorize a new pattern:
-1. Locate a pattern you want to categorize in the table. You can use the search bar to filter for specific strings.
-2. Click into the **Global ID** cell for that row.
-3. Type your chosen Reference ID (e.g., `25`, `14a`).
-4. Press `Enter` or click outside the cell to save. 
+Once inside a manuscript's editor, the interface is split into two panels:
 
-The tool will now associate every occurrence of that pattern with that Ref ID across all manuscripts (unless overridden).
+### 1. Left Panel: Available Patterns
+This panel lists every unique musical pattern found in the transcription data for this specific manuscript.
+- Use the **Sort** dropdown to order patterns by frequency, alphabetical order, or length.
+- Use the **Search** bar to quickly find a specific string (e.g., `*dd`).
+- Click on any pattern in the list to add it to your active table on the right.
 
-## Managing Local Overrides
+### 2. Right Panel: Active Table
+This table shows the patterns you have selected to manage for this manuscript.
 
-Sometimes a specific manuscript writes a standard musical gesture in a non-standard way. You can document this using a Local Override.
+- **ID**: The Reference ID you wish to assign to this pattern in this manuscript. 
+- **Pattern**: A visual rendering of the transcription string.
+- **Frequency**: How many times this specific pattern occurs within this manuscript.
+- **Actions**: Contains a button to open the **Gallery** (to preview the physical occurrences) or remove the pattern from your active list.
 
-1. Click the `+` or edit icon in the **Local IDs** column for a specific pattern.
-2. A modal will appear allowing you to select a specific manuscript from your directory.
-3. Enter the overriding Ref ID for that specific manuscript.
-4. Save the change.
+## Setting Reference IDs
 
-Now, whenever you encounter that pattern in that specific manuscript, it will be labeled with the Local ID instead of the Global ID.
+By default, the ID you type into the "ID" column applies **only to the current manuscript**. This allows you to handle manuscript-specific graphical variations easily.
 
-## Filtering and Searching
+### The Global ID Button (★)
+If you determine that a pattern should use a specific Ref ID across *all* manuscripts in your project, enter the ID and click the **★ (Star)** icon next to the input field. 
 
-The search bar at the top of the table allows you to quickly find patterns. 
-- You can search by the pattern string itself to find related musical gestures.
-- You can search by Ref ID to see all patterns assigned to a specific graphical shape.
+This promotes the ID to a **Global Default**. In the future, whenever you add this pattern to another manuscript, the tool will automatically pre-fill the ID field with your Global Default, saving you time while still allowing you to overwrite it if that specific manuscript differs.

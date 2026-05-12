@@ -6,25 +6,27 @@ The core visual feature of the tool is the **Polygon Editor**. This interface al
 
 Before you can annotate, you need to add a manuscript to your workspace.
 
-1. Navigate to the **Manuscript Annotations** view.
-2. Click **Add Manuscript**.
-3. Provide a short, recognizable name (e.g., "St. Gallen 359") and a unique system identifier.
+1. Navigate to the **Manuscript Annotations** view (the Polygon Editor).
+2. In the left sidebar, click the **+ IIIF** button at the top.
+3. A modal will appear. Provide the **Source Name** (this should match the source name used in your transcription data, e.g., "St. Gallen 359").
 4. **Crucially**, provide the valid **IIIF Manifest URL** for the manuscript.
-5. The tool will parse the manifest and load the image viewer.
+5. Click **Add Source**. The tool will parse the manifest and list the available folios/pages in the sidebar.
 
-::: info 💡 Suggestion for Future Documentation
-*[Consider inserting a brief screen recording here demonstrating how to find a IIIF Manifest URL on a library site (like Gallica or e-codices) and pasting it into the application.]*
-:::
+
+<video src="/figures/iiif.mov" controls autoplay loop muted width="100%" style="border-radius: 8px; margin: 20px 0;"></video>
+
 
 ## Drawing Line Regions
 
-Annotations are organized by "Lines". Before drawing individual neumes, you must define the physical lines on the page.
+Annotations are organized by "Lines". Before drawing individual neumes, you must define the staff lines on the page.
 
 1. Open a specific folio/page from the manuscript.
 2. In the toolbar, ensure the **Line Region** tool is selected (often represented by a rectangle icon).
 3. Click and drag a box around a complete line of music and text.
 4. A prompt will appear asking you to name the region. Use a standard convention (e.g., "Line 1", "Line 2").
 5. Repeat this for all lines on the page you wish to annotate.
+
+<video src="/figures/line_select.mov" controls autoplay loop muted width="100%" style="border-radius: 8px; margin: 20px 0;"></video>
 
 ## Annotating Specific Signs
 
@@ -34,9 +36,7 @@ Once lines are defined, you can annotate individual graphical shapes (neumes).
 2. Switch to the **Polygon** drawing tool in the toolbar.
 3. Click to drop points around the perimeter of the specific neume you want to capture. Close the shape by clicking the first point again.
 
-::: info 💡 Suggestion for Future Documentation
-*[Consider inserting an animated GIF or short video here showing the precise click-by-click process of drawing a polygon around a complex neume shape.]*
-:::
+<video src="/figures/polygon.mov" controls autoplay loop muted width="100%" style="border-radius: 8px; margin: 20px 0;"></video>
 
 4. The **Transcription Linking** panel will open.
 5. The panel displays occurrences from your transcription data that are mapped to this manuscript.

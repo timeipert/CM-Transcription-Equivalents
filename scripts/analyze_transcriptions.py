@@ -102,6 +102,10 @@ def analyze_single_source(corpus_path):
             
             # Check for Syllable
             if node_type == "Syllable":
+                syl_type = getattr(node, "syllableType", "Normal") if not isinstance(node, dict) else node.get("syllableType", "Normal")
+                if syl_type != "Normal":
+                    return
+                
                 text = getattr(node, "text", "") if not isinstance(node, dict) else node.get("text", "")
                 current_context["syllable"] = text
                 
@@ -161,6 +165,21 @@ def analyze_single_source(corpus_path):
             #         current_context["line"] = str(val + 1)
             #     except:
             #         pass
+            
+            elif node_type == "ParatextContainer":
+                text = getattr(node, "text", "") if not isinstance(node, dict) else node.get("text", "")
+                
+                # Check for line change '|'
+                if "|" in text:
+                    line_counter += text.count("|")
+                    current_context["line"] = str(line_counter)
+                
+                # Check for folio change e.g. '(f. 157v)' or 'f. 157'
+                m = re.search(r'f\.\s*([0-9]+[rv]?)', text, re.IGNORECASE)
+                if m:
+                    current_context["folio"] = m.group(1)
+                    line_counter = 1
+                    current_context["line"] = "1"
 
             elif node_type == "nonSpaced":
                 # Check if this node IS a nonSpaced group or has one
