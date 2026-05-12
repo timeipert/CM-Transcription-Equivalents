@@ -9,6 +9,8 @@ import { useTranscriptionData } from '../composables/useTranscriptionData';
 import PatternDisplay from '../components/PatternDisplay.vue';
 import AnnotationCutout from '../components/AnnotationCutout.vue';
 import { useImageManifest } from '../composables/useImageManifest';
+import { comparePatternIds } from '../utils/sorting';
+
 
 const route = useRoute();
 const router = useRouter();
@@ -98,7 +100,8 @@ const patternRefMap = computed(() => {
 // Split table rows into two halves for the 2-column layout
 const tableHalves = computed(() => {
     if (!table.value) return [[], []];
-    const rows = table.value.rows;
+    // Create a copy and sort by ID
+    const rows = [...table.value.rows].sort((a, b) => comparePatternIds(a.customId, b.customId));
     const mid = Math.ceil(rows.length / 2);
     return [rows.slice(0, mid), rows.slice(mid)];
 });

@@ -213,15 +213,15 @@ const contentStyle = computed(() => {
                  
                  <!-- ID Labels -->
                   <g v-for="ov in overlays" :key="'label-' + ov.id">
-                      <rect :x="getRectFromPoints(ov.points).x - 0.2" 
-                            :y="getRectFromPoints(ov.points).y - 3.2" 
-                            :width="Math.max(6, (ov.displayId || '').length * 1.5)" 
-                            height="3.5" 
+                      <rect :x="getRectFromPoints(ov.points).x - 0.05" 
+                            :y="getRectFromPoints(ov.points).y - 1.4" 
+                            :width="Math.max(2.2, (ov.displayId || '').length * 0.8)" 
+                            height="1.5" 
                             fill="rgba(79, 70, 229, 0.9)" 
-                            rx="0.4" />
-                      <text :x="getRectFromPoints(ov.points).x + 0.3" 
-                            :y="getRectFromPoints(ov.points).y - 0.6" 
-                            fill="white" font-size="2.2" font-family="Inter, sans-serif" font-weight="bold">
+                            rx="0.2" />
+                      <text :x="getRectFromPoints(ov.points).x + 0.15" 
+                            :y="getRectFromPoints(ov.points).y - 0.3" 
+                            fill="white" font-size="1.1" font-family="Inter, sans-serif" font-weight="bold">
                           {{ ov.displayId || (ov.id ? String(ov.id).substring(0,4) : '?') }}
                       </text>
                   </g>

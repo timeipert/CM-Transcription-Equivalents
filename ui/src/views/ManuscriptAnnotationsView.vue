@@ -9,6 +9,8 @@ import GalleryModal from '../components/gallery/GalleryModal.vue';
 // Composables
 import { useTranscriptionData } from '../composables/useTranscriptionData';
 import { usePdfExport } from '../composables/usePdfExport';
+import { comparePatternIds } from '../utils/sorting';
+
 
 const store = usePersonalTablesStore();
 const settings = useSettingsStore();
@@ -42,7 +44,10 @@ function initTable() {
         return;
     }
     // Deep copy
-    table.value = JSON.parse(JSON.stringify(existing));
+    const data = JSON.parse(JSON.stringify(existing));
+    // Sort rows initially
+    data.rows.sort((a, b) => comparePatternIds(a.customId, b.customId));
+    table.value = data;
     loading.value = false;
 }
 
@@ -118,6 +123,7 @@ function togglePattern(pat) {
             customId: defaultId, 
             notes: ''
         });
+        sortTable();
     } else {
         table.value.rows.splice(idx, 1);
     }
@@ -133,6 +139,11 @@ watch(table, (newVal) => {
         store.updateTable(tableId, JSON.parse(JSON.stringify(newVal)));
     }
 }, { deep: true });
+
+function sortTable() {
+    if (!table.value) return;
+    table.value.rows.sort((a, b) => comparePatternIds(a.customId, b.customId));
+}
 
 const isProducingPdf = ref(false);
 async function doPdf() {
@@ -175,7 +186,9 @@ function onGallerySelect(p) {
         query: { 
             source: p.d, 
             folio: p.f, 
-            highlight: p.pat 
+            highlight: p.pat,
+            return_to: 'annotations',
+            return_id: tableId
         } 
     });
 }
@@ -249,10 +262,10 @@ function onGallerySelect(p) {
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="(row, idx) in table.rows" :key="idx">
+                    <tr v-for="row in table.rows" :key="row.pattern">
                         <td>
                             <div class="id-cell">
-                                <input v-model="row.customId" placeholder="ID..." />
+                                <input v-model="row.customId" placeholder="ID..." @blur="sortTable" />
                                 <button class="btn-icon" 
                                         :class="{promoted: promoteStatus[row.pattern]}"
                                         title="Set as Global ID" 

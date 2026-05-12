@@ -38,3 +38,23 @@ export function compareFolios(a, b) {
     // ASCII "" is less than "r".
     return pa.suffix.localeCompare(pb.suffix);
 }
+
+/**
+ * Compares pattern IDs.
+ * Pure numbers come first (sorted numerically).
+ * Mixed IDs (with suffixes like 10+, 10+20-) come later (sorted naturally).
+ */
+export function comparePatternIds(a, b) {
+    if (!a && b) return 1;
+    if (a && !b) return -1;
+    if (!a && !b) return 0;
+
+    const isPureNumA = /^\d+$/.test(a);
+    const isPureNumB = /^\d+$/.test(b);
+
+    if (isPureNumA && !isPureNumB) return -1;
+    if (!isPureNumA && isPureNumB) return 1;
+
+    // Both pure numbers OR both mixed strings
+    return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+}

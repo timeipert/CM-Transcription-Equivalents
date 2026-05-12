@@ -9,8 +9,10 @@ import PatternDisplay from '../PatternDisplay.vue';
 import AnnotationCutout from '../AnnotationCutout.vue';
 import FolioAnnotator from '../FolioAnnotator.vue';
 import SnippetDetailModal from '../SnippetDetailModal.vue';
+import { useRouter } from 'vue-router';
 
-const props = defineProps(['source', 'folio', 'initialRegionId', 'highlightPattern']);
+const props = defineProps(['source', 'folio', 'initialRegionId', 'highlightPattern', 'returnTo', 'returnId']);
+const router = useRouter();
 const annotStore = useAnnotationsStore();
 const tableStore = usePersonalTablesStore();
 const settings = useSettingsStore();
@@ -542,7 +544,8 @@ function openSnippet(item) {
         <!-- HEADER -->
         <div class="header">
             <div class="left">
-                <button v-if="activeRegion" @click="activeRegion = null" class="btn-secondary">&larr; Back</button>
+                <button v-if="returnTo === 'annotations'" @click="router.push({ name: 'annotations', params: { id: returnId } })" class="btn-secondary" style="margin-right: 10px;">&larr; Back to Gallery</button>
+                <button v-if="activeRegion" @click="activeRegion = null" class="btn-secondary">&larr; Back to Line Regions</button>
                 <h2>
                     {{ source }} / {{ folio }} 
                     <span v-if="activeRegion" class="crumb"> / {{ activeRegion.name }}</span>
@@ -564,7 +567,7 @@ function openSnippet(item) {
                 </div>
             </div>
             <div class="stats">
-                <span v-if="!activeRegion">{{ regions.length }} Regions</span>
+                <span v-if="!activeRegion">{{ regions.length }} Line Regions</span>
                 <span v-else>{{ activeRegionItems.length }} Items</span>
             </div>
         </div>
@@ -579,7 +582,7 @@ function openSnippet(item) {
                 </div>
                 
                 <div class="regions-list">
-                     <div v-if="regions.length === 0" class="empty-msg">No regions defined.</div>
+                     <div v-if="regions.length === 0" class="empty-msg">No line regions defined.</div>
                      <div v-for="r in regions" :key="r.id" class="region-card" @click="selectRegion(r)">
                          <div class="r-preview">
                              <AnnotationCutout 
@@ -682,7 +685,8 @@ function openSnippet(item) {
         <div class="modal-content annot-modal">
               <div class="modal-header">
                 <div style="display:flex; align-items:center; gap: 12px;">
-                    <h3 style="margin:0">Define Region</h3>
+                    <button v-if="returnTo === 'annotations'" @click="router.push({ name: 'annotations', params: { id: returnId } })" class="btn-secondary">&larr; Back to Gallery</button>
+                    <h3 style="margin:0">Define Line Region</h3>
                     <div class="line-selector-group">
                         <label>Target:</label>
                         <select v-model="newRegionName" class="line-select">

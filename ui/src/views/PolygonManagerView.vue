@@ -8,6 +8,8 @@ const selectedSource = ref(null);
 const selectedFolio = ref(null);
 const initialRegionId = ref(null);
 const highlightPattern = ref(null);
+const returnTo = ref(null);
+const returnId = ref(null);
 const route = useRoute();
 
 const updateFromQuery = () => {
@@ -15,6 +17,8 @@ const updateFromQuery = () => {
     selectedFolio.value = route.query.folio || null;
     initialRegionId.value = route.query.region || null;
     highlightPattern.value = route.query.highlight || null;
+    returnTo.value = route.query.return_to || null;
+    returnId.value = route.query.return_id || null;
 };
 
 onMounted(updateFromQuery);
@@ -40,6 +44,8 @@ function onSelect({ source, folio }) {
         :folio="selectedFolio"
         :initialRegionId="initialRegionId" 
         :highlightPattern="highlightPattern"
+        :returnTo="returnTo"
+        :returnId="returnId"
     />
 </div>
 </template>
