@@ -181,15 +181,18 @@ function openGallery(row) {
 
 function onGallerySelect(p) {
     showGallery.value = false;
+    const q = { 
+        source: p.d, 
+        folio: p.f, 
+        highlight: p.pat,
+        return_to: 'annotations',
+        return_id: tableId
+    };
+    if (p.regionId) q.region = p.regionId;
+    
     router.push({ 
         name: 'polygons', 
-        query: { 
-            source: p.d, 
-            folio: p.f, 
-            highlight: p.pat,
-            return_to: 'annotations',
-            return_id: tableId
-        } 
+        query: q
     });
 }
 

@@ -24,7 +24,20 @@ const startPanX = ref(0);
 const startPanY = ref(0);
 
 const containerRef = ref(null);
+const viewportRef = ref(null);
 const imageLoaded = ref(false);
+
+function onImageLoad(e) {
+    imageLoaded.value = true;
+    if (viewportRef.value && e.target) {
+        const vpWidth = viewportRef.value.clientWidth;
+        const imgWidth = e.target.clientWidth;
+        // Center horizontally if viewport is wider than image
+        if (vpWidth > imgWidth) {
+            translateX.value = (vpWidth - imgWidth) / 2;
+        }
+    }
+}
 
 import { watch } from 'vue';
 watch(() => props.imageUrl, () => {
@@ -135,10 +148,21 @@ function undo() {
 // Pan/Zoom implementation
 function onWheel(e) {
     e.preventDefault();
+    if (!viewportRef.value) return;
+    
+    const rect = viewportRef.value.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    const oldScale = scale.value;
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    let newScale = scale.value * delta;
-    if (newScale < 0.1) newScale = 0.1; // Allow zooming out more
+    let newScale = oldScale * delta;
+    if (newScale < 0.1) newScale = 0.1; 
     if (newScale > 50) newScale = 50;
+    
+    translateX.value = mouseX - (mouseX - translateX.value) * (newScale / oldScale);
+    translateY.value = mouseY - (mouseY - translateY.value) * (newScale / oldScale);
+    
     scale.value = newScale;
 }
 function startPan(e) {
@@ -158,24 +182,31 @@ function endPan() {
 const contentStyle = computed(() => {
     if (props.cropRect) {
         const { x, y, w, h } = props.cropRect;
-        const top = y;
-        const right = 100 - (x + w);
-        const bottom = 100 - (y + h);
-        const left = x;
-        
         const s = 100 / w; // Base scale to fit width
         
         return {
-             // Combine User Transform (translate/scale) + Base Crop Transform (scale/translate)
              transform: `translate(${translateX.value}px, ${translateY.value}px) scale(${scale.value}) scale(${s}) translate(-${x}%, -${y}%)`,
-             transformOrigin: '0 0',
-             clipPath: `inset(${top}% ${right}% ${bottom}% ${left}%)`
+             transformOrigin: '0 0'
         };
     }
     return {
         transform: `translate(${translateX.value}px, ${translateY.value}px) scale(${scale.value})`,
         transformOrigin: '0 0'
     };
+});
+
+const imageClipStyle = computed(() => {
+    if (props.cropRect) {
+        const { x, y, w, h } = props.cropRect;
+        const top = y;
+        const right = 100 - (x + w);
+        const bottom = 100 - (y + h);
+        const left = x;
+        return {
+            clipPath: `inset(${top}% ${right}% ${bottom}% ${left}%)`
+        };
+    }
+    return {};
 });
 </script>
 
@@ -190,15 +221,16 @@ const contentStyle = computed(() => {
     </div>
     
     <div class="canvas-viewport" 
+         ref="viewportRef"
          @wheel="onWheel"
          @mousedown="onMouseDown"
          @mousemove="onMouseMove"
          @mouseup="onMouseUp"
          @mouseleave="onMouseUp">
          
-         <div class="canvas-content" :style="contentStyle" ref="containerRef">
+             <div class="canvas-content" :style="contentStyle" ref="containerRef">
              <div v-if="!imageLoaded" class="loading-overlay">Loading Image...</div>
-             <img :src="imageUrl" class="bg-image" draggable="false" @load="imageLoaded = true" />
+             <img :src="imageUrl" class="bg-image" :style="imageClipStyle" draggable="false" @load="onImageLoad" />
              
              <!-- Drawing Layer -->
              <svg class="drawing-layer" viewBox="0 0 100 100" preserveAspectRatio="none">

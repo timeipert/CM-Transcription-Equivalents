@@ -239,6 +239,7 @@ const newRegionName = ref('');
 
 // Auto-open region creator or select existing when navigating from gallery with a highlight
 watch(highlightHint, (newHint) => {
+    if (props.initialRegionId) return; // We already have a specific region targeted
     if (newHint && props.highlightPattern) {
         // Find if any of the target lines already have a region
         const targetLines = newHint.lines;
@@ -305,6 +306,68 @@ const pendingItemPoints = ref(null); // Points for the item just drawn
 const selectedSnippet = ref(null);
 
 // --- Computed ---
+
+const otherPageAnnotations = computed(() => {
+    const res = {};
+    const currentSrc = stdSource.value;
+    const currentFol = stdFolio.value;
+    
+    // 1. Legacy Annotations
+    for (const key in annotStore.annotations) {
+        const parts = key.split('_');
+        if (parts.length >= 3) {
+            const src = parts[0];
+            const fol = parts[1];
+            if (src === currentSrc && fol === currentFol) continue;
+            
+            const pat = parts.slice(2).join('_');
+            const basePat = getBasePattern(pat);
+            
+            if (!res[basePat]) res[basePat] = [];
+            const count = annotStore.annotations[key].length;
+            if (count > 0) {
+                 res[basePat].push({ folio: fol, line: '', count });
+            }
+        }
+    }
+    
+    // 2. Region Items
+    const regionToLoc = {};
+    for (const key in annotStore.regions) {
+        const parts = key.split('_');
+        if (parts.length >= 2) {
+            const src = parts[0];
+            const fol = parts[1];
+            if (src === currentSrc && fol === currentFol) continue;
+            
+            for (const r of annotStore.regions[key]) {
+                 regionToLoc[r.id] = { folio: fol, name: r.name };
+            }
+        }
+    }
+    
+    for (const rid in annotStore.regionItems) {
+        if (!regionToLoc[rid]) continue;
+        
+        const loc = regionToLoc[rid];
+        const items = annotStore.regionItems[rid];
+        
+        const patCounts = {};
+        for (const item of items) {
+             const basePat = getBasePattern(item.pattern);
+             if (!patCounts[basePat]) patCounts[basePat] = 0;
+             patCounts[basePat]++;
+        }
+        
+        for (const pat in patCounts) {
+             if (!res[pat]) res[pat] = [];
+             res[pat].push({ folio: loc.folio, line: loc.name, count: patCounts[pat] });
+        }
+    }
+    
+    return res;
+});
+
 const activeRegionItems = computed(() => {
     if (!activeRegion.value) return [];
     
@@ -321,7 +384,7 @@ const activeRegionItems = computed(() => {
                      const refId = localId || globalId;
                      
                      let dId = refId;
-                     if (!dId) dId = a.linkData?.sysId ? a.linkData.sysId.split('|')[0] : String(a.id).substring(0,4);
+                     if (!dId) dId = basePat;
                      
                      // Variant logic
                      let variant = a.variant || '';
@@ -352,7 +415,7 @@ const activeRegionItems = computed(() => {
         
         let dId = refId;
         if (!dId) {
-             dId = item.linkData?.sysId ? item.linkData.sysId.split('|')[0] : String(item.id).substring(0,4);
+             dId = basePat;
         }
         
         // Variant logic
@@ -653,6 +716,11 @@ function openSnippet(item) {
                                  @click="selectPatternBase(pat)">
                                  <PatternDisplay :pattern="pat" :glyphs="glyphs" />
                                  <span>{{ pat }}</span>
+                                 <div v-if="otherPageAnnotations[pat] && otherPageAnnotations[pat].length > 0" 
+                                      class="other-annot-badge"
+                                      :title="otherPageAnnotations[pat].map(x => `${x.folio} ${x.line || ''} (${x.count}x)`).join('\n')">
+                                     {{ otherPageAnnotations[pat].reduce((sum, x) => sum + x.count, 0) }}
+                                 </div>
                             </div>
                         </div>
                     </div>
@@ -888,4 +956,18 @@ function openSnippet(item) {
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; }
 .notes-cell { font-family: monospace; color: #666; font-size: 0.9em; }
+.other-annot-badge {
+    margin-left: auto;
+    background: #e2e8f0;
+    color: #475569;
+    font-size: 0.7rem;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 12px;
+    cursor: help;
+}
+.pat-option.active .other-annot-badge {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
 </style>

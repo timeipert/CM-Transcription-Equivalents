@@ -203,7 +203,8 @@ watch([() => props.visible, () => iiifStore.parsedData, () => props.pattern], as
                 const stf = getStandardFolio(p.d, p.f);
                 
                 // Check if this page is in our snippets list
-                const hasAnnot = currentGalleryItems.value.some(s => s.source === std && s.folio === stf);
+                const snippetMatch = currentGalleryItems.value.find(s => s.source === std && s.folio === stf);
+                const hasAnnot = !!snippetMatch;
                 
                 const lineList = Array.from(p.lines).sort((a,b) => a-b);
                 const lineStr = lineList.length > 0 ? `L${lineList.join(', ')}` : '';
@@ -213,7 +214,8 @@ watch([() => props.visible, () => iiifStore.parsedData, () => props.pattern], as
                     pat: p.pat,
                     label: String(p.f),
                     lineHint: lineStr,
-                    isAnnotated: hasAnnot
+                    isAnnotated: hasAnnot,
+                    regionId: snippetMatch ? snippetMatch.regionId : null
                 });
             }
         }
