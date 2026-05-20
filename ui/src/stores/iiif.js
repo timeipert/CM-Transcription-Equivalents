@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
+import { iiifParseRules } from '../config/iiifRules';
 
 export const useIiifStore = defineStore('iiif', () => {
     // State
@@ -53,7 +54,21 @@ export const useIiifStore = defineStore('iiif', () => {
                                 imgUrl = res['@id'];
                             }
                         }
-                        if (imgUrl) folios.push({ folio: label, imgUrl, serviceUrl, w: cw, h: ch });
+                        if (imgUrl) {
+                            let mappedLabels = [label];
+                            if (iiifParseRules[source]) {
+                                const mapped = iiifParseRules[source](label);
+                                if (Array.isArray(mapped)) {
+                                    mappedLabels = mapped;
+                                } else if (mapped !== null && mapped !== undefined) {
+                                    mappedLabels = [mapped];
+                                }
+                            }
+                            for (const mappedLabel of mappedLabels) {
+                                const cleanLabel = String(mappedLabel).replace(/^p\.?\s*/i, '').trim();
+                                folios.push({ folio: cleanLabel, imgUrl, serviceUrl, w: cw, h: ch, originalFolio: label });
+                            }
+                        }
                     }
                 }
             } 
@@ -87,7 +102,21 @@ export const useIiifStore = defineStore('iiif', () => {
                                 imgUrl = body.id;
                             }
                         }
-                        if (imgUrl) folios.push({ folio: label, imgUrl, serviceUrl, w: cw, h: ch });
+                        if (imgUrl) {
+                            let mappedLabels = [label];
+                            if (iiifParseRules[source]) {
+                                const mapped = iiifParseRules[source](label);
+                                if (Array.isArray(mapped)) {
+                                    mappedLabels = mapped;
+                                } else if (mapped !== null && mapped !== undefined) {
+                                    mappedLabels = [mapped];
+                                }
+                            }
+                            for (const mappedLabel of mappedLabels) {
+                                const cleanLabel = String(mappedLabel).replace(/^p\.?\s*/i, '').trim();
+                                folios.push({ folio: cleanLabel, imgUrl, serviceUrl, w: cw, h: ch, originalFolio: label });
+                            }
+                        }
                     }
                 }
             } else {

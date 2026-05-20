@@ -1,7 +1,7 @@
 <script setup>
 import { ref, watch, computed, reactive } from 'vue';
 import { useTranscriptionData } from '../../composables/useTranscriptionData';
-import { useImageManifest } from '../../composables/useImageManifest';
+import { useImageManifest, compareFolios } from '../../composables/useImageManifest';
 import { useIiifStore } from '../../stores/iiif';
 
 const props = defineProps(['selectedSource', 'selectedFolio']);
@@ -10,7 +10,7 @@ const emits = defineEmits(['select']);
 const iiifStore = useIiifStore();
 
 const { sourceFolios, loading: dataLoading } = useTranscriptionData();
-const { manifest, hasImage, loaded: manifestLoaded, getManifestStructure } = useImageManifest();
+const { manifest, hasImage, loaded: manifestLoaded, getManifestStructure, getStandardFolio, hasTranscriptionData } = useImageManifest();
 
 // Tree Structure
 const tree = computed(() => {
@@ -34,33 +34,28 @@ const tree = computed(() => {
     const sortedSources = Array.from(allSources).sort();
     
     for (const src of sortedSources) {
-        const foliosFromString = new Set();
-        
-        // Add from Data
-        if (dataStruct[src]) {
-            for (const f of dataStruct[src]) foliosFromString.add(f);
-        }
+        const validFoliosSet = new Set();
         
         // Add from Manifest
         if (manifestStruct[src]) {
-            for (const f of manifestStruct[src]) foliosFromString.add(f);
-        }
-        
-        // Filter: Only keep folios that exist in Manifest (or satisfy hasImage)
-        // Actually, manifestStruct already implies hasImage is true.
-        // But dataStruct might have folios without images.
-        // We generally only want to show folios that HAVE images in this view (Polygon Manager).
-        
-        const validFolios = [];
-        for (const fol of foliosFromString) {
-            if (hasImage(src, fol)) {
-                validFolios.push(fol);
+            for (const f of manifestStruct[src]) {
+                validFoliosSet.add(getStandardFolio(src, f));
             }
         }
         
+        // Add from Data (mapped to standard folio)
+        if (dataStruct[src]) {
+            for (const f of dataStruct[src]) {
+                const stdFol = getStandardFolio(src, f);
+                if (hasImage(src, stdFol)) {
+                    validFoliosSet.add(stdFol);
+                }
+            }
+        }
+        
+        const validFolios = Array.from(validFoliosSet);
+        
         if (validFolios.length > 0) {
-            const hasData = (fol) => dataStruct[src] && dataStruct[src].has(fol);
-            
             const orderMap = {};
             if (iiifStore.parsedData[src]) {
                 iiifStore.parsedData[src].forEach((item, idx) => {
@@ -69,22 +64,15 @@ const tree = computed(() => {
             }
 
             t[src] = validFolios.sort((a, b) => {
-                const aActive = hasData(a);
-                const bActive = hasData(b);
-                
-                // 1. Active folios first
-                if (aActive && !bActive) return -1;
-                if (!aActive && bActive) return 1;
-                
-                // 2. IIIF Order
+                // 1. IIIF Order
                 if (iiifStore.parsedData[src]) {
                     const idxA = orderMap[a] ?? 9999;
                     const idxB = orderMap[b] ?? 9999;
                     if (idxA !== idxB) return idxA - idxB;
                 }
                 
-                // 3. Fallback alpha
-                return a.localeCompare(b);
+                // 2. Fallback Natural Sort
+                return compareFolios(a, b);
             });
         }
     }
@@ -166,9 +154,10 @@ async function submitIiif() {
                        @click.stop />
                 <div v-for="fol in folios.filter(f => !folioSearch[src] || f.toLowerCase().includes(folioSearch[src].toLowerCase()))" :key="fol" 
                      class="folio-item" 
-                     :class="{active: selectedSource===src && selectedFolio===fol, 'has-data': sourceFolios[src] && sourceFolios[src].has(fol)}"
+                     :class="{active: selectedSource===src && selectedFolio===fol, 'has-data': hasTranscriptionData(src, fol)}"
+                     :title="hasTranscriptionData(src, fol) ? 'This page contains Monodi transcription data' : ''"
                      @click="onSelect(src, fol)">
-                    <span v-if="sourceFolios[src] && sourceFolios[src].has(fol)" class="data-indicator">•</span>
+                    <span v-if="hasTranscriptionData(src, fol)" class="data-indicator">•</span>
                     {{ fol }}
                 </div>
             </div>

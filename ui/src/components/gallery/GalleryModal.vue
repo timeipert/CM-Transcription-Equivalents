@@ -40,11 +40,37 @@ const allOccurrences = ref([]);
 const occurrencesLoading = ref(false);
 
 const pageSearch = ref("");
+const pitchSearch = ref("");
 
 const filteredPages = computed(() => {
-    if (!pageSearch.value.trim()) return availablePages.value;
-    const q = pageSearch.value.toLowerCase();
-    return availablePages.value.filter(p => p.label.toLowerCase().includes(q));
+    const qPage = pageSearch.value.toLowerCase().trim();
+    const qPitch = pitchSearch.value.toLowerCase().trim();
+    
+    let res = [];
+    for (const p of availablePages.value) {
+        // 1. Filter by page label
+        if (qPage && !p.label.toLowerCase().includes(qPage)) continue;
+        
+        // 2. Filter occurrences by pitch
+        let matchingOccs = p.occs;
+        if (qPitch) {
+            matchingOccs = p.occs.filter(o => o.notes.toLowerCase().includes(qPitch));
+        }
+        
+        // 3. If no matches left, skip page
+        if (matchingOccs.length === 0) continue;
+        
+        // 4. Recalculate line hint for matching occurrences
+        const lineList = Array.from(new Set(matchingOccs.map(o => o.line))).sort((a,b) => a-b);
+        const lineStr = lineList.length > 0 ? `L${lineList.join(', ')}` : '';
+        
+        res.push({
+            ...p,
+            lineHint: lineStr,
+            matchSummary: Array.from(new Set(matchingOccs.map(o => o.notes))).join(', ')
+        });
+    }
+    return res;
 });
 
 const currentGalleryItems = ref([]);
@@ -182,9 +208,13 @@ watch([() => props.visible, () => iiifStore.parsedData, () => props.pattern], as
             const key = `${o.source}_${o.folio}`;
             if (!uniqueKeys.has(key)) {
                 uniqueKeys.add(key);
-                pageMap.set(key, { d: o.source, f: o.folio, pat: o.pattern, lines: new Set([o.line]) });
+                pageMap.set(key, { 
+                    d: o.source, f: o.folio, pat: o.pattern, 
+                    occs: [o]
+                });
             } else {
-                pageMap.get(key).lines.add(o.line);
+                const entry = pageMap.get(key);
+                entry.occs.push(o);
             }
         }
         processingProgress.value = 40 + Math.round((i / occurrences.length) * 30);
@@ -206,16 +236,16 @@ watch([() => props.visible, () => iiifStore.parsedData, () => props.pattern], as
                 const snippetMatch = currentGalleryItems.value.find(s => s.source === std && s.folio === stf);
                 const hasAnnot = !!snippetMatch;
                 
-                const lineList = Array.from(p.lines).sort((a,b) => a-b);
-                const lineStr = lineList.length > 0 ? `L${lineList.join(', ')}` : '';
+
 
                 result.push({
                     d: p.d, f: p.f, stf,
                     pat: p.pat,
                     label: String(p.f),
-                    lineHint: lineStr,
                     isAnnotated: hasAnnot,
-                    regionId: snippetMatch ? snippetMatch.regionId : null
+                    regionId: snippetMatch ? snippetMatch.regionId : null,
+                    occs: p.occs,
+                    allPitches: Array.from(new Set(p.occs.map(o => o.notes))).join(' | ')
                 });
             }
         }
@@ -389,9 +419,13 @@ const virtualLines = computed(() => {
                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                         <div style="display: flex; align-items: center; gap: 15px;">
                             <h4>Available for annotation ({{ availablePages.length }})</h4>
-                            <input v-if="availablePages.length > 10" 
+                             <input v-if="availablePages.length > 5" 
                                    v-model="pageSearch" 
-                                   placeholder="Filter pages..." 
+                                   placeholder="Filter folio..." 
+                                   class="page-filter" />
+                             <input v-if="availablePages.length > 5" 
+                                   v-model="pitchSearch" 
+                                   placeholder="Filter pitches..." 
                                    class="page-filter" />
                         </div>
                         <div v-if="pagesLoading || occurrencesLoading || snippetsLoading" class="mini-loader">
@@ -413,11 +447,13 @@ const virtualLines = computed(() => {
                              :key="p.label" 
                              class="chip" 
                              :class="{ 'is-annotated': p.isAnnotated }"
+                             :title="p.matchSummary"
                              @click="startAnnotating(p)"
                           >
                               <span v-if="p.isAnnotated" class="annot-check">✓</span>
                               <span class="folio-lbl">{{ p.label }}</span>
                               <span v-if="p.lineHint" class="line-hint">{{ p.lineHint }}</span>
+                              <span v-if="pitchSearch && p.matchSummary" class="pitch-preview">{{ p.matchSummary }}</span>
                           </button>
                      </div>
                 </div>
@@ -605,4 +641,15 @@ const virtualLines = computed(() => {
 /* Nested Annotator Styles */
 .annot-modal { width: 95vw; height: 95vh; background:white; display:flex; flex-direction:column; border-radius:12px; overflow:hidden; }
 .modal-body-annot { flex:1; overflow:hidden; position: relative; }
+.pitch-preview {
+    display: block;
+    font-size: 8px;
+    color: #6366f1;
+    margin-top: 2px;
+    font-family: monospace;
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 </style>

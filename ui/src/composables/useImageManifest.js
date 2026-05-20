@@ -1,5 +1,34 @@
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { useIiifStore } from '../stores/iiif';
+import { useTranscriptionData } from './useTranscriptionData';
+
+const normCache = new Map();
+const stdFolioCache = new Map();
+const stdSourceFoliosCache = new Map();
+
+let cacheWatcherSetup = false;
+
+export function compareFolios(a, b) {
+    const parse = (f) => {
+        const str = String(f || '').toLowerCase().trim();
+        const m = str.match(/^0*(\d+)/);
+        if (!m) return { n: 999999, w: 99, s: str };
+        const n = parseInt(m[1], 10);
+        const s = str.substring(m[0].length).trim();
+        let w = 5;
+        if (s === '') w = 1;
+        else if (s === 'r') w = 2;
+        else if (s === 'v') w = 3;
+        else if (s === 'a') w = 4;
+        else if (s === 'b') w = 5;
+        else w = 6;
+        return { n, w, s };
+    };
+    const pa = parse(a), pb = parse(b);
+    if (pa.n !== pb.n) return pa.n - pb.n;
+    if (pa.w !== pb.w) return pa.w - pb.w;
+    return pa.s.localeCompare(pb.s);
+}
 
 const manifest = ref(new Set());
 const loaded = ref(false);
@@ -32,6 +61,14 @@ async function loadManifest() {
 
 export function useImageManifest() {
     const iiifStore = useIiifStore();
+
+    if (!cacheWatcherSetup) {
+        watch(() => iiifStore.parsedData, () => {
+            stdFolioCache.clear();
+            stdSourceFoliosCache.clear();
+        }, { deep: true });
+        cacheWatcherSetup = true;
+    }
 
     if (!loaded.value) {
         loadManifest();
@@ -105,15 +142,36 @@ export function useImageManifest() {
         return bestMatch;
     }
 
+    function normalizeFolioName(name) {
+        if (!name) return "";
+        if (normCache.has(name)) return normCache.get(name);
+        
+        let s = String(name).toLowerCase().trim();
+        s = s.replace(/^p\.?\s*/, '');
+        s = s.replace(/^\((\d+)\)$/, '$1');
+        s = s.replace(/^0+(\d+)/, '$1');
+        // Handle explicit recto/verso
+        s = s.replace(/recto/g, 'r');
+        s = s.replace(/verso/g, 'v');
+        // Remove structural suffixes like -a, /1
+        s = s.replace(/[-/]\s*[a-g1-9]$/, '');
+        // Remove trailing letter suffixes (22b -> 22)
+        s = s.replace(/([0-9rv])\s*[a-g]$/, '$1');
+        
+        const res = s.trim();
+        normCache.set(name, res);
+        return res;
+    }
+
     function fuzzyMatchIiifFolio(source, folioName) {
         const iiifKey = resolveIiifSource(source);
         if (!iiifKey || !iiifStore.parsedData[iiifKey]) return null;
 
         const data = iiifStore.parsedData[iiifKey];
 
-        // 1. Exact match (case-insensitive)
-        const target = String(folioName).toLowerCase().trim();
-        let match = data.find(i => String(i.folio).toLowerCase().trim() === target);
+        // 1. Normalized exact match
+        const target = normalizeFolioName(folioName);
+        let match = data.find(i => normalizeFolioName(i.folio) === target);
         if (match) return { ...match, resolvedSource: iiifKey };
 
         // 2. Extract number from folioName (e.g., '22b' -> '22', 'V22' -> '22')
@@ -124,7 +182,7 @@ export function useImageManifest() {
             // Try to find a canvas label that also contains this number
             // or follows a standard recto/verso pattern
             match = data.find(i => {
-                const lbl = String(i.folio).toLowerCase().trim();
+                const lbl = normalizeFolioName(i.folio);
                 if (lbl === target) return true;
                 
                 // If label is "22r" or "22v" or "22", it's a match for "22b"
@@ -215,11 +273,33 @@ export function useImageManifest() {
      * Returns the physical folio name from the IIIF manifest.
      */
     function getStandardFolio(source, folio) {
+        const cacheKey = `${source}|||${folio}`;
+        if (stdFolioCache.has(cacheKey)) return stdFolioCache.get(cacheKey);
+
         const iiifMatch = fuzzyMatchIiifFolio(source, folio);
-        if (iiifMatch) {
-            return iiifMatch.folio;
+        const res = iiifMatch ? iiifMatch.folio : (folio ? String(folio).replace(/^p\.?\s*/i, '').trim() : folio);
+        
+        stdFolioCache.set(cacheKey, res);
+        return res;
+    }
+
+    function hasTranscriptionData(source, folio) {
+        const { sourceFolios } = useTranscriptionData();
+        const srcData = sourceFolios.value[source];
+        if (!srcData) return false;
+        
+        let cache = stdSourceFoliosCache.get(source);
+        if (!cache || cache.rawSize !== srcData.size) {
+            const stdSet = new Set();
+            for (const f of srcData) {
+                stdSet.add(getStandardFolio(source, f));
+            }
+            cache = { rawSize: srcData.size, stdSet };
+            stdSourceFoliosCache.set(source, cache);
         }
-        return folio ? String(folio).trim() : folio;
+        
+        const stdFol = getStandardFolio(source, folio);
+        return cache.stdSet.has(stdFol);
     }
 
     /**
@@ -269,7 +349,7 @@ export function useImageManifest() {
         // Convert Sets to Arrays for easier consumption
         const result = {};
         for (const src in structure) {
-            result[src] = Array.from(structure[src]).sort();
+            result[src] = Array.from(structure[src]).sort(compareFolios);
         }
         return result;
     }
@@ -283,6 +363,7 @@ export function useImageManifest() {
         getIiifRegionUrl,
         getStandardSource,
         getStandardFolio,
+        hasTranscriptionData,
         getManifestStructure,
         loaded
     };

@@ -196,6 +196,22 @@ function onGallerySelect(p) {
     });
 }
 
+onMounted(() => {
+    if (route.query.gallery) {
+        // Wait for data and table to load before opening
+        const stop = watch([loading, dataLoading], ([l, dl]) => {
+            if (!l && !dl) {
+                galleryPattern.value = route.query.gallery;
+                showGallery.value = true;
+                stop();
+                
+                // Optional: Clear the query param so it doesn't reopen on refresh?
+                // router.replace({ query: { ...route.query, gallery: undefined } });
+            }
+        });
+    }
+});
+
 </script>
 
 <template>

@@ -16,8 +16,8 @@ const router = useRouter();
 const annotStore = useAnnotationsStore();
 const tableStore = usePersonalTablesStore();
 const settings = useSettingsStore();
-const { pagePatternsIndex, folioLinesIndex, glyphs, rawData, patStats } = useTranscriptionData();
-const { getImageUrl, getStandardSource, getStandardFolio } = useImageManifest();
+const { pagePatternsIndex, folioLinesIndex, glyphs, rawData, patStats, sourceFolios } = useTranscriptionData();
+const { getImageUrl, getStandardSource, getStandardFolio, getIiifThumbnailUrl, hasTranscriptionData } = useImageManifest();
 
 // --- Utils ---
 function parseLineNumber(name) {
@@ -44,11 +44,20 @@ const resolvedSrcKey = computed(() => {
 
 // Global base stats for sorting
 const patternCustomIdMap = computed(() => {
-    const table = tableStore.tables.find(t => t.source === props.source);
+    let table = null;
+    if (props.returnId) {
+        table = tableStore.getTable(props.returnId);
+    } else {
+        // Fallback search if no specific table ID is provided
+        table = tableStore.tables.find(t => t.source === props.source || getStandardSource(t.source) === stdSource.value);
+    }
+    
     if (!table) return {};
     const map = {};
     for (const row of table.rows) {
-        map[row.pattern] = row.customId;
+        // Map the base pattern
+        const base = row.pattern.split(' ')[0];
+        map[base] = row.customId;
     }
     return map;
 });
@@ -607,7 +616,9 @@ function openSnippet(item) {
         <!-- HEADER -->
         <div class="header">
             <div class="left">
-                <button v-if="returnTo === 'annotations'" @click="router.push({ name: 'annotations', params: { id: returnId } })" class="btn-secondary" style="margin-right: 10px;">&larr; Back to Gallery</button>
+                <button v-if="returnTo === 'annotations'" 
+                        @click="router.push({ name: 'annotations', params: { id: returnId }, query: { gallery: highlightPattern } })" 
+                        class="btn-secondary" style="margin-right: 10px;">&larr; Back to Gallery</button>
                 <button v-if="activeRegion" @click="activeRegion = null" class="btn-secondary">&larr; Back to Line Regions</button>
                 <h2>
                     {{ source }} / {{ folio }} 
@@ -642,8 +653,20 @@ function openSnippet(item) {
             <div v-if="!activeRegion" class="overview-grid">
                 <div class="overview-toolbar">
                     <button @click="openRegionCreator" class="btn-primary">+ Add Line Region</button>
+                    <span v-if="hasTranscriptionData(stdSource, stdFolio)" class="data-badge" title="This page has imported transcription data">
+                        <span class="dot">•</span> Monodi Data Available
+                    </span>
                 </div>
                 
+                <div class="page-preview-container" v-if="stdSource && stdFolio">
+                    <div class="page-preview" @click="openRegionCreator">
+                        <img :src="getIiifThumbnailUrl(source, folio, 600)" />
+                        <div class="preview-overlay">
+                            <span>Click anywhere to add a new line region</span>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="regions-list">
                      <div v-if="regions.length === 0" class="empty-msg">No line regions defined.</div>
                      <div v-for="r in regions" :key="r.id" class="region-card" @click="selectRegion(r)">
@@ -715,7 +738,10 @@ function openSnippet(item) {
                                  :class="{active: getBasePattern(activePattern) === pat}"
                                  @click="selectPatternBase(pat)">
                                  <PatternDisplay :pattern="pat" :glyphs="glyphs" />
-                                 <span>{{ pat }}</span>
+                                 <span class="pat-name-text">{{ pat }}</span>
+                                 <div v-if="patternCustomIdMap[pat]" class="in-table-badge" title="Present in Transcription Equivalent Table">
+                                     {{ patternCustomIdMap[pat] }}
+                                 </div>
                                  <div v-if="otherPageAnnotations[pat] && otherPageAnnotations[pat].length > 0" 
                                       class="other-annot-badge"
                                       :title="otherPageAnnotations[pat].map(x => `${x.folio} ${x.line || ''} (${x.count}x)`).join('\n')">
@@ -892,7 +918,20 @@ function openSnippet(item) {
 
 /* Overview */
 .overview-grid { padding: 20px; height: 100%; overflow-y: auto; }
-.overview-toolbar { margin-bottom: 20px; }
+.overview-toolbar { margin-bottom: 20px; display: flex; align-items: center; }
+
+.data-badge { margin-left: 15px; background: #fffbeb; color: #b45309; border: 1px solid #fde68a; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; }
+.data-badge .dot { color: #f59e0b; font-size: 1.5em; margin-right: 6px; line-height: 0.5; }
+
+.page-preview-container { margin-bottom: 25px; }
+.page-preview { position: relative; max-width: 600px; border-radius: 8px; overflow: hidden; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transition: transform 0.2s; }
+.page-preview:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.2); }
+.page-preview img { display: block; width: 100%; height: auto; }
+.preview-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0); display: flex; justify-content: center; align-items: center; transition: background 0.2s; }
+.page-preview:hover .preview-overlay { background: rgba(0,0,0,0.4); }
+.preview-overlay span { opacity: 0; color: white; font-weight: 600; font-size: 16px; background: rgba(0,0,0,0.7); padding: 8px 16px; border-radius: 20px; transition: opacity 0.2s; }
+.page-preview:hover .preview-overlay span { opacity: 1; }
+
 .regions-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; }
 .region-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
 .region-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
@@ -970,4 +1009,20 @@ th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; }
     background: rgba(255, 255, 255, 0.2);
     color: white;
 }
+.in-table-badge {
+    background: #dcfce7;
+    color: #166534;
+    font-size: 0.65rem;
+    padding: 1px 5px;
+    border-radius: 4px;
+    border: 1px solid #bbf7d0;
+    font-weight: 800;
+    margin-left: 4px;
+}
+.pat-option.active .in-table-badge {
+    background: #166534;
+    color: white;
+    border-color: #14532d;
+}
+.pat-name-text { font-size: 13px; }
 </style>
