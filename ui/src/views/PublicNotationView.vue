@@ -244,17 +244,19 @@ const patternOccurrences = computed(() => {
                 <span class="icon">&larr;</span> Back to Directory
             </button>
             <div class="title-stack">
-                <div class="brand">Notationsdokumentation</div>
+                <div class="brand">
+                    Notationsdokumentation
+                    <span class="info-icon" title="This page provides a detailed index of transcription patterns and their corresponding locations within the manuscript. Patterns are identified by Ref IDs, which are cross-referenced with the annotated line gallery below.">?</span>
+                </div>
                 <h1>{{ source }}</h1>
                 <p class="subtitle">{{ table.name }}</p>
+                <div class="notes-text" v-if="table.notes">{{ table.notes }}</div>
             </div>
         </div>
     </header>
 
     <div class="main-content">
-        <div class="page-intro">
-            <p>This page provides a detailed index of transcription patterns and their corresponding locations within the manuscript. Patterns are identified by Ref IDs, which are cross-referenced with the annotated line gallery below.</p>
-        </div>
+
 
         <!-- Section 1: Patterns Overview -->
         <section class="section table-section">
@@ -458,19 +460,36 @@ const patternOccurrences = computed(() => {
     text-transform: uppercase;
     letter-spacing: 0.1em;
     margin-bottom: -4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
-.page-intro {
-    max-width: 800px;
-    margin-bottom: 30px;
-    padding: 0;
+.info-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    background: #cbd5e1;
+    color: white;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    font-weight: bold;
+    cursor: help;
+    transition: background 0.2s;
+}
+.info-icon:hover {
+    background: #3b82f6;
 }
 
-.page-intro p {
+.notes-text {
+    margin-top: 12px;
     color: #475569;
-    font-size: 1.1rem;
+    font-size: 1.05rem;
     line-height: 1.6;
-    margin: 0;
+    white-space: pre-wrap;
+    max-width: 800px;
 }
 
 .subtitle {

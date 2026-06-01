@@ -74,7 +74,7 @@ const highlightHint = computed(() => {
     const onThisPage = patData.filter(o => getStandardFolio(srcKey, o[1]) === targetFolio);
     if (onThisPage.length === 0) return null;
     
-    const lines = Array.from(new Set(onThisPage.map(o => o[2]))).sort((a,b) => a-b);
+    const lines = Array.from(new Set(onThisPage.map(o => Number(o[2])))).sort((a,b) => a-b);
     
     const sortedOccs = [...onThisPage].sort((a, b) => {
         const lineA = parseInt(a[2]) || 0;
@@ -104,9 +104,9 @@ const allLinesOnPage = computed(() => {
                 lines = lines.concat(fLines);
             }
         }
-        lines = Array.from(new Set(lines)).sort((a,b) => a-b);
+        lines = Array.from(new Set(lines));
     }
-    return lines;
+    return lines.map(Number).sort((a,b) => a-b);
 });
 
 const existingRegionLines = computed(() => {
@@ -246,6 +246,16 @@ const showRegionCreator = ref(false);
 const showLinker = ref(false);
 const newRegionName = ref('');
 
+const isNewRegionNameCustomLine = computed(() => {
+    if (!newRegionName.value) return false;
+    if (newRegionName.value === 'Custom') return false;
+    
+    const lineNum = parseLineNumber(newRegionName.value);
+    if (lineNum === null) return true;
+    
+    return !allLinesOnPage.value.includes(lineNum);
+});
+
 // Auto-open region creator or select existing when navigating from gallery with a highlight
 watch(highlightHint, (newHint) => {
     if (props.initialRegionId) return; // We already have a specific region targeted
@@ -280,7 +290,12 @@ watch(showRegionCreator, (open) => {
         if (linesToAnnotate.value.length > 0) {
             newRegionName.value = `Line ${linesToAnnotate.value[0]}`;
         } else {
-            newRegionName.value = `Line ${regions.value.length + 1}`;
+            // Find the maximum existing line number or transcription line number
+            const maxLineInTranscription = allLinesOnPage.value.length > 0 ? Math.max(...allLinesOnPage.value) : 0;
+            const maxLineInRegions = regions.value.length > 0 ? Math.max(...regions.value.map(r => parseLineNumber(r.name) || 0)) : 0;
+            const startLine = Math.max(maxLineInTranscription, maxLineInRegions);
+            
+            newRegionName.value = `Line ${startLine + 1}`;
         }
     }
 });
@@ -792,6 +807,7 @@ function openSnippet(item) {
                                     Line {{ l }} ✓
                                 </option>
                             </optgroup>
+                            <option v-if="isNewRegionNameCustomLine" :value="newRegionName">{{ newRegionName }}</option>
                             <option value="Custom">Custom Name...</option>
                         </select>
                         <input v-if="newRegionName === 'Custom'" v-model="customRegionName" placeholder="Enter name..." class="custom-input" />

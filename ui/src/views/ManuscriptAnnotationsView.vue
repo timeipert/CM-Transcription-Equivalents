@@ -233,11 +233,11 @@ onMounted(() => {
     </div>
 
     <div class="editor-body">
-        <!-- Left Panel: Configuration -->
+        <!-- Left Panel: Pattern Library -->
         <div class="config-panel">
-            <div class="field-group">
-                <label>Manuscript Source</label>
-                <div class="source-display">{{ table.source }}</div>
+            <div class="panel-header">
+                <h3>Pattern Library</h3>
+                <p class="panel-desc">Select patterns to add them to your table.</p>
             </div>
             
             <div class="field-group" v-if="table.source">
@@ -265,13 +265,22 @@ onMounted(() => {
             </div>
         </div>
 
-        <!-- Right Panel: Table Preview -->
+        <!-- Right Panel: Main Content -->
         <div class="preview-panel">
-            <h3>Table Rows</h3>
-            <div v-if="table.rows.length === 0" class="empty-msg">
-                No patterns selected. Select source and patterns from the left.
-            </div>
-            <table v-else class="edit-table">
+            <div class="content-max-width">
+                <!-- Patterns Table Section -->
+                <div class="card table-card">
+                    <div class="card-header">
+                        <h3>Selected Patterns</h3>
+                        <p class="card-desc">Manage the patterns included in this manuscript's table and set their global IDs.</p>
+                    </div>
+                    <div class="card-body">
+                        <div v-if="table.rows.length === 0" class="empty-msg">
+                            <div class="empty-icon">👈</div>
+                            <h4>No patterns selected</h4>
+                            <p>Select patterns from the library on the left to add them to your table.</p>
+                        </div>
+                        <table v-else class="edit-table">
                 <thead>
                     <tr>
                         <th style="width: 140px;">ID</th>
@@ -307,11 +316,25 @@ onMounted(() => {
                             </div>
                         </td>
                         <td>
-                            <button @click="togglePattern(row.pattern)" class="btn-sm">Remove</button>
+                            <button @click="togglePattern(row.pattern)" class="btn-default">Remove</button>
                         </td>
                     </tr>
                 </tbody>
             </table>
+                    </div>
+                </div>
+
+                <!-- Notes Section -->
+                <div class="card notes-card">
+                    <div class="card-header">
+                        <h3>Public Notes (Anmerkungen)</h3>
+                        <p class="card-desc">These notes will be displayed publicly on the manuscript's notation overview page.</p>
+                    </div>
+                    <div class="card-body">
+                        <textarea v-model="table.notes" class="notes-textarea large" placeholder="Write any remarks, observations, or metadata about this manuscript here..."></textarea>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     
@@ -353,46 +376,75 @@ onMounted(() => {
 .editor-body { flex: 1; display: flex; min-height: 0; }
 
 .config-panel { 
-    width: 320px; background: #fdfdfd; border-right: 1px solid #e2e8f0; 
+    width: 350px; background: #ffffff; border-right: 1px solid #e2e8f0; 
     display: flex; flex-direction: column; overflow: scroll;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.02); z-index: 5;
 }
-.field-group { padding: 20px; border-bottom: 1px solid #f1f5f9; }
-.field-group label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 0.8rem; text-transform: uppercase; color: #64748b; letter-spacing: 0.025em; }
+.panel-header {
+    padding: 24px 20px 10px 20px;
+}
+.panel-header h3 { margin: 0; font-size: 1.1rem; color: #1e293b; }
+.panel-desc { margin: 4px 0 0 0; font-size: 0.85rem; color: #64748b; }
+
+.field-group { padding: 10px 20px 20px 20px; }
+.field-group label { display: block; font-weight: 700; margin-bottom: 8px; font-size: 0.75rem; text-transform: uppercase; color: #475569; letter-spacing: 0.05em; }
 
 .search-input { 
-    width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; 
-    font-size: 0.95rem; background: #fff; transition: border-color 0.2s;
+    width: 100%; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; 
+    font-size: 0.95rem; background: #f8fafc; transition: all 0.2s;
 }
-.search-input:focus { border-color: #3b82f6; outline: none; }
+.search-input:focus { border-color: #3b82f6; outline: none; background: #fff; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
 
-.source-display {
-    width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; 
-    font-size: 0.95rem; background: #f8fafc; color: #334155; font-weight: 500;
+.notes-textarea.large {
+    min-height: 240px;
+    padding: 16px;
+    font-size: 1rem;
+    line-height: 1.5;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    border-radius: 8px;
+    width: 100%;
+    resize: vertical;
+    font-family: inherit;
+    transition: all 0.2s;
 }
-.table-title { margin: 0; font-size: 1.5rem; font-weight: 700; color: #1e293b; }
+.notes-textarea.large:focus { background: #fff; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
 
-.pattern-list { flex: 1; overflow-y: auto; background: white; margin-top: 10px; border-top: 1px solid #f1f5f9; }
+.pattern-list { flex: 1; overflow-y: auto; background: white; margin-top: 15px; border: 1px solid #e2e8f0; border-radius: 8px; }
 .pattern-item {
-    padding: 10px 16px; border-bottom: 1px solid #f8fafc; cursor: pointer;
+    padding: 12px 16px; border-bottom: 1px solid #f1f5f9; cursor: pointer;
     display: flex; gap: 12px; align-items: center; font-size: 0.9rem;
-    transition: background 0.2s;
+    transition: all 0.2s;
 }
-.pattern-item:hover { background: #f1f5f0; }
-.pattern-item.selected { background: #eff6ff; border-left: 3px solid #3b82f6; }
+.pattern-item:last-child { border-bottom: none; }
+.pattern-item:hover { background: #f8fafc; }
+.pattern-item.selected { background: #eff6ff; }
+.pat-name { font-family: monospace; font-weight: 600; color: #475569; width: 60px; }
 
-.preview-panel { flex: 1; padding: 32px; overflow-y: auto; }
-.preview-panel h3 { margin-top: 0; color: #1e293b; font-weight: 700; }
+.preview-panel { flex: 1; padding: 40px; overflow-y: auto; background: #f1f5f9; }
+.content-max-width { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 30px; }
 
-.edit-table { width: 100%; border-collapse: separate; border-spacing: 0 8px; margin-top: 20px; }
+.card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+}
+
+.card-header { padding: 24px 24px 16px 24px; border-bottom: 1px solid #f1f5f9; }
+.card-header h3 { margin: 0; color: #0f172a; font-size: 1.25rem; font-weight: 700; }
+.card-desc { margin: 6px 0 0 0; color: #64748b; font-size: 0.95rem; }
+.card-body { padding: 24px; }
+
+.edit-table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 0; }
 .edit-table th { 
-    padding: 12px 16px; font-weight: 600; text-align: left; 
-    color: #64748b; font-size: 0.85rem; border-bottom: 1px solid #e2e8f0; 
+    padding: 12px 16px; font-weight: 700; text-align: left; text-transform: uppercase;
+    color: #64748b; font-size: 0.75rem; border-bottom: 2px solid #e2e8f0; letter-spacing: 0.05em;
 }
 .edit-table td { 
-    padding: 12px 16px; background: white; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;
+    padding: 16px; background: white; border-bottom: 1px solid #f1f5f9;
 }
-.edit-table td:first-child { border-left: 1px solid #f1f5f9; border-top-left-radius: 10px; border-bottom-left-radius: 10px; }
-.edit-table td:last-child { border-right: 1px solid #f1f5f9; border-top-right-radius: 10px; border-bottom-right-radius: 10px; }
 
 .id-cell { display: flex; gap: 8px; align-items: center; }
 .id-cell input { 
@@ -414,26 +466,30 @@ onMounted(() => {
 .btn-primary:hover { background: #2563eb; transform: translateY(-1px); }
 
 .btn-secondary { 
-    background: white; color: #475569; border: 1px solid #e2e8f0; 
-    padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; 
-    transition: all 0.2s; 
+    background: white; color: #475569; border: 1px solid #cbd5e1; 
+    padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; 
+    transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
-.btn-secondary:hover { background: #f8fafc; border-color: #3b82f6; color: #3b82f6; }
+.btn-secondary:hover { background: #f8fafc; border-color: #94a3b8; color: #0f172a; }
 
 .btn-default {
-    background: transparent; color: #64748b; border: none; padding: 10px 20px;
-    cursor: pointer; font-weight: 600;
+    background: white; color: #ef4444; border: 1px solid #fee2e2; padding: 8px 16px;
+    border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s;
 }
-.btn-default:hover { color: #ef4444; }
+.btn-default:hover { background: #fef2f2; border-color: #fca5a5; }
 
 .btn-sm { 
-    padding: 6px 12px; font-size: 0.8rem; background: #f1f5f9; 
-    border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; color: #475569;
+    padding: 6px 12px; font-size: 0.8rem; background: #fff; font-weight: 600;
+    border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; color: #475569;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: all 0.2s;
 }
-.btn-sm:hover { border-color: #3b82f6; color: #3b82f6; }
+.btn-sm:hover { border-color: #3b82f6; color: #3b82f6; background: #f0f7ff; }
 
-.auto-save-hint { font-size: 11px; color: #94a3b8; font-style: italic; }
+.auto-save-hint { font-size: 0.8rem; color: #94a3b8; font-weight: 500; }
 
-.empty-msg { padding: 60px; text-align: center; color: #94a3b8; font-style: italic; }
+.empty-msg { padding: 60px 20px; text-align: center; color: #64748b; }
+.empty-icon { font-size: 3rem; margin-bottom: 16px; opacity: 0.5; }
+.empty-msg h4 { margin: 0 0 8px 0; color: #334155; font-size: 1.1rem; }
+.empty-msg p { margin: 0; font-size: 0.95rem; }
 </style>
 ```

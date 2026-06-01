@@ -90,7 +90,10 @@ function goToOverview(source) {
                 </thead>
                 <tbody>
                     <tr v-for="table in sortedTables" :key="table.id" @click="goToOverview(table.source)">
-                        <td class="font-bold">{{ table.source }}</td>
+                        <td class="font-bold">
+                            {{ table.source }}
+                            <span v-if="table.notes" class="note-icon" title="Has Notes">📝</span>
+                        </td>
                         <td class="text-secondary">{{ table.name }}</td>
                         <td style="text-align: right;">
                             <span class="badge">{{ table.rows.length }}</span>
@@ -225,6 +228,12 @@ h1 {
 
 .text-secondary {
     color: #64748b;
+}
+
+.note-icon {
+    font-size: 0.9em;
+    margin-left: 8px;
+    opacity: 0.7;
 }
 
 .badge {

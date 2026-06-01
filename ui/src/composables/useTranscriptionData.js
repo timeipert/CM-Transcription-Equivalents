@@ -16,7 +16,7 @@ let initPromise = null;
 
 async function fetchAll() {
     try {
-        const res = await fetch('data.json');
+        const res = await fetch(`data.json?t=${Date.now()}`);
         if (!res.ok) throw new Error("Failed to load data");
         const json = await res.json();
 

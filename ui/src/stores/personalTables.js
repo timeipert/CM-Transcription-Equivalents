@@ -41,6 +41,7 @@ export const usePersonalTablesStore = defineStore('personalTables', () => {
             id,
             name,
             source: '',
+            notes: '',
             patterns: [], // List of strings (pattern names)
             rows: [] // List of { pattern: "...", customId: "..." }
         })

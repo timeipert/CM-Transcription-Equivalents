@@ -73,12 +73,20 @@ def analyze_single_source(corpus_path):
             else:
                 initial_folio = getattr(doc.meta, "initial_folio", "")
                 initial_line_str = getattr(doc.meta, "initial_line", "0")
+
+            if source == "Tri 2254" and initial_folio:
+                m = re.search(r'(\d+)', str(initial_folio))
+                if m:
+                    num = int(m.group(1))
+                    if num >= 334:
+                        initial_folio = str(initial_folio).replace(str(num), str(num - 2))
         
         # Try to parse line start
         try:
             line_start_val = int(initial_line_str)
             line_counter = line_start_val if line_start_val > 0 else 1
         except ValueError:
+            line_start_val = 1
             line_counter = 1
 
         current_context = {
@@ -134,10 +142,21 @@ def analyze_single_source(corpus_path):
                     if hasattr(node, "folio"): current_context["folio"] = str(node.folio)
                     elif hasattr(node, "text"): current_context["folio"] = str(node.text)
 
-            # Reset line count on explicit FolioChange OR if the folio string changed (e.g. via label)
-            if node_type == "FolioChange" or current_context["folio"] != old_folio:
-                line_counter = 1
-                current_context["line"] = "1"
+            # Reset line count if the folio string changed (e.g. via label or FolioChange)
+            if current_context["folio"] != old_folio:
+                # SPECIAL RULE FOR Tri 2254
+                if source == "Tri 2254":
+                    m = re.search(r'(\d+)', current_context["folio"])
+                    if m:
+                        num = int(m.group(1))
+                        if num >= 334:
+                            current_context["folio"] = current_context["folio"].replace(str(num), str(num - 2))
+
+                if current_context["folio"] == initial_folio:
+                    line_counter = line_start_val
+                else:
+                    line_counter = 1
+                current_context["line"] = str(line_counter)
 
             elif node_type == "LineChange":
                 # Update line context - user says "count for the line".
@@ -173,13 +192,6 @@ def analyze_single_source(corpus_path):
                 if "|" in text:
                     line_counter += text.count("|")
                     current_context["line"] = str(line_counter)
-                
-                # Check for folio change e.g. '(f. 157v)' or 'f. 157'
-                m = re.search(r'f\.\s*([0-9]+[rv]?)', text, re.IGNORECASE)
-                if m:
-                    current_context["folio"] = m.group(1)
-                    line_counter = 1
-                    current_context["line"] = "1"
 
             elif node_type == "nonSpaced":
                 # Check if this node IS a nonSpaced group or has one
@@ -341,8 +353,8 @@ def analyze_single_source(corpus_path):
         if hasattr(doc, "data"):
             # Initial Metadata
             if hasattr(doc, "meta"):
-                 current_context["folio"] = getattr(doc.meta, "initial_folio", "")
-                 current_context["line"] = getattr(doc.meta, "initial_line", "0")
+                 current_context["folio"] = str(initial_folio)
+                 current_context["line"] = str(initial_line_str) if initial_line_str != "0" else "1"
             
             traverse(doc.data)
         
