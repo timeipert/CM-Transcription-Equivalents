@@ -1,0 +1,7 @@
+node_modules/
+ui/node_modules/
+user-manual/node_modules/
+.git/
+.venv/
+.DS_Store
+export/
