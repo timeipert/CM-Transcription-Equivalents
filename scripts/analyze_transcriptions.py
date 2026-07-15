@@ -1,3 +1,4 @@
+import argparse
 import monodikit
 import json
 from collections import defaultdict
@@ -5,9 +6,10 @@ import os
 import glob
 import re
 import pandas as pd
-from logic import pitch_to_midi, get_direction, get_suffix
+import os
 
-CACHE_FILE = "transcription_cache.json"
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from logic import pitch_to_midi, get_direction, get_suffix
 
 def extract_pattern(notes):
     if len(notes) < 2:
@@ -368,7 +370,7 @@ def analyze_single_source(corpus_path):
         
     return results
 
-def export_json(data):
+def export_json(data, output_file):
     # COMPACT JSON: Convert defaultdict to regular dict
     data_js = json.loads(json.dumps(data))
     
@@ -392,25 +394,25 @@ def export_json(data):
     # Load Glyphs
     glyphs = {}
     glyph_files = {
-        "note": "glyphs/note.svg",
-        "oriscus": "glyphs/oriscus.svg",
-        "quilisma": "glyphs/quilisma.svg",
-        "ascending": "glyphs/ascending.svg",
-        "descending": "glyphs/descending.svg",
-        "strophicus": "glyphs/strophicus.svg"
+        "note": os.path.join(REPO_ROOT, "glyphs/note.svg"),
+        "oriscus": os.path.join(REPO_ROOT, "glyphs/oriscus.svg"),
+        "quilisma": os.path.join(REPO_ROOT, "glyphs/quilisma.svg"),
+        "ascending": os.path.join(REPO_ROOT, "glyphs/ascending.svg"),
+        "descending": os.path.join(REPO_ROOT, "glyphs/descending.svg"),
+        "strophicus": os.path.join(REPO_ROOT, "glyphs/strophicus.svg")
     }
     
     for name, path in glyph_files.items():
         if os.path.exists(path):
             with open(path, "r") as f:
-                content = f.read()
+                content_svg = f.read()
                 # Extract viewBox
                 vb = "0 0 10 10"
-                m_vb = re.search(r'viewBox="([^"]+)"', content)
+                m_vb = re.search(r'viewBox="([^"]+)"', content_svg)
                 if m_vb: vb = m_vb.group(1)
                 
                 # Extract Path d
-                m_d = re.search(r' d="([^"]+)"', content)
+                m_d = re.search(r' d="([^"]+)"', content_svg)
                 d_val = ""
                 if m_d: d_val = m_d.group(1)
                 
@@ -421,7 +423,7 @@ def export_json(data):
     # Load Metadata (Quellendaten)
     manifest_map = {}
     try:
-        excel_path = "data/raw/Quellendaten.xlsx"
+        excel_path = os.path.join(REPO_ROOT, "data/raw/Quellendaten.xlsx")
         if os.path.exists(excel_path):
             df = pd.read_excel(excel_path)
             if "Quellensigle" in df.columns and "Manifest" in df.columns:
@@ -444,9 +446,7 @@ def export_json(data):
         "manifests": manifest_map
     }
     
-    # Ensure ui/public exists
-    os.makedirs("ui/public", exist_ok=True)
-    output_file = "ui/public/data.json"
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
     
     with open(output_file, "w") as f:
         json.dump(export_obj, f)
@@ -454,8 +454,8 @@ def export_json(data):
     print(f"Exported JSON to {output_file}")
 
 
-def load_or_process_data(cache_file):
-    if os.path.exists(cache_file):
+def load_or_process_data(corpus_path, cache_file, fresh):
+    if not fresh and os.path.exists(cache_file):
         print(f"Loading data from cache: {cache_file} ...")
         try:
             with open(cache_file, "r") as f:
@@ -465,10 +465,10 @@ def load_or_process_data(cache_file):
         except Exception as e:
             print(f"Error loading cache: {e}. Reprocessing...")
     
-    return analyze_corpus("export")
+    return analyze_corpus(corpus_path, cache_file)
 
 
-def analyze_corpus(corpus_path="export"):
+def analyze_corpus(corpus_path, cache_file):
     # Aggregated results
     final_results = defaultdict(lambda: defaultdict(list))
     
@@ -485,25 +485,23 @@ def analyze_corpus(corpus_path="export"):
         print(f"Found {len(source_dirs)} sources in {corpus_path}")
 
     total = len(source_dirs)
+    failures = []
     for i, src in enumerate(source_dirs):
-        # print(f"--- Processing Source {i+1}/{total}: {os.path.basename(src)} ---")
         try:
-            # Call the single source analyzer
-            # Note: analyze_single_source must return results!
             src_results = analyze_single_source(src)
-            
-            # Merge results
             for source_name, patterns in src_results.items():
                 for pat, occurrences in patterns.items():
                     final_results[source_name][pat].extend(occurrences)
-                    
         except Exception as e:
+            failures.append((src, e))
             print(f"Error processing {src}: {e}")
             
+    print(f"Processed {total} sources, {len(failures)} failed: {[os.path.basename(f[0]) for f in failures]}")
+    
     # Cache the results
-    print(f"Saving data to cache: {CACHE_FILE} ...")
+    print(f"Saving data to cache: {cache_file} ...")
     try:
-        with open(CACHE_FILE, "w") as f:
+        with open(cache_file, "w") as f:
             json.dump(final_results, f)
         print("Data cached.")
     except Exception as e:
@@ -513,6 +511,12 @@ def analyze_corpus(corpus_path="export"):
 
 
 if __name__ == "__main__":
-    # Load from cache or process
-    results = load_or_process_data(CACHE_FILE)
-    export_json(results)
+    parser = argparse.ArgumentParser(description="Preprocess chant transcription data")
+    parser.add_argument("--corpus", default=os.path.join(REPO_ROOT, "export"), help="Path to corpus directory")
+    parser.add_argument("--out", default=os.path.join(REPO_ROOT, "ui/public/data.json"), help="Path to output JSON")
+    parser.add_argument("--cache", default=os.path.join(REPO_ROOT, "transcription_cache.json"), help="Path to cache JSON")
+    parser.add_argument("--fresh", action="store_true", help="Ignore and rewrite the cache")
+    args = parser.parse_args()
+
+    results = load_or_process_data(args.corpus, args.cache, args.fresh)
+    export_json(results, args.out)
