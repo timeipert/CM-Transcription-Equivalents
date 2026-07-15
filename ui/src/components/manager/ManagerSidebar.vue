@@ -142,9 +142,14 @@ async function submitIiif() {
     </div>
     <div class="tree" v-else>
         <div v-for="(folios, src) in tree" :key="src" class="tree-node">
-            <div class="src-label" @click="toggleSource(src)">
-                <span class="chevron">{{ expandedSources.has(src) ? '▼' : '▶' }}</span>
-                {{ src }}
+            <div class="src-label-container">
+                <div class="src-label" @click="toggleSource(src)">
+                    <span class="chevron">{{ expandedSources.has(src) ? '▼' : '▶' }}</span>
+                    {{ src }}
+                    <span v-if="iiifStore.manifestStatus[src]?.status === 'loading'" class="manifest-status loading" title="Loading Manifest...">↻</span>
+                    <span v-else-if="iiifStore.manifestStatus[src]?.status === 'error'" class="manifest-status error" :title="iiifStore.manifestStatus[src]?.error">⚠️</span>
+                </div>
+                <button v-if="iiifStore.manifestStatus[src]?.status === 'error'" class="btn-xs retry-btn" @click.stop="iiifStore.ensureLoaded(src)" title="Retry loading IIIF Manifest">Retry</button>
             </div>
             <div class="folio-list" v-show="expandedSources.has(src)">
                 <input v-if="folios.length > 10" 
@@ -201,8 +206,14 @@ async function submitIiif() {
 .iiif-btn { background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; }
 .iiif-btn:hover { background: #c7d2fe; }
 .tree { flex: 1; overflow-y: auto; padding: 10px; }
-.src-label { font-weight: bold; margin-top: 10px; color: #555; position: sticky; top:0; background:#f9f9f9; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 4px; border-radius: 4px; }
-.src-label:hover { background: #eee; }
+.src-label-container { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding-right: 4px; background: #f9f9f9; position: sticky; top:0; z-index: 10; border-radius: 4px; }
+.src-label-container:hover { background: #eee; }
+.src-label { font-weight: bold; color: #555; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 4px; flex: 1; }
+.manifest-status.loading { display: inline-block; animation: spin 1s linear infinite; color: #888; font-size: 0.8em; }
+.manifest-status.error { color: #dc2626; cursor: help; font-size: 0.9em; }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+.retry-btn { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.7em; }
+.retry-btn:hover { background: #fecaca; }
 .chevron { font-size: 0.8em; color: #888; }
 .folio-list { padding-left: 15px; padding-bottom: 5px; }
 .folio-search { width: 90%; margin: 4px 0 8px 4px; padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85em; }

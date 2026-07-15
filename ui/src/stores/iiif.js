@@ -6,6 +6,7 @@ export const useIiifStore = defineStore('iiif', () => {
     // State
     const links = ref(JSON.parse(localStorage.getItem('iiifLinks') || '{}'));
     const parsedData = ref({}); // source -> array of { folio, imgUrl }
+    const manifestStatus = ref({}); // source -> { status: 'loading' | 'ok' | 'error', error: null }
 
     // Persist links
     watch(links, (newLinks) => {
@@ -29,9 +30,39 @@ export const useIiifStore = defineStore('iiif', () => {
     }
 
     async function fetchAndParseManifest(source, url) {
+        manifestStatus.value[source] = { status: 'loading', error: null };
         try {
-            const res = await fetch(url);
-            if (!res.ok) throw new Error("Failed to load manifest");
+            let attempt = 0;
+            const retries = 3;
+            const timeout = 15000;
+            let res;
+            
+            while (attempt < retries) {
+                const controller = new AbortController();
+                const id = setTimeout(() => controller.abort(), timeout);
+                try {
+                    res = await fetch(url, { signal: controller.signal });
+                    clearTimeout(id);
+                    if (res.ok || res.status === 404 || res.status === 401 || res.status === 403) {
+                        break;
+                    }
+                    throw new Error(`HTTP ${res.status}`);
+                } catch (e) {
+                    clearTimeout(id);
+                    attempt++;
+                    if (attempt >= retries) {
+                        if (e.name === 'AbortError') throw new Error(`Manifest fetch timed out after ${timeout/1000}s`);
+                        throw e;
+                    }
+                    // backoff
+                    await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+                }
+            }
+
+            if (!res.ok) {
+                 throw new Error(`Failed to load manifest: HTTP ${res.status}`);
+            }
+            
             const data = await res.json();
             
             const folios = [];
@@ -125,12 +156,16 @@ export const useIiifStore = defineStore('iiif', () => {
             
             if (folios.length > 0) {
                 parsedData.value[source] = folios;
+                manifestStatus.value[source] = { status: 'ok', error: null };
             } else {
-                console.warn(`No canvases found in manifest for ${source}`);
+                const msg = `No canvases found in manifest for ${source}`;
+                console.warn(msg);
+                manifestStatus.value[source] = { status: 'error', error: msg };
             }
             
         } catch (e) {
             console.error(`Failed to load IIIF manifest for ${source}`, e);
+            manifestStatus.value[source] = { status: 'error', error: e.message };
         }
     }
 
@@ -165,6 +200,7 @@ export const useIiifStore = defineStore('iiif', () => {
     return {
         links,
         parsedData,
+        manifestStatus,
         addManifest,
         removeManifest,
         importFromDataManifests,
