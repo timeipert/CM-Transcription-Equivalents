@@ -16,7 +16,7 @@ def get_direction(p1, p2):
 def get_suffix(note_type, is_liquescent):
     """Returns the paleographic suffix for a note."""
     s = ""
-    t = note_type
+    t = str(note_type).capitalize()
     l = is_liquescent
     
     if t == "Oriscus": s += "O"

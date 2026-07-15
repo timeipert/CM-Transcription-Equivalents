@@ -49,7 +49,7 @@ export function renderSvg(pattern, glyphs, isGroup) {
         let suffix = "";
         while (i < p.length) {
             const nextC = p[i];
-            if (['L', 'Q', 'O', 'S'].includes(nextC)) {
+            if (['L', 'Q', 'O', 'S', 'A', 'D'].includes(nextC)) {
                 suffix += nextC;
                 i++;
             } else {

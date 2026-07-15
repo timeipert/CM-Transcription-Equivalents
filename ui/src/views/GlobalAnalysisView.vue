@@ -120,7 +120,7 @@ const modalSortDir = ref(1); // 1 = asc, -1 = desc
 // Helpers
 function getBasicType(pattern) {
     let p = pattern.replace(/[\*\[\]]/g, "");
-    p = p.replace(/[LQOS]/g, "");
+    p = p.replace(/[LQOSAD]/g, "");
     if (p === "") return "(Start)";
     return p;
 }
