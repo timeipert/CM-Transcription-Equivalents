@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useSettingsStore } from '../stores/settings';
 import PatternDisplay from '../components/PatternDisplay.vue';
 import SvgPattern from '../components/SvgPattern.vue'; // Keep for group headers if needed, or refactorGroups?
@@ -14,7 +14,7 @@ import { useRouter } from 'vue-router';
 import { compareFolios } from '../utils/sorting';
 
 // Use Composable
-const { rawData, patStats, glyphs, manifests, overallMax, loading } = useTranscriptionData();
+const { rawData, patStats, glyphs, manifests, overallMax, loading, sourceFolios, loadSource } = useTranscriptionData();
 const annotStore = useAnnotationsStore();
 const { getStandardSource } = useImageManifest();
 const router = useRouter();
@@ -125,7 +125,7 @@ function getBasicType(pattern) {
     return p;
 }
 
-const sources = computed(() => Object.keys(rawData.value).sort());
+const sources = computed(() => Object.keys(sourceFolios.value || {}).sort());
 const allPatterns = computed(() => Object.keys(patStats.value));
 
 const patternGroups = computed(() => {
@@ -144,16 +144,9 @@ const groupStats = computed(() => {
     const stats = {};
     for (const g of allBasicTypes.value) {
         let total = 0;
-        // Use the pre-calculated stats from data.json if available?
-        // Actually locally calculating is safer if we filter sources later.
-        // But data.json aggregation is fast.
-        
-        // Re-calculate to support potential source filtering later
-        for (const src of sources.value) {
-            const row = rawData.value[src];
-            if (!row) continue;
-            for (const v of patternGroups.value[g]) {
-                if (row[v]) total += row[v].length;
+        for (const v of patternGroups.value[g]) {
+            if (patStats.value[v]) {
+                total += patStats.value[v].count;
             }
         }
         stats[g] = total;
@@ -230,6 +223,16 @@ const pageSources = computed(() => {
     const start = (currentPage.value - 1) * rowsPerPage;
     return sortedRows.value.slice(start, start + rowsPerPage);
 });
+
+
+watch(pageSources, async (newSources) => {
+    if (!newSources) return;
+    for (const src of newSources) {
+        if (!rawData.value[src]) {
+            await loadSource(src);
+        }
+    }
+}, { immediate: true, deep: true });
 
 
 // Methods
@@ -394,7 +397,6 @@ onMounted(() => {
         tryOpen();
     }
 });
-import { watch } from 'vue'; // Ensure watch is imported
 
 function isHighlighted(row) {
     if (!route.query.highlightId) return false;

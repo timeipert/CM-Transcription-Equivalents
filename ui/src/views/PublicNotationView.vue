@@ -18,7 +18,7 @@ const tableStore = usePersonalTablesStore();
 const annotStore = useAnnotationsStore();
 const iiifStore = useIiifStore();
 const settings = useSettingsStore();
-const { glyphs, rawData } = useTranscriptionData();
+const { glyphs, rawData, loadSource } = useTranscriptionData();
 const { hasImage } = useImageManifest();
 
 const source = route.params.source;
@@ -82,6 +82,7 @@ function isStarred(item) {
 onMounted(async () => {
     // Ensure IIIF manifest is loaded for snippets to work
     await iiifStore.ensureLoaded(source);
+    await loadSource(source);
 });
 const table = computed(() => tableStore.tables.find(t => t.source === source));
 

@@ -16,7 +16,7 @@ const router = useRouter();
 const annotStore = useAnnotationsStore();
 const tableStore = usePersonalTablesStore();
 const settings = useSettingsStore();
-const { pagePatternsIndex, folioLinesIndex, glyphs, rawData, patStats, sourceFolios } = useTranscriptionData();
+const { pagePatternsIndex, folioLinesIndex, glyphs, rawData, patStats, sourceFolios, loadSource } = useTranscriptionData();
 const { getImageUrl, getStandardSource, getStandardFolio, getIiifThumbnailUrl, hasTranscriptionData } = useImageManifest();
 
 // --- Utils ---
@@ -238,6 +238,12 @@ watch([() => props.initialRegionId, regions], ([id, list]) => {
         if (match) {
              activeRegion.value = match;
         }
+    }
+}, { immediate: true });
+
+watch(() => props.source, async (newSrc) => {
+    if (newSrc) {
+        await loadSource(newSrc);
     }
 }, { immediate: true });
 

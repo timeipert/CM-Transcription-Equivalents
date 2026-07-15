@@ -18,7 +18,7 @@ const route = useRoute();
 const router = useRouter();
 
 // Data
-const { rawData, glyphs, loading: dataLoading, patStats } = useTranscriptionData();
+const { rawData, glyphs, loading: dataLoading, patStats, sourceFolios, loadSource } = useTranscriptionData();
 const { generatePdf } = usePdfExport();
 
 const tableId = route.params.id;
@@ -30,8 +30,13 @@ const searchTerm = ref("");
 const patternSort = ref('freq'); // freq, alpha, length
 
 // Setup Data & Table
-watch(dataLoading, (val) => {
-    if (!val) initTable();
+watch(dataLoading, async (val) => {
+    if (!val) {
+        initTable();
+        if (table.value && table.value.source) {
+            await loadSource(table.value.source);
+        }
+    }
 }, { immediate: true });
 
 function initTable() {
@@ -53,7 +58,7 @@ function initTable() {
 
 
 // Computed Data
-const sources = computed(() => Object.keys(rawData.value || {}).sort());
+const sources = computed(() => Object.keys(sourceFolios.value || {}).sort());
 
 // Global base stats for sorting
 const baseStats = computed(() => {

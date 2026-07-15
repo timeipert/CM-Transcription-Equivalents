@@ -11,54 +11,34 @@ const folioLinesIndex = shallowRef({}); // { source: { folio: [lines] } }
 const overallMax = ref(0);
 const loading = ref(true);
 const error = ref(null);
+const loadedSources = ref(new Set());
 
 let initPromise = null;
 
 async function fetchAll() {
     try {
-        const res = await fetch(`data.json?t=${Date.now()}`);
-        if (!res.ok) throw new Error("Failed to load data");
+        const res = await fetch(`index.json?t=${Date.now()}`);
+        if (!res.ok) throw new Error("Failed to load data index");
         const json = await res.json();
 
-        // Build efficient indices
-        const sFolios = {};
-        const pPats = {};
-        const fLines = {};
+        // Populate empty indices initially
+        rawData.value = {};
+        pagePatternsIndex.value = {};
+        folioLinesIndex.value = {};
 
-        for (const [src, patterns] of Object.entries(json.data)) {
-            sFolios[src] = new Set();
-            pPats[src] = {};
-            fLines[src] = {};
-
-            for (const [pat, occs] of Object.entries(patterns)) {
-                for (const occ of occs) {
-                    const fol = occ[1];
-                    const line = occ[2];
-                    sFolios[src].add(fol);
-
-                    if (!pPats[src][fol]) pPats[src][fol] = [];
-                    pPats[src][fol].push(pat);
-                    
-                    if (!fLines[src][fol]) fLines[src][fol] = new Set();
-                    fLines[src][fol].add(line);
-                }
-            }
-
-            // Deduplicate patterns per page and convert line sets to sorted arrays
-            for (const fol of Object.keys(pPats[src])) {
-                pPats[src][fol] = Array.from(new Set(pPats[src][fol])).sort();
-                fLines[src][fol] = Array.from(fLines[src][fol]).sort((a,b) => a-b);
-            }
-        }
-
-        rawData.value = json.data;
-        sourceFolios.value = sFolios;
-        pagePatternsIndex.value = pPats;
-        folioLinesIndex.value = fLines;
         patStats.value = json.stats;
         glyphs.value = json.glyphs;
         manifests.value = json.manifests || {};
         overallMax.value = json.overallMax;
+
+        // Populate sourceFolios from index
+        const sFolios = {};
+        if (json.sourceFolios) {
+            for (const [src, fList] of Object.entries(json.sourceFolios)) {
+                sFolios[src] = new Set(fList);
+            }
+        }
+        sourceFolios.value = sFolios;
         loading.value = false;
 
         // Auto-import IIIF manifests from data.json into the IIIF store
@@ -74,6 +54,50 @@ async function fetchAll() {
         console.error(e);
         error.value = e;
         loading.value = false;
+    }
+}
+
+async function loadSource(sourceName) {
+    if (!sourceName) return;
+    if (loadedSources.value.has(sourceName)) return;
+    
+    const safeSrc = sourceName.replace(/\//g, "_");
+    
+    try {
+        const res = await fetch(`sources/${safeSrc}.json`);
+        if (!res.ok) throw new Error(`Failed to load source ${sourceName}`);
+        const sourceData = await res.json();
+        
+        const pPats = {};
+        const fLines = {};
+        
+        for (const [pat, occs] of Object.entries(sourceData)) {
+            for (const occ of occs) {
+                const fol = occ[1];
+                const line = occ[2];
+                
+                if (!pPats[fol]) pPats[fol] = [];
+                pPats[fol].push(pat);
+                
+                if (!fLines[fol]) fLines[fol] = new Set();
+                fLines[fol].add(line);
+            }
+        }
+        
+        // Deduplicate
+        for (const fol of Object.keys(pPats)) {
+            pPats[fol] = Array.from(new Set(pPats[fol])).sort();
+            fLines[fol] = Array.from(fLines[fol]).sort((a,b) => a-b);
+        }
+        
+        // Mutate shallowRefs
+        rawData.value = { ...rawData.value, [sourceName]: sourceData };
+        pagePatternsIndex.value = { ...pagePatternsIndex.value, [sourceName]: pPats };
+        folioLinesIndex.value = { ...folioLinesIndex.value, [sourceName]: fLines };
+        
+        loadedSources.value.add(sourceName);
+    } catch (e) {
+        console.error(e);
     }
 }
 
@@ -93,6 +117,8 @@ export function useTranscriptionData() {
         manifests,
         overallMax,
         loading,
-        error
+        error,
+        loadSource,
+        loadedSources
     };
 }

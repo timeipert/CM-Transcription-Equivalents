@@ -381,8 +381,10 @@ def export_json(data, output_file):
     pat_stats = defaultdict(lambda: {"count": 0, "length": 0})
     
     overall_max = 0
+    source_folios = {}
 
     for src in sources:
+        folios = set()
         for pat, occurrences in data_js[src].items():
             all_patterns.add(pat)
             count = len(occurrences)
@@ -390,6 +392,9 @@ def export_json(data, output_file):
             pat_stats[pat]["length"] = len(pat)
             if count > overall_max:
                 overall_max = count
+            for occ in occurrences:
+                folios.add(occ[1])
+        source_folios[src] = sorted(list(folios))
     
     # Load Glyphs
     glyphs = {}
@@ -437,21 +442,33 @@ def export_json(data, output_file):
     except Exception as e:
         print(f"Warning: Could not load Quellendaten.xlsx: {e}")
 
-    # Construct Final Export Object
+    # Construct Final Export Object (Index without large data payload)
     export_obj = {
-        "data": data_js,
         "stats": pat_stats,
         "overallMax": overall_max,
         "glyphs": glyphs,
-        "manifests": manifest_map
+        "manifests": manifest_map,
+        "sourceFolios": source_folios,
+        "sources": sources
     }
     
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    out_dir = os.path.dirname(output_file)
+    os.makedirs(out_dir, exist_ok=True)
     
     with open(output_file, "w") as f:
         json.dump(export_obj, f)
+        
+    sources_dir = os.path.join(out_dir, "sources")
+    os.makedirs(sources_dir, exist_ok=True)
     
-    print(f"Exported JSON to {output_file}")
+    # Replace slashes in source names to avoid subdirectories
+    for src in sources:
+        safe_src = src.replace("/", "_")
+        src_file = os.path.join(sources_dir, f"{safe_src}.json")
+        with open(src_file, "w") as f:
+            json.dump(data_js[src], f)
+    
+    print(f"Exported index JSON to {output_file} and {len(sources)} source files to {sources_dir}")
 
 
 def load_or_process_data(corpus_path, cache_file, fresh):
@@ -513,7 +530,7 @@ def analyze_corpus(corpus_path, cache_file):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Preprocess chant transcription data")
     parser.add_argument("--corpus", default=os.path.join(REPO_ROOT, "export"), help="Path to corpus directory")
-    parser.add_argument("--out", default=os.path.join(REPO_ROOT, "ui/public/data.json"), help="Path to output JSON")
+    parser.add_argument("--out", default=os.path.join(REPO_ROOT, "ui/public/index.json"), help="Path to output JSON")
     parser.add_argument("--cache", default=os.path.join(REPO_ROOT, "transcription_cache.json"), help="Path to cache JSON")
     parser.add_argument("--fresh", action="store_true", help="Ignore and rewrite the cache")
     args = parser.parse_args()

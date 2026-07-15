@@ -6,15 +6,15 @@ import { useTranscriptionData } from '../composables/useTranscriptionData'
 
 const store = usePersonalTablesStore()
 const router = useRouter()
-const { rawData, loading } = useTranscriptionData()
+const { rawData, loading, sourceFolios } = useTranscriptionData()
 
 const searchQuery = ref("");
 
 const manuscripts = computed(() => {
-    if (!rawData.value) return [];
+    if (!sourceFolios.value) return [];
     
-    // Get all unique source names from transcription data
-    let allSources = Object.keys(rawData.value).sort();
+    // Get all unique source names from index
+    let allSources = Object.keys(sourceFolios.value).sort();
     
     // Filter
     if (searchQuery.value.trim()) {
