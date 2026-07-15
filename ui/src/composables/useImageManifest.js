@@ -1,6 +1,8 @@
 import { ref, watch } from 'vue';
 import { useIiifStore } from '../stores/iiif';
 import { useTranscriptionData } from './useTranscriptionData';
+import { useSettingsStore } from '../stores/settings';
+import { folioToIndex, indexToFolio } from '../utils/folioMath';
 
 const normCache = new Map();
 const stdFolioCache = new Map();
@@ -168,6 +170,34 @@ export function useImageManifest() {
         if (!iiifKey || !iiifStore.parsedData[iiifKey]) return null;
 
         const data = iiifStore.parsedData[iiifKey];
+        
+        // 0. Check Alignment Settings
+        const settings = useSettingsStore();
+        const align = settings.sourceAlignments[source] || settings.sourceAlignments[iiifKey];
+        
+        if (align) {
+            const dataIndex = folioToIndex(folioName, align.dataType);
+            if (dataIndex !== null) {
+                let totalOffset = align.offset || 0;
+                if (align.adjustments && Array.isArray(align.adjustments)) {
+                    for (const rule of align.adjustments) {
+                        const ruleIdx = folioToIndex(rule.fromFolio, align.dataType);
+                        if (ruleIdx !== null && dataIndex >= ruleIdx) {
+                            totalOffset += (rule.adjust || 0);
+                        }
+                    }
+                }
+                const iiifIndex = dataIndex + totalOffset;
+                const expectedIiifLabel = indexToFolio(iiifIndex, align.iiifType);
+                
+                if (expectedIiifLabel) {
+                    const mappedTarget = normalizeFolioName(expectedIiifLabel);
+                    // Match against normalized label or original label (useful for padded labels)
+                    const exactMatch = data.find(i => normalizeFolioName(i.folio) === mappedTarget || normalizeFolioName(i.originalFolio) === mappedTarget);
+                    if (exactMatch) return { ...exactMatch, resolvedSource: iiifKey };
+                }
+            }
+        }
 
         // 1. Normalized exact match
         const target = normalizeFolioName(folioName);
