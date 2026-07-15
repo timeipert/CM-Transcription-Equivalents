@@ -24,6 +24,13 @@
   --color-primary-dark: #1e3a8a;
 
   /* Semantic */
+  --color-danger-light: #fee2e2;
+  --color-danger-muted: #fca5a5;
+  --color-warning-light: #fef3c7;
+  --color-warning-muted: #fde68a;
+  --color-warning-dark: #b45309;
+  --color-success-light: #dcfce7;
+  --color-success-muted: #86efac;
   --color-accent: #8b5cf6;
   --color-danger: #ef4444;
   --color-warning: #f59e0b;

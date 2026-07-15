@@ -41,6 +41,6 @@ const arrowRep = computed(() => {
     justify-content: center;
     align-items: center;
 }
-.mode-arrow { font-size: 1.1em; color: #555; }
-.mode-text { font-family: monospace; font-weight: bold; color: #333; }
+.mode-arrow { font-size: 1.1em; color: var(--color-text-muted); }
+.mode-text { font-family: monospace; font-weight: bold; color: var(--color-text); }
 </style>

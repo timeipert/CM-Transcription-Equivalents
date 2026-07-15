@@ -36,7 +36,7 @@ const props = defineProps({
 .folio-viewer {
     width: 100%;
     height: 100%;
-    background: #333;
+    background: var(--color-text);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -52,7 +52,7 @@ const props = defineProps({
     display: block;
     max-width: 100%;
     max-height: 80vh; 
-    border: 2px solid #555;
+    border: 2px solid var(--color-text-muted);
 }
 .overlay-layer {
     position: absolute;

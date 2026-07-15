@@ -197,12 +197,12 @@ const alignPreview = computed(() => {
             <button @click="doExport" class="btn-primary">Export JSON</button>
             
             <div class="import-zone">
-                <input type="file" ref="fileInput" @change="doImport" accept=".json" multiple style="display:none">
+                <input type="file" ref="fileInput" @change="doImport" accept=".json" multiple class="d-none">
                 <button @click="$refs.fileInput.click()" class="btn-secondary">Import JSON</button>
             </div>
             
-            <div style="flex: 1"></div>
-            <button @click="doClearAll" class="btn-danger btn-secondary" style="border-color: #ef9a9a;">Remove All Data</button>
+            <div class="flex-1"></div>
+            <button @click="doClearAll" class="btn-danger btn-secondary border-danger">Remove All Data</button>
         </div>
         <div v-if="importMsg" :class="['msg', importStatus]">{{ importMsg }}</div>
     </div>
@@ -285,13 +285,13 @@ const alignPreview = computed(() => {
                             <td>{{ store.sourceAlignments[src].offset }}</td>
                             <td>{{ store.sourceAlignments[src].adjustments?.length || 0 }} jumps</td>
                             <td>
-                                <button @click="startEditAlignment(src)" class="btn-sm btn-primary" style="margin-right:8px;">Edit</button>
+                                <button @click="startEditAlignment(src)" class="btn-sm btn-primary mr-8">Edit</button>
                                 <button @click="deleteAlignment(src)" class="btn-sm btn-danger">Remove</button>
                             </td>
                         </tr>
                     </tbody>
                 </table>
-                <div v-else class="empty" style="margin-bottom:15px;">No manuscripts have custom alignment rules configured.</div>
+                <div v-else class="empty mb-15">No manuscripts have custom alignment rules configured.</div>
             </div>
             <button @click="startEditAlignment('')" class="btn-primary">Add Configuration</button>
         </div>
@@ -304,7 +304,7 @@ const alignPreview = computed(() => {
                     <option v-for="src in availableSources" :key="src" :value="src">{{ src }}</option>
                 </select>
             </div>
-            <h3 v-else style="margin-top:0;">Configuring: {{ editingAlignment.source }}</h3>
+            <h3 v-else class="mt-0">Configuring: {{ editingAlignment.source }}</h3>
 
             <div class="align-grid">
                 <div>
@@ -319,17 +319,17 @@ const alignPreview = computed(() => {
                 </div>
                 <div>
                     <label>Base Offset</label>
-                    <input type="number" v-model="editingAlignment.offset" style="width:80px; padding:6px;">
-                    <p style="font-size:0.8em; color:#888;">Applied to all folios</p>
+                    <input type="number" v-model="editingAlignment.offset" class="w-80-p6">
+                    <p class="text-sm-light">Applied to all folios</p>
                 </div>
             </div>
 
             <div class="jump-rules">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <label style="font-weight:bold;">Jump Rules</label>
+                <div class="flex-between-mb10">
+                    <label class="fw-bold">Jump Rules</label>
                     <button @click="addAdjustment" class="btn-sm btn-secondary">+ Add Jump</button>
                 </div>
-                <p style="font-size:0.85em; color:#666; margin-top:0;">Use this if the IIIF manifest skips images or jumps midway (e.g. missing pages).</p>
+                <p class="text-sm-muted-mt0">Use this if the IIIF manifest skips images or jumps midway (e.g. missing pages).</p>
                 
                 <table v-if="editingAlignment.adjustments.length > 0">
                     <thead><tr><th>From Data Folio</th><th>Extra Offset</th><th></th></tr></thead>
@@ -343,16 +343,16 @@ const alignPreview = computed(() => {
                 </table>
             </div>
 
-            <div class="align-preview" style="margin-top:20px;">
-                <div style="margin-bottom:10px;">
+            <div class="align-preview mt-20">
+                <div class="mb-10">
                     <strong>Live Preview</strong> - Test a Data Folio: 
-                    <input v-model="testDataFolio" style="width:60px; padding:4px;" />
+                    <input v-model="testDataFolio" class="w-60-p4" />
                 </div>
                 <div>{{ alignPreview }}</div>
             </div>
 
-            <div class="add-row" style="background:transparent; padding:0; margin-top:15px; border-top:1px solid #eee; padding-top:15px; justify-content: flex-end;">
-                <button @click="editingAlignment = null" class="btn-secondary" style="margin-right:auto;">Cancel</button>
+            <div class="add-row add-row-actions">
+                <button @click="editingAlignment = null" class="btn-secondary mr-auto">Cancel</button>
                 <button @click="saveAlignment" class="btn-primary" :disabled="!editingAlignment.source">Save Alignment</button>
             </div>
         </div>
@@ -406,70 +406,87 @@ const alignPreview = computed(() => {
 .settings-container { padding: 30px; max-width: 800px; margin: 0 auto; }
 h1 { margin-bottom: 30px; }
 .section { margin-bottom: 30px; text-align: left; }
-.section h2 { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; font-size: 1.2em; }
-.desc { color: #666; font-size: 0.9em; margin-bottom: 20px; }
+.section h2 { margin-top: 0; border-bottom: 1px solid var(--color-border); padding-bottom: 10px; margin-bottom: 20px; font-size: 1.2em; }
+.desc { color: var(--color-text-muted); font-size: 0.9em; margin-bottom: 20px; }
 
 .setting-row { margin-bottom: 15px; }
 .setting-row label { display: block; font-weight: 500; }
 .setting-row select { margin-top: 5px; padding: 8px; width: 200px; }
 .setting-row input[type="checkbox"] { margin-right: 10px; }
 
-.add-row { display: flex; gap: 10px; margin-bottom: 20px; background: #f9f9f9; padding: 15px; border-radius: 4px; }
-.add-row input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+.add-row { display: flex; gap: 10px; margin-bottom: 20px; background: var(--color-bg); padding: 15px; border-radius: 4px; }
+.add-row input { flex: 1; padding: 8px; border: 1px solid var(--color-border); border-radius: 4px; }
 
 table { width: 100%; border-collapse: collapse; }
-th, td { border-bottom: 1px solid #eee; padding: 10px; text-align: left; }
-th { background: #f5f5f5; font-weight: 600; }
-.code-font { font-family: monospace; color: #555; font-weight: bold; }
-.empty { color: #999; font-style: italic; padding: 20px; text-align: center; background: #fafafa; border-radius: 4px; }
+th, td { border-bottom: 1px solid var(--color-border); padding: 10px; text-align: left; }
+th { background: var(--color-surface-muted); font-weight: 600; }
+.code-font { font-family: monospace; color: var(--color-text-muted); font-weight: bold; }
+.empty { color: var(--color-text-light); font-style: italic; padding: 20px; text-align: center; background: var(--color-bg); border-radius: 4px; }
 
 .btn-sm { padding: 4px 10px; font-size: 0.8em; }
-.btn-danger { color: #d32f2f; border-color: #ef9a9a; background: #ffebee; }
-.btn-danger:hover { background: #ffcdd2; }
+.btn-danger { color: var(--color-danger); border-color: var(--color-danger, var(--color-danger)); background: var(--color-danger-light, var(--color-danger-light)); }
+.btn-danger:hover { background: var(--color-danger-light, var(--color-danger-light)); }
 
 /* Backup UI Styles */
 .backup-actions { display: flex; gap: 10px; margin-top: 15px; align-items: center; }
 .import-zone { display: inline-block; }
-.text-input { width: 100%; max-width: 300px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95rem; }
+.text-input { width: 100%; max-width: 300px; padding: 8px; border: 1px solid var(--color-border); border-radius: 4px; font-size: 0.95rem; }
 .msg { margin-top: 10px; padding: 10px; border-radius: 4px; font-size: 0.9em; }
-.msg.success { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
-.msg.error { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
-.btn-secondary { background: white; color: #333; border: 1px solid #ccc; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
-.btn-secondary:hover { background: #f5f5f5; }
-.btn-primary { background: #007bff; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; }
-.btn-primary:hover { background: #0056b3; }
+.msg.success { background: var(--color-success-light, var(--color-success-light)); color: var(--color-success); border: 1px solid var(--color-success-light); }
+.msg.error { background: var(--color-danger-light, var(--color-danger-light)); color: var(--color-danger); border: 1px solid var(--color-danger-light, var(--color-danger-light)); }
+.btn-secondary { background: white; color: var(--color-text); border: 1px solid var(--color-border); padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+.btn-secondary:hover { background: var(--color-surface-muted); }
+.btn-primary { background: var(--color-primary); color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; }
+.btn-primary:hover { background: var(--color-primary-hover); }
 
 /* Modal Styles */
 .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; }
 .modal-content { background: white; border-radius: 8px; width: 600px; max-width: 90vw; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; }
-.modal-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+.modal-header { padding: 20px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; }
 .modal-header h3 { margin: 0; }
-.close { font-size: 24px; cursor: pointer; color: #888; }
-.close:hover { color: #000; }
+.close { font-size: 24px; cursor: pointer; color: var(--color-text-light); }
+.close:hover { color: var(--color-text); }
 .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
-.modal-footer { padding: 20px; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 10px; background: #fafafa; }
+.modal-footer { padding: 20px; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; gap: 10px; background: var(--color-bg); }
 
-.merge-section { margin-top: 20px; padding: 15px; border: 1px solid #eee; border-radius: 6px; background: #fafafa; }
-.merge-section h4 { margin-top: 0; margin-bottom: 10px; color: #333; }
+.merge-section { margin-top: 20px; padding: 15px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-bg); }
+.merge-section h4 { margin-top: 0; margin-bottom: 10px; color: var(--color-text); }
 .new-sources-list { display: flex; flex-wrap: wrap; gap: 8px; }
-.badge { background: #e3f2fd; color: #1976d2; padding: 4px 10px; border-radius: 20px; font-size: 0.85em; font-weight: 500; }
+.badge { background: var(--color-primary-light); color: var(--color-primary-active); padding: 4px 10px; border-radius: 20px; font-size: 0.85em; font-weight: 500; }
 
 .conflict-list { display: flex; flex-direction: column; gap: 10px; }
-.conflict-item { display: flex; justify-content: space-between; align-items: center; background: white; padding: 12px 15px; border-radius: 6px; border: 1px solid #e0e0e0; }
-.src-name { font-weight: bold; color: #333; }
+.conflict-item { display: flex; justify-content: space-between; align-items: center; background: white; padding: 12px 15px; border-radius: 6px; border: 1px solid var(--color-border); }
+.src-name { font-weight: bold; color: var(--color-text); }
 .conflict-actions { display: flex; gap: 10px; }
-.radio-label { display: flex; align-items: center; gap: 5px; cursor: pointer; padding: 6px 12px; border-radius: 4px; border: 1px solid #ddd; background: #f9f9f9; transition: all 0.2s; font-size: 0.9em; }
+.radio-label { display: flex; align-items: center; gap: 5px; cursor: pointer; padding: 6px 12px; border-radius: 4px; border: 1px solid var(--color-border); background: var(--color-bg); transition: all 0.2s; font-size: 0.9em; }
 .radio-label:hover { background: #f0f0f0; }
-.radio-label.selected { background: #e8f5e9; border-color: #81c784; color: #2e7d32; font-weight: 500; }
-.radio-label.overwrite.selected { background: #ffebee; border-color: #e57373; color: #c62828; }
+.radio-label.selected { background: var(--color-success-light, var(--color-success-light)); border-color: var(--color-success); color: var(--color-success); font-weight: 500; }
+.radio-label.overwrite.selected { background: var(--color-danger-light, var(--color-danger-light)); border-color: var(--color-danger); color: var(--color-danger); }
 .radio-label input { margin: 0; }
 
-.alignment-editor { margin-top: 15px; padding: 15px; background: #fafafa; border: 1px solid #ddd; border-radius: 6px; }
+.alignment-editor { margin-top: 15px; padding: 15px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 6px; }
 .align-grid { display: flex; gap: 40px; margin-bottom: 20px; }
-.align-grid > div > label { display: block; font-weight: bold; margin-bottom: 8px; color: #333; }
+.align-grid > div > label { display: block; font-weight: bold; margin-bottom: 8px; color: var(--color-text); }
 .align-grid .radio-label { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-weight: normal; cursor: pointer; border: none; padding: 0; background: transparent; }
-.jump-rules { margin-top:20px; padding:15px; background:white; border:1px solid #eee; border-radius:4px; }
+.jump-rules { margin-top:20px; padding:15px; background:white; border:1px solid var(--color-border); border-radius:4px; }
 .jump-rules table { margin-top:10px; }
-.jump-rules input { padding:6px; border:1px solid #ccc; border-radius:4px; width:100%; box-sizing:border-box;}
-.align-preview { padding: 12px; background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; font-family: monospace; font-size: 1.1em; text-align: center; }
+.jump-rules input { padding:6px; border:1px solid var(--color-border); border-radius:4px; width:100%; box-sizing:border-box;}
+.align-preview { padding: 12px; background: var(--color-primary-light); color: var(--color-primary); border: 1px solid var(--color-primary-light); border-radius: 4px; font-family: monospace; font-size: 1.1em; text-align: center; }
+
+.d-none { display: none; }
+.flex-1 { flex: 1; }
+.border-danger { border-color: var(--color-danger); }
+.mr-8 { margin-right: 8px; }
+.mb-15 { margin-bottom: 15px; }
+.mt-0 { margin-top: 0; }
+.w-80-p6 { width: 80px; padding: 6px; }
+.text-sm-light { font-size: 0.8em; color: var(--color-text-light); }
+.flex-between-mb10 { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.fw-bold { font-weight: bold; }
+.text-sm-muted-mt0 { font-size: 0.85em; color: var(--color-text-muted); margin-top: 0; }
+.mt-20 { margin-top: 20px; }
+.mb-10 { margin-bottom: 10px; }
+.w-60-p4 { width: 60px; padding: 4px; }
+.add-row-actions { background: transparent; padding: 0; margin-top: 15px; border-top: 1px solid var(--color-border); padding-top: 15px; justify-content: flex-end; display: flex; }
+.mr-auto { margin-right: auto; }
 </style>

@@ -63,7 +63,7 @@ function openManuscript(sourceName) {
                 <tr>
                     <th>Manuscript Source</th>
                     <th>Status</th>
-                    <th style="width: 100px;">Action</th>
+                    <th class="w-100">Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -97,40 +97,42 @@ function openManuscript(sourceName) {
 <style scoped>
 .container { padding: 40px; max-width: 1200px; margin: 0 auto; }
 .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
-.subtitle { color: #64748b; margin-top: 5px; }
+.subtitle { color: var(--color-text-muted); margin-top: 5px; }
 
 .search-box input {
-    padding: 10px 16px; width: 300px; border: 1px solid #e2e8f0; border-radius: 8px;
+    padding: 10px 16px; width: 300px; border: 1px solid var(--color-border); border-radius: 8px;
     font-size: 0.95rem; outline: none; transition: border-color 0.2s;
 }
-.search-box input:focus { border-color: #3b82f6; }
+.search-box input:focus { border-color: var(--color-primary); }
 
 .ms-table { width: 100%; border-collapse: separate; border-spacing: 0; }
 .ms-table th { 
-    text-align: left; padding: 12px 20px; color: #64748b; font-weight: 600; 
-    border-bottom: 2px solid #e2e8f0; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em;
+    text-align: left; padding: 12px 20px; color: var(--color-text-muted); font-weight: 600; 
+    border-bottom: 2px solid var(--color-border); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em;
 }
-.ms-table td { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; background: white; transition: background 0.2s; }
+.ms-table td { padding: 16px 20px; border-bottom: 1px solid var(--color-surface-muted); background: white; transition: background 0.2s; }
 
 .ms-row { cursor: pointer; }
-.ms-row:hover td { background: #f8fafc; }
+.ms-row:hover td { background: var(--color-bg); }
 .ms-row:first-child td:first-child { border-top-left-radius: 12px; }
 .ms-row:first-child td:last-child { border-top-right-radius: 12px; }
 .ms-row:last-child td:first-child { border-bottom-left-radius: 12px; }
 .ms-row:last-child td:last-child { border-bottom-right-radius: 12px; }
 
-.ms-name { font-weight: 600; color: #1e293b; font-size: 1.05rem; }
+.ms-name { font-weight: 600; color: var(--color-text); font-size: 1.05rem; }
 
 .badge { font-size: 0.85rem; padding: 4px 10px; border-radius: 20px; font-weight: 600; display: inline-block; }
-.badge.active { background: #dbeafe; color: #1e40af; }
-.badge.new { background: #f1f5f9; color: #94a3b8; }
+.badge.active { background: var(--color-primary-light); color: var(--color-primary-dark); }
+.badge.new { background: var(--color-surface-muted); color: var(--color-text-light); }
 
 .btn-sm { 
-    background: white; border: 1px solid #e2e8f0; padding: 6px 12px; border-radius: 6px; 
-    cursor: pointer; color: #64748b; font-weight: 500; transition: all 0.2s;
+    background: white; border: 1px solid var(--color-border); padding: 6px 12px; border-radius: 6px; 
+    cursor: pointer; color: var(--color-text-muted); font-weight: 500; transition: all 0.2s;
 }
-.ms-row:hover .btn-sm { border-color: #3b82f6; color: #3b82f6; }
+.ms-row:hover .btn-sm { border-color: var(--color-primary); color: var(--color-primary); }
 
-.loading, .empty-state { padding: 60px; text-align: center; color: #94a3b8; font-style: italic; }
+.loading, .empty-state { padding: 60px; text-align: center; color: var(--color-text-light); font-style: italic; }
 .greyed-out { opacity: 0.5; filter: grayscale(100%); }
+
+.w-100 { width: 100px; }
 </style>

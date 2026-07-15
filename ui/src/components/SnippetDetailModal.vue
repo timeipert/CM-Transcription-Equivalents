@@ -202,14 +202,14 @@ function goToEditor() {
 }
 
 .card-header {
-    padding: 16px 20px; border-bottom: 1px solid #f1f5f9;
+    padding: 16px 20px; border-bottom: 1px solid var(--color-surface-muted);
     display: flex; justify-content: space-between; align-items: center;
     flex-shrink: 0;
 }
-.card-header h3 { margin: 0; font-size: 1.1rem; color: #1e293b; }
+.card-header h3 { margin: 0; font-size: 1.1rem; color: var(--color-text); }
 
 .close-btn {
-    background: transparent; border: none; font-size: 1.5rem; color: #64748b; cursor: pointer;
+    background: transparent; border: none; font-size: 1.5rem; color: var(--color-text-muted); cursor: pointer;
 }
 
 .card-body { 
@@ -219,42 +219,42 @@ function goToEditor() {
 }
 
 .visual-section {
-    background: #0f172a; padding: 20px;
+    background: var(--color-text); padding: 20px;
     display: flex; flex-direction: column; align-items: center; gap: 10px;
 }
 .cutout-wrapper {
     border: 2px solid rgba(255,255,255,0.1); border-radius: 8px; overflow: hidden;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.3); background: #000;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3); background: var(--color-text);
 }
 .pattern-badge {
     background: rgba(255,255,255,0.1); color: white;
     padding: 6px 16px; border-radius: 20px;
     display: flex; align-items: center; gap: 12px; font-size: 0.95rem;
 }
-.ref-id-badge { font-family: monospace; font-weight: 800; color: #60a5fa; }
+.ref-id-badge { font-family: monospace; font-weight: 800; color: var(--color-primary); }
 .pattern-text { font-family: monospace; opacity: 0.8; font-size: 0.8rem; }
 
-.info-section { padding: 20px; color: #334155; }
+.info-section { padding: 20px; color: var(--color-text); }
 
 .info-group { margin-bottom: 12px; }
 .info-group label { 
     display: flex; justify-content: space-between; align-items: center;
     font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; 
-    color: #64748b; font-weight: 600; margin-bottom: 4px; 
+    color: var(--color-text-muted); font-weight: 600; margin-bottom: 4px; 
 }
 .val { font-size: 1rem; font-weight: 500; }
 .val-grid { 
     display: grid; grid-template-columns: 1fr 1fr; gap: 8px; 
-    background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0;
+    background: var(--color-bg); padding: 10px; border-radius: 6px; border: 1px solid var(--color-border);
 }
-.notes { grid-column: span 2; font-family: monospace; color: #0f172a; }
+.notes { grid-column: span 2; font-family: monospace; color: var(--color-text); }
 
-.badge-link { background: #dbeafe; color: #2563eb; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; }
-.text-muted { color: #94a3b8; font-style: italic; font-size: 0.9rem; }
-.divider { border: 0; border-top: 1px solid #f1f5f9; margin: 16px 0; }
+.badge-link { background: var(--color-primary-light); color: var(--color-primary-hover); padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; }
+.text-muted { color: var(--color-text-light); font-style: italic; font-size: 0.9rem; }
+.divider { border: 0; border-top: 1px solid var(--color-surface-muted); margin: 16px 0; }
 
 .actions-section {
-    padding: 20px; background: #f8fafc; border-top: 1px solid #e2e8f0;
+    padding: 20px; background: var(--color-bg); border-top: 1px solid var(--color-border);
     display: flex; flex-direction: column; gap: 10px;
 }
 
@@ -263,15 +263,15 @@ function goToEditor() {
     display: flex; align-items: center; justify-content: center; gap: 8px;
     transition: all 0.2s; border: 1px solid transparent;
 }
-.primary { background: #3b82f6; color: white; }
-.primary:hover { background: #2563eb; }
+.primary { background: var(--color-primary); color: white; }
+.primary:hover { background: var(--color-primary-hover); }
 
-.secondary { background: white; border-color: #cbd5e1; color: #475569; }
-.secondary:hover { border-color: #94a3b8; color: #1e293b; }
+.secondary { background: white; border-color: var(--color-border-hover); color: var(--color-text); }
+.secondary:hover { border-color: var(--color-text-light); color: var(--color-text); }
 
 .variant-select {
-    width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0;
-    font-size: 1rem; background: #fff;
+    width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--color-border);
+    font-size: 1rem; background: var(--color-surface);
 }
 
 </style>

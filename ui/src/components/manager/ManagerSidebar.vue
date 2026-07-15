@@ -136,7 +136,7 @@ async function submitIiif() {
     
     <div v-if="dataLoading">Loading Data...</div>
     <div v-else-if="Object.keys(tree).length === 0">
-        <div style="padding:10px; color:#888;">
+        <div class="empty-state">
             No manuscripts with images found.
         </div>
     </div>
@@ -188,7 +188,7 @@ async function submitIiif() {
                     <label>Manifest URL</label>
                     <input v-model="iiifUrl" placeholder="https://.../manifest" />
                 </div>
-                <div style="margin-top: 15px; display: flex; justify-content: flex-end;">
+                <div class="modal-actions">
                     <button class="btn-primary" @click="submitIiif" :disabled="isSubmittingIiif">
                         {{ isSubmittingIiif ? 'Loading...' : 'Add Source' }}
                     </button>
@@ -200,42 +200,45 @@ async function submitIiif() {
 </template>
 
 <style scoped>
-.sidebar { width: 250px; border-right: 1px solid #ddd; background: #f9f9f9; display: flex; flex-direction: column; height: 100%; }
-.sidebar-header { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee; background: white; }
+.sidebar { width: 250px; border-right: 1px solid var(--color-border); background: var(--color-bg); display: flex; flex-direction: column; height: 100%; }
+.sidebar-header { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid var(--color-border); background: white; }
 .sidebar-header h3 { margin: 0; }
-.iiif-btn { background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; }
-.iiif-btn:hover { background: #c7d2fe; }
+.iiif-btn { background: var(--color-primary-light); color: var(--color-primary-dark); border: 1px solid var(--color-primary-light); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+.iiif-btn:hover { background: var(--color-primary-light); }
 .tree { flex: 1; overflow-y: auto; padding: 10px; }
-.src-label-container { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding-right: 4px; background: #f9f9f9; position: sticky; top:0; z-index: 10; border-radius: 4px; }
-.src-label-container:hover { background: #eee; }
-.src-label { font-weight: bold; color: #555; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 4px; flex: 1; }
-.manifest-status.loading { display: inline-block; animation: spin 1s linear infinite; color: #888; font-size: 0.8em; }
-.manifest-status.error { color: #dc2626; cursor: help; font-size: 0.9em; }
+.src-label-container { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding-right: 4px; background: var(--color-bg); position: sticky; top:0; z-index: 10; border-radius: 4px; }
+.src-label-container:hover { background: var(--color-border); }
+.src-label { font-weight: bold; color: var(--color-text-muted); cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 4px; flex: 1; }
+.manifest-status.loading { display: inline-block; animation: spin 1s linear infinite; color: var(--color-text-light); font-size: 0.8em; }
+.manifest-status.error { color: var(--color-danger); cursor: help; font-size: 0.9em; }
 @keyframes spin { 100% { transform: rotate(360deg); } }
-.retry-btn { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.7em; }
-.retry-btn:hover { background: #fecaca; }
-.chevron { font-size: 0.8em; color: #888; }
+.retry-btn { background: var(--color-danger-light); color: var(--color-danger); border: 1px solid var(--color-danger-muted); padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.7em; }
+.retry-btn:hover { background: var(--color-danger-muted); }
+.chevron { font-size: 0.8em; color: var(--color-text-light); }
 .folio-list { padding-left: 15px; padding-bottom: 5px; }
-.folio-search { width: 90%; margin: 4px 0 8px 4px; padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85em; }
+.folio-search { width: 90%; margin: 4px 0 8px 4px; padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 4px; font-size: 0.85em; }
 .folio-item { padding: 4px 10px; cursor: pointer; border-radius: 4px; font-family: monospace; font-size: 0.9em; margin-bottom: 1px; display: flex; align-items: center; gap: 6px; }
-.folio-item:hover { background: #eee; }
-.folio-item.active { background: #007bff; color: white; }
-.folio-item.has-data { font-weight: 600; color: #1e293b; }
+.folio-item:hover { background: var(--color-border); }
+.folio-item.active { background: var(--color-primary); color: white; }
+.folio-item.has-data { font-weight: 600; color: var(--color-text); }
 .folio-item.active.has-data { color: white; }
-.data-indicator { color: #f59e0b; font-size: 1.2em; line-height: 0.5; }
+.data-indicator { color: var(--color-warning); font-size: 1.2em; line-height: 0.5; }
 
 /* Modals */
 .modal { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); display:flex; justify-content:center; align-items:center; z-index:1000; }
 .iiif-modal { width: 400px; background: white; border-radius: 8px; overflow: hidden; }
-.modal-header { padding: 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+.modal-header { padding: 15px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; }
 .modal-header h3 { margin: 0; }
-.close { font-size: 24px; cursor: pointer; color: #888; }
-.close:hover { color: #000; }
+.close { font-size: 24px; cursor: pointer; color: var(--color-text-light); }
+.close:hover { color: var(--color-text); }
 .modal-body { padding: 20px; }
 .form-group { margin-bottom: 15px; }
-.form-group label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; color: #555; }
-.form-group input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-.btn-primary { background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }
-.btn-primary:hover:not(:disabled) { background: #2563eb; }
+.form-group label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; color: var(--color-text-muted); }
+.form-group input { width: 100%; padding: 8px; border: 1px solid var(--color-border); border-radius: 4px; box-sizing: border-box; }
+.btn-primary { background: var(--color-primary); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+.btn-primary:hover:not(:disabled) { background: var(--color-primary-hover); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.empty-state { padding: 10px; color: var(--color-text-light); }
+.modal-actions { margin-top: 15px; display: flex; justify-content: flex-end; }
 </style>

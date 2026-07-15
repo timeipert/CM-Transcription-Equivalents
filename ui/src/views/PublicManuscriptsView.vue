@@ -81,11 +81,11 @@ function goToOverview(source) {
                             Manuscript Title
                             <span class="sort-icon" v-if="sortBy === 'name'">{{ sortOrder === 1 ? '↑' : '↓' }}</span>
                         </th>
-                        <th @click="toggleSort('patterns')" :class="{ active: sortBy === 'patterns' }" style="text-align: right;">
+                        <th @click="toggleSort('patterns')" :class="{ active: sortBy === 'patterns' }" class="text-right">
                             Patterns
                             <span class="sort-icon" v-if="sortBy === 'patterns'">{{ sortOrder === 1 ? '↑' : '↓' }}</span>
                         </th>
-                        <th style="text-align: right; width: 100px;"></th>
+                        <th class="text-right w-100"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -95,10 +95,10 @@ function goToOverview(source) {
                             <span v-if="table.notes" class="note-icon" title="Has Notes">📝</span>
                         </td>
                         <td class="text-secondary">{{ table.name }}</td>
-                        <td style="text-align: right;">
+                        <td class="text-right">
                             <span class="badge">{{ table.rows.length }}</span>
                         </td>
-                        <td style="text-align: right;">
+                        <td class="text-right">
                             <button class="btn-view-sm">View &rarr;</button>
                         </td>
                     </tr>
@@ -123,14 +123,14 @@ function goToOverview(source) {
 
 h1 {
     font-size: 2.5rem;
-    color: #1e293b;
+    color: var(--color-text);
     margin-bottom: 10px;
     font-weight: 800;
 }
 
 .subtitle {
     font-size: 1.1rem;
-    color: #64748b;
+    color: var(--color-text-muted);
 }
 
 .empty-state {
@@ -138,7 +138,7 @@ h1 {
     padding: 80px 20px;
     background: white;
     border-radius: 12px;
-    border: 1px dashed #cbd5e1;
+    border: 1px dashed var(--color-border-hover);
 }
 
 .empty-state .icon {
@@ -148,12 +148,12 @@ h1 {
 }
 
 .empty-state h3 {
-    color: #334155;
+    color: var(--color-text);
     margin-bottom: 10px;
 }
 
 .empty-state p {
-    color: #94a3b8;
+    color: var(--color-text-light);
 }
 
 .manuscript-grid {
@@ -164,7 +164,7 @@ h1 {
     background: white;
     border-radius: 12px;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--color-border);
     overflow: hidden;
 }
 
@@ -175,25 +175,25 @@ h1 {
 }
 
 .ms-table th {
-    background: #f8fafc;
+    background: var(--color-bg);
     padding: 16px 24px;
     font-size: 0.85rem;
     font-weight: 600;
-    color: #64748b;
+    color: var(--color-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.025em;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid var(--color-border);
     cursor: pointer;
     user-select: none;
 }
 
 .ms-table th:hover {
-    background: #f1f5f9;
-    color: #1e293b;
+    background: var(--color-surface-muted);
+    color: var(--color-text);
 }
 
 .ms-table th.active {
-    color: #2563eb;
+    color: var(--color-primary-hover);
 }
 
 .sort-icon {
@@ -203,9 +203,9 @@ h1 {
 
 .ms-table td {
     padding: 16px 24px;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid var(--color-surface-muted);
     font-size: 0.95rem;
-    color: #334155;
+    color: var(--color-text);
     transition: background 0.2s;
 }
 
@@ -214,7 +214,7 @@ h1 {
 }
 
 .ms-table tr:hover td {
-    background: #f8fafc;
+    background: var(--color-bg);
 }
 
 .ms-table tr:last-child td {
@@ -223,11 +223,11 @@ h1 {
 
 .font-bold {
     font-weight: 700;
-    color: #0f172a;
+    color: var(--color-text);
 }
 
 .text-secondary {
-    color: #64748b;
+    color: var(--color-text-muted);
 }
 
 .note-icon {
@@ -237,8 +237,8 @@ h1 {
 }
 
 .badge {
-    background: #eff6ff;
-    color: #2563eb;
+    background: var(--color-primary-light);
+    color: var(--color-primary-hover);
     padding: 4px 10px;
     border-radius: 20px;
     font-size: 0.8rem;
@@ -247,7 +247,7 @@ h1 {
 
 .btn-view-sm {
     background: transparent;
-    color: #3b82f6;
+    color: var(--color-primary);
     border: none;
     padding: 0;
     font-size: 0.9rem;
@@ -256,6 +256,9 @@ h1 {
 }
 
 .ms-table tr:hover .btn-view-sm {
-    color: #2563eb;
+    color: var(--color-primary-hover);
 }
+
+.text-right { text-align: right; }
+.w-100 { width: 100px; }
 </style>

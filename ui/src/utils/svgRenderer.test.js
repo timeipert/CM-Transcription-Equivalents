@@ -35,8 +35,8 @@ describe('renderSvg (pure logic)', () => {
 
     it('handles groups (bracket syntax) [uud]', () => {
         const res = renderSvg('[uud]', dummyGlyphs, false);
-        // It should render a bracket path with stroke="#555"
-        expect(res.content).toContain('stroke="#555"');
+        // It should render a bracket path with stroke="var(--color-text-muted)"
+        expect(res.content).toContain('stroke="var(--color-text-muted)"');
     });
 
     it('applies ascending/descending special LA/LD', () => {

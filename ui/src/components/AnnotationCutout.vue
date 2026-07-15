@@ -131,7 +131,7 @@ const clipId = computed(() => `clip-${props.source}-${props.folio}-${Math.abs(pr
         <polygon v-for="(ov, idx) in overlays" :key="idx"
             :points="ov.points"
             :fill="ov.id === highlightId ? 'rgba(37, 99, 235, 0.4)' : 'rgba(0, 255, 0, 0.1)'"
-            :stroke="ov.id === highlightId ? '#2563eb' : '#00cc00'"
+            :stroke="ov.id === highlightId ? 'var(--color-primary-hover)' : 'var(--color-success)'"
             :stroke-width="ov.id === highlightId ? '1.5' : '0.3'"
             vector-effect="non-scaling-stroke"
             class="interactive-poly"
@@ -143,7 +143,7 @@ const clipId = computed(() => `clip-${props.source}-${props.folio}-${Math.abs(pr
         <polygon 
             :points="polyPoints" 
             fill="none" 
-            stroke="#cbd5e1" 
+            stroke="var(--color-border-hover)" 
             stroke-width="0.5" 
             vector-effect="non-scaling-stroke" 
             opacity="0.8"
@@ -171,8 +171,8 @@ const clipId = computed(() => `clip-${props.source}-${props.folio}-${Math.abs(pr
     display: inline-flex;
     flex-direction: column;
     align-items: center;
-    background: #fff;
-    border: 1px solid #e2e8f0;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
     border-radius: 8px;
     overflow: hidden;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
@@ -180,7 +180,7 @@ const clipId = computed(() => `clip-${props.source}-${props.folio}-${Math.abs(pr
 }
 
 .cutout-svg {
-    background: #fdfdfd;
+    background: var(--color-surface);
     display: block;
     overflow: visible;
 }
@@ -204,16 +204,16 @@ const clipId = computed(() => `clip-${props.source}-${props.folio}-${Math.abs(pr
     cursor: pointer;
 }
 .html-label:hover {
-    background: #000;
-    color: #fff;
+    background: var(--color-text);
+    color: var(--color-surface);
     z-index: 20;
 }
-.star-badge { color: #f59e0b; margin-right: 2px; }
+.star-badge { color: var(--color-warning); margin-right: 2px; }
 
 .highlighted-label {
-    background: #2563eb !important;
+    background: var(--color-primary-hover) !important;
     color: white !important;
-    border-color: #1e3a8a !important;
+    border-color: var(--color-primary-dark) !important;
     z-index: 30;
     transform: translate(-50%, -100%) translateY(-2px) scale(1.2);
     transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -242,9 +242,9 @@ const clipId = computed(() => `clip-${props.source}-${props.folio}-${Math.abs(pr
     text-align: center;
     font-size: 11px;
     font-weight: 600;
-    background: #f8f9fa;
+    background: var(--color-bg);
     padding: 3px 0;
-    border-top: 1px solid #eee;
-    color: #666;
+    border-top: 1px solid var(--color-border);
+    color: var(--color-text-muted);
 }
 </style>

@@ -73,7 +73,7 @@ const isPublic = computed(() => route.path.startsWith('/public'));
   font-weight: 700 !important;
 }
 .public-ext-link:hover {
-  color: #93c5fd !important;
+  color: var(--color-primary-light) !important;
   background: rgba(96, 165, 250, 0.1) !important;
 }
 
@@ -82,7 +82,7 @@ const isPublic = computed(() => route.path.startsWith('/public'));
   font-weight: 600 !important;
 }
 .manual-link:hover {
-  color: #86efac !important;
+  color: var(--color-success-muted) !important;
   background: rgba(74, 222, 128, 0.1) !important;
 }
 

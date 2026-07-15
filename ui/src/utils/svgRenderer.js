@@ -125,7 +125,7 @@ export function renderSvg(pattern, glyphs, isGroup) {
         const brWidth = xEnd - xStart;
 
         const pathD = `M ${xStart} ${by} l 0 -3 a 3 3 0 0 1 3 -3 l ${brWidth - 6} 0 a 3 3 0 0 1 3 3 l 0 3`;
-        svg += `<path d="${pathD}" stroke="#555" stroke-width="1.2" fill="none" />`;
+        svg += `<path d="${pathD}" stroke="var(--color-text-muted)" stroke-width="1.2" fill="none" />`;
     }
 
     // Draw Notes

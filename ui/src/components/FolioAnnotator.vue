@@ -238,7 +238,7 @@ const imageClipStyle = computed(() => {
                  <polygon v-for="ov in overlays" :key="ov.id"
                           :points="ov.points"
                           fill="rgba(0, 255, 0, 0.2)"
-                          stroke="#00ff00"
+                          stroke="var(--color-success)"
                           stroke-width="0.3"
                           vector-effect="non-scaling-stroke" 
                  />
@@ -262,7 +262,7 @@ const imageClipStyle = computed(() => {
                  <rect v-if="dragStart && dragCurrent" 
                        :x="boxRect.x" :y="boxRect.y" :width="boxRect.w" :height="boxRect.h"
                        fill="rgba(0,123,255,0.2)"
-                       stroke="#007bff"
+                       stroke="var(--color-primary)"
                        stroke-width="0.3" 
                        vector-effect="non-scaling-stroke"/>
              </svg>
@@ -274,17 +274,17 @@ const imageClipStyle = computed(() => {
 <style scoped>
 .annotator-container { 
     display: flex; flex-direction: column; height: 100%; 
-    background: #0f172a; /* Deep slate */
+    background: var(--color-text); /* Deep slate */
 }
 .toolbar { 
     padding: 12px 20px; 
-    background: #ffffff; 
+    background: var(--color-surface); 
     display: flex; justify-content: space-between; align-items: center; 
     z-index: 10;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
-.hint { font-size: 0.85rem; color: #64748b; }
-.hint b { color: #334155; }
+.hint { font-size: 0.85rem; color: var(--color-text-muted); }
+.hint b { color: var(--color-text); }
 
 .canvas-viewport { 
     flex: 1; 
@@ -313,19 +313,19 @@ const imageClipStyle = computed(() => {
 }
 
 .btn-primary { 
-    background: #3b82f6; color: white; border: none; 
+    background: var(--color-primary); color: white; border: none; 
     padding: 6px 16px; border-radius: 6px; cursor: pointer; 
     font-weight: 600; transition: all 0.2s;
 }
-.btn-primary:hover { background: #2563eb; transform: translateY(-1px); }
-.btn-primary:disabled { background: #94a3b8; transform: none; cursor: not-allowed; }
+.btn-primary:hover { background: var(--color-primary-hover); transform: translateY(-1px); }
+.btn-primary:disabled { background: var(--color-text-light); transform: none; cursor: not-allowed; }
 
 .btn-secondary {
-    background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;
+    background: var(--color-surface-muted); color: var(--color-text); border: 1px solid var(--color-border);
     padding: 6px 16px; border-radius: 6px; cursor: pointer;
     font-weight: 500; transition: all 0.2s;
 }
-.btn-secondary:hover { background: #e2e8f0; color: #1e293b; }
+.btn-secondary:hover { background: var(--color-border); color: var(--color-text); }
 .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
 
 button { margin-left: 8px; }

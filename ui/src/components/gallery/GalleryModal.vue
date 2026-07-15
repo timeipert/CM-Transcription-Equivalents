@@ -416,8 +416,8 @@ const virtualLines = computed(() => {
                 </div>
                 
                 <div class="gallery-footer">
-                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <div style="display: flex; align-items: center; gap: 15px;">
+                     <div class="modal-header-actions">
+                        <div class="modal-controls">
                             <h4>Available for annotation ({{ availablePages.length }})</h4>
                              <input v-if="availablePages.length > 5" 
                                    v-model="pageSearch" 
@@ -487,31 +487,31 @@ const virtualLines = computed(() => {
 }
 
 .modal-header { 
-    padding: 20px 24px; border-bottom: 1px solid #f1f5f9; 
+    padding: 20px 24px; border-bottom: 1px solid var(--color-surface-muted); 
     display: flex; justify-content: space-between; align-items: center; 
-    background: #fff;
+    background: var(--color-surface);
 }
-.modal-header h3 { margin: 0; font-size: 1.25rem; color: #1e293b; font-weight: 700; }
+.modal-header h3 { margin: 0; font-size: 1.25rem; color: var(--color-text); font-weight: 700; }
 
 .close-btn {
-    background: #f1f5f9; border: none; border-radius: 50%;
+    background: var(--color-surface-muted); border: none; border-radius: 50%;
     width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
-    cursor: pointer; transition: all 0.2s; color: #64748b; font-size: 1.2rem;
+    cursor: pointer; transition: all 0.2s; color: var(--color-text-muted); font-size: 1.2rem;
 }
-.close-btn:hover { background: #e2e8f0; color: #0f172a; transform: rotate(90deg); }
+.close-btn:hover { background: var(--color-border); color: var(--color-text); transform: rotate(90deg); }
 
 .gallery-body { 
     flex: 1; overflow: hidden; display: flex; flex-direction: column;
 }
 
 .scroll-area { 
-    flex: 1; overflow-y: auto; padding: 24px; background: #f8fafc;
+    flex: 1; overflow-y: auto; padding: 24px; background: var(--color-bg);
     position: relative;
 }
 
 .snippets-loader {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    padding: 40px; color: #3b82f6; gap: 10px; font-weight: 600;
+    padding: 40px; color: var(--color-primary); gap: 10px; font-weight: 600;
 }
 
 .cutouts-grid { 
@@ -523,7 +523,7 @@ const virtualLines = computed(() => {
 .cutout-container { position: relative; }
 .btn-del { 
     position: absolute; top: -8px; right: -8px; 
-    background: #ef4444; color: white; border: none; 
+    background: var(--color-danger); color: white; border: none; 
     border-radius: 50%; width: 24px; height: 24px; 
     cursor: pointer; display: flex; align-items: center; justify-content: center;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -538,53 +538,53 @@ const virtualLines = computed(() => {
     text-align: center;
     background: white;
     padding: 2px;
-    border-top: 1px solid #eee;
-    color: #334155;
+    border-top: 1px solid var(--color-border);
+    color: var(--color-text);
 }
 
 .gallery-footer { 
-    background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 24px; 
+    background: var(--color-bg); border-top: 1px solid var(--color-border); padding: 16px 24px; 
 }
-.gallery-footer h4 { margin: 0 0 12px 0; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; font-weight: 600; }
+.gallery-footer h4 { margin: 0 0 12px 0; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted); font-weight: 600; }
 
 .page-chips { 
     display: flex; flex-wrap: wrap; gap: 8px; 
     max-height: 120px; overflow-y: auto; padding-bottom: 8px;
 }
 .chip { 
-    padding: 6px 14px; background: #fff; border: 1px solid #e2e8f0; 
+    padding: 6px 14px; background: var(--color-surface); border: 1px solid var(--color-border); 
     border-radius: 20px; cursor: pointer; font-size: 0.85rem; font-weight: 500;
-    transition: all 0.2s; color: #334155;
+    transition: all 0.2s; color: var(--color-text);
     display: flex; align-items: center; gap: 4px;
 }
-.chip:hover { border-color: #3b82f6; color: #3b82f6; background: #eff6ff; }
-.chip.is-annotated { background: #f0fdf4; border-color: #86efac; color: #166534; }
-.chip.is-annotated:hover { background: #dcfce7; border-color: #4ade80; }
+.chip:hover { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-light); }
+.chip.is-annotated { background: var(--color-success-light); border-color: var(--color-success); color: var(--color-success); }
+.chip.is-annotated:hover { background: var(--color-success-light); border-color: var(--color-success); }
 
 .folio-lbl { font-weight: bold; }
 .line-hint { 
     font-size: 9px; 
-    background: #e2e8f0; 
-    color: #475569; 
+    background: var(--color-border); 
+    color: var(--color-text); 
     padding: 1px 4px; 
     border-radius: 4px; 
     margin-left: 4px;
     font-family: monospace;
 }
-.chip.is-annotated .line-hint { background: #dcfce7; color: #166534; }
-.annot-check { color: #22c55e; font-weight: bold; margin-right: 2px; }
+.chip.is-annotated .line-hint { background: var(--color-success-light); color: var(--color-success); }
+.annot-check { color: var(--color-success); font-weight: bold; margin-right: 2px; }
 .no-cutouts { 
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    padding: 60px 0; color: #94a3b8; font-style: italic; font-size: 0.95rem;
+    padding: 60px 0; color: var(--color-text-light); font-style: italic; font-size: 0.95rem;
 }
-.warn { color: #f59e0b; font-size: 0.85rem; padding: 8px 12px; background: #fffbeb; border-radius: 6px; border: 1px solid #fef3c7; }
-.loading { color: #64748b; font-size: 0.9rem; }
+.warn { color: var(--color-warning); font-size: 0.85rem; padding: 8px 12px; background: var(--color-warning-light); border-radius: 6px; border: 1px solid var(--color-warning-light); }
+.loading { color: var(--color-text-muted); font-size: 0.9rem; }
 
-.mini-loader { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #3b82f6; font-weight: 600; }
+.mini-loader { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--color-primary); font-weight: 600; }
 .spinner {
     width: 16px; height: 16px;
     border: 2px solid rgba(59, 130, 246, 0.2);
-    border-top-color: #3b82f6;
+    border-top-color: var(--color-primary);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
 }
@@ -594,49 +594,49 @@ const virtualLines = computed(() => {
 .star-btn {
     position: absolute; top: 4px; left: 4px; background: rgba(255,255,255,0.8);
     border: none; border-radius: 4px; padding: 2px 4px; cursor: pointer;
-    font-size: 14px; color: #cbd5e1; z-index: 10;
+    font-size: 14px; color: var(--color-border-hover); z-index: 10;
 }
-.star-btn:hover { color: #f59e0b; }
+.star-btn:hover { color: var(--color-warning); }
 
 /* Compact Virtual Gallery Styles */
 .v-line-row {
-    background: white; border: 1px solid #e2e8f0; border-radius: 6px; 
+    background: white; border: 1px solid var(--color-border); border-radius: 6px; 
     margin-bottom: 12px; display: flex; flex-direction: column; overflow: hidden;
     grid-column: 1 / -1;
 }
 .v-line-info {
-    background: #f8fafc; padding: 6px 12px; border-bottom: 1px solid #e2e8f0;
+    background: var(--color-bg); padding: 6px 12px; border-bottom: 1px solid var(--color-border);
     display: flex; justify-content: space-between; align-items: center;
 }
-.v-loc { font-weight: 800; font-size: 0.75rem; color: #64748b; font-family: monospace; }
+.v-loc { font-weight: 800; font-size: 0.75rem; color: var(--color-text-muted); font-family: monospace; }
 .v-row-annot-btn { 
-    font-size: 0.65rem; background: #3b82f6; color: white; border: none; 
+    font-size: 0.65rem; background: var(--color-primary); color: white; border: none; 
     border-radius: 4px; padding: 2px 8px; cursor: pointer; font-weight: 600;
 }
 .v-tokens-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; }
 .v-token-compact {
-    border: 1px solid #f1f5f9; border-radius: 4px; background: #fff;
+    border: 1px solid var(--color-surface-muted); border-radius: 4px; background: var(--color-surface);
     padding: 4px 8px; min-width: 80px; transition: all 0.2s;
 }
-.v-token-compact.starred { background: #fffbeb; border-color: #f59e0b; }
+.v-token-compact.starred { background: var(--color-warning-light); border-color: var(--color-warning); }
 .v-token-content { display: flex; flex-direction: column; gap: 2px; }
 .v-token-top { display: flex; justify-content: space-between; align-items: center; gap: 4px; }
-.v-token-syl { font-size: 0.75rem; font-weight: 800; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.v-token-star { background: none; border: none; cursor: pointer; font-size: 0.85rem; color: #cbd5e1; padding: 0; line-height: 1; }
-.v-token-compact.starred .v-token-star { color: #f59e0b; }
-.v-token-pitch { font-size: 0.65rem; color: #64748b; font-family: monospace; }
+.v-token-syl { font-size: 0.75rem; font-weight: 800; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v-token-star { background: none; border: none; cursor: pointer; font-size: 0.85rem; color: var(--color-border-hover); padding: 0; line-height: 1; }
+.v-token-compact.starred .v-token-star { color: var(--color-warning); }
+.v-token-pitch { font-size: 0.65rem; color: var(--color-text-muted); font-family: monospace; }
 
 .faded { opacity: 0.5; pointer-events: none; }
 
 
 .page-filter {
     padding: 4px 10px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--color-border);
     border-radius: 6px;
     font-size: 12px;
     outline: none;
 }
-.page-filter:focus { border-color: #3b82f6; }
+.page-filter:focus { border-color: var(--color-primary); }
 
 /* Nested Annotator Styles */
 .annot-modal { width: 95vw; height: 95vh; background:white; display:flex; flex-direction:column; border-radius:12px; overflow:hidden; }
@@ -644,7 +644,7 @@ const virtualLines = computed(() => {
 .pitch-preview {
     display: block;
     font-size: 8px;
-    color: #6366f1;
+    color: var(--color-primary);
     margin-top: 2px;
     font-family: monospace;
     max-width: 80px;
@@ -652,4 +652,7 @@ const virtualLines = computed(() => {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
+.modal-header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-3); }
+.modal-controls { display: flex; align-items: center; gap: 15px; }
 </style>
