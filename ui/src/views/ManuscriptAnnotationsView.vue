@@ -44,7 +44,7 @@ function initTable() {
     if (!existing) {
         if (!dataLoading.value) { // Only redirect if data is ready but table not found
             alert("Table not found");
-            router.push('/my-tables');
+            router.push('/equivalents');
         }
         return;
     }

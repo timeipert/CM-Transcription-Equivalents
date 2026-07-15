@@ -18,10 +18,10 @@ const isMenuOpen = ref(false);
       <div id="nav-links" class="nav-links" :class="{ 'menu-open': isMenuOpen }" @click="isMenuOpen = false">
         <RouterLink to="/" active-class="active">Overview</RouterLink>
         <RouterLink to="/equivalents" active-class="active">Transcription Equivalents</RouterLink>
-        <RouterLink to="/polygons" active-class="active">Manuscript Annotations</RouterLink>
+        <RouterLink to="/polygons" active-class="active">Polygon Manager</RouterLink>
         <RouterLink to="/settings" active-class="active">Settings</RouterLink>
-        <a href="/manual/index.html" target="_blank" class="manual-link">User Manual</a>
-        <RouterLink to="/public" target="_blank" class="public-ext-link">Public</RouterLink>
+        <a href="manual/index.html" target="_blank" class="manual-link">User Manual</a>
+        <a href="#/public" target="_blank" rel="noopener" class="public-ext-link">Public</a>
       </div>
     </nav>
     
