@@ -3,6 +3,8 @@ import { useAnnotationsStore } from '../stores/annotations';
 import { usePersonalTablesStore } from '../stores/personalTables';
 import { useIiifStore } from '../stores/iiif';
 
+const SCHEMA_VERSION = 1;
+
 export function useDataManagement() {
     const settings = useSettingsStore();
     const annotStore = useAnnotationsStore();
@@ -10,11 +12,11 @@ export function useDataManagement() {
     const iiifStore = useIiifStore();
 
     function exportData() {
-        const data = {
-            version: 1,
-            date: new Date().toISOString(),
+        const payload = {
+            schemaVersion: SCHEMA_VERSION,
+            exportedAt: new Date().toISOString(),
             label: settings.backupLabel,
-            content: {
+            data: {
                 personalTables: tablesStore.tables,
                 annotations: annotStore.annotations,
                 regions: annotStore.regions,
@@ -28,7 +30,7 @@ export function useDataManagement() {
             }
         };
 
-        const json = JSON.stringify(data, null, 2);
+        const json = JSON.stringify(payload, null, 2);
         const blob = new Blob([json], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
 
@@ -36,7 +38,7 @@ export function useDataManagement() {
         a.href = url;
         const cleanDate = new Date().toLocaleDateString().replace(/\//g, '-');
         const cleanLabel = (settings.backupLabel || 'backup').replace(/[^a-z0-9]/gi, '-');
-        a.download = `cm-transcription-${cleanLabel}-${cleanDate}.json`;
+        a.download = `cm-transkript-backup-${cleanLabel}-${cleanDate}.json`;
         a.click();
 
         URL.revokeObjectURL(url);
@@ -49,10 +51,10 @@ export function useDataManagement() {
                 try {
                     resolve(JSON.parse(e.target.result));
                 } catch (err) {
-                    reject(new Error("Failed to parse JSON"));
+                    reject(new Error("Failed to parse JSON file - it might be malformed."));
                 }
             };
-            reader.onerror = () => reject(new Error("Failed to read file"));
+            reader.onerror = () => reject(new Error("Failed to read the file from disk."));
             reader.readAsText(file);
         });
     }
@@ -102,11 +104,25 @@ export function useDataManagement() {
         for (const file of Array.from(files)) {
             try {
                 const json = await readFileAsJson(file);
-                if (!json.version || !json.content) {
-                    throw new Error("Invalid backup file format");
+                
+                // Backwards compatibility check with older `version` / `content` format
+                if (json.version && json.content && !json.schemaVersion) {
+                    // Transparently map old format to new format for migration logic
+                    json.schemaVersion = json.version;
+                    json.data = json.content;
                 }
 
-                const importedSources = extractSourcesFromContent(json.content);
+                if (!json.schemaVersion || !json.data) {
+                    throw new Error("Invalid backup file format: Missing schemaVersion or data object.");
+                }
+
+                if (json.schemaVersion !== SCHEMA_VERSION) {
+                    // TODO: Implement actual migration steps for future schemas
+                    // e.g. if (json.schemaVersion === 1 && SCHEMA_VERSION === 2) { ... }
+                    throw new Error(`Schema mismatch! File is v${json.schemaVersion}, app expects v${SCHEMA_VERSION}. Migration path not yet implemented.`);
+                }
+
+                const importedSources = extractSourcesFromContent(json.data);
                 const newSources = [];
                 const overlapSources = [];
 
@@ -219,7 +235,7 @@ export function useDataManagement() {
 
     function executeImport(parsedJson, choices) {
         // choices: { [source]: 'overwrite' | 'skip' }
-        const importedSources = extractSourcesFromContent(parsedJson.content);
+        const importedSources = extractSourcesFromContent(parsedJson.data);
         const allowedSources = [];
 
         for (const src of importedSources) {
@@ -234,7 +250,7 @@ export function useDataManagement() {
             }
         }
 
-        const filteredContent = filterJsonContentForSources(parsedJson.content, allowedSources);
+        const filteredContent = filterJsonContentForSources(parsedJson.data, allowedSources);
 
         // Merge into stores
         if (filteredContent.personalTables.length > 0) {
