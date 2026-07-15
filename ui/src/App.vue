@@ -38,8 +38,8 @@ const isPublic = computed(() => route.path.startsWith('/public'));
 
 .top-nav {
   flex: 0 0 50px;
-  background: #2c3e50;
-  color: rgb(255, 255, 255);
+  background: var(--color-nav-bg);
+  color: var(--color-surface);
   display: flex;
   align-items: center;
   padding: 0 20px;
@@ -89,7 +89,7 @@ const isPublic = computed(() => route.path.startsWith('/public'));
 .main-content {
   flex: 1;
   overflow: auto; /* Allow scrolling */
-  background: #f4f6f8;
+  background: var(--color-bg);
   width: 100%;
 }
 
