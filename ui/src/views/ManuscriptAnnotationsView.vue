@@ -502,5 +502,15 @@ onMounted(() => {
 .small-select { padding: 2px; font-size: 11px; border-radius: 4px; }
 .w-140 { width: 140px; }
 .flex-center-gap10 { display: flex; gap: 10px; align-items: center; justify-content: center; }
+
+@media (max-width: 768px) {
+    .editor-header { flex-direction: column; align-items: flex-start; gap: 10px; padding: 15px; height: auto; }
+    .actions { width: 100%; flex-wrap: wrap; }
+    .editor-body { flex-direction: column; }
+    .config-panel { width: 100%; max-height: 40vh; flex: none; border-right: none; border-bottom: 1px solid var(--color-border); }
+    .preview-panel { padding: 15px; }
+    .card-body { padding: 15px; overflow-x: auto; }
+    .edit-table { min-width: 500px; }
+}
 </style>
 ```

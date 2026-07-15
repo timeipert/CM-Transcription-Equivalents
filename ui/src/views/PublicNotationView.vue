@@ -734,4 +734,15 @@ const patternOccurrences = computed(() => {
 
 .w-70 { width: 70px; }
 .w-140 { width: 140px; }
+
+@media (max-width: 768px) {
+    .header-content { align-items: flex-start; }
+    .title-stack h1 { font-size: 2rem; }
+    .table-columns { flex-direction: column; }
+    .table-column { width: 100%; overflow-x: auto; }
+    .pattern-table { min-width: 500px; }
+    .zoom-content { padding: 20px; width: 95vw; }
+    .zoom-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .ref-pill { align-self: flex-start; }
+}
 </style>

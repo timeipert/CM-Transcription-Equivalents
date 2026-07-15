@@ -241,4 +241,9 @@ async function submitIiif() {
 
 .empty-state { padding: 10px; color: var(--color-text-light); }
 .modal-actions { margin-top: 15px; display: flex; justify-content: flex-end; }
+
+@media (max-width: 768px) {
+    .sidebar { width: 100%; height: auto; max-height: 40vh; border-right: none; border-bottom: 1px solid var(--color-border); flex: none; }
+    .tree { max-height: 30vh; }
+}
 </style>

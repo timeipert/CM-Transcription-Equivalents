@@ -1054,4 +1054,18 @@ th, td { padding: 8px; border-bottom: 1px solid var(--color-border); text-align:
 .text-muted { color: var(--color-text-muted); }
 .flex-center-gap { display: flex; align-items: center; gap: 12px; }
 .m-0 { margin: 0; }
+
+@media (max-width: 768px) {
+    .header { flex-direction: column; align-items: flex-start; gap: 10px; padding: 10px; }
+    .left { flex-direction: column; align-items: flex-start; gap: 5px; }
+    .detail-split { flex-direction: column; }
+    .detail-canvas { flex: none; height: 50vh; }
+    .detail-sidebar { width: 100%; flex: 1; border-left: none; border-top: 1px solid var(--color-border); }
+    .overview-toolbar { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .data-badge { margin-left: 0; }
+    .modal-header { flex-direction: column; gap: 10px; }
+    .flex-center-gap { flex-wrap: wrap; }
+    .line-selector-group { width: 100%; box-sizing: border-box; }
+    .creator-guidance { margin-top: 10px; }
+}
 </style>

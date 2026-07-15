@@ -745,4 +745,14 @@ tr:hover td { background: #f0f0f0 !important; }
 .cell-clickable:hover {
     background-color: #f0f0f0;
 }
+
+@media (max-width: 768px) {
+    .controls { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .control-group { width: 100%; justify-content: space-between; }
+    .modal-content { width: 95vw; height: 95vh; }
+    .modal-header { flex-direction: column; gap: 10px; }
+    .header-controls { flex-direction: column; align-items: flex-start; width: 100%; }
+    .size-slider { width: 100%; justify-content: space-between; }
+    .close { position: absolute; top: 10px; right: 15px; }
+}
 </style>
