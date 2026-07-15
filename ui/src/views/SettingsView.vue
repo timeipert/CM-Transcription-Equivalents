@@ -3,11 +3,13 @@ import { ref, computed } from 'vue';
 import { useSettingsStore } from '../stores/settings';
 import { useDataManagement } from '../composables/useDataManagement';
 import SvgPattern from '../components/SvgPattern.vue';
+import { useWorkspaceStorage } from '../composables/useWorkspaceStorage';
 
 import { useTranscriptionData } from '../composables/useTranscriptionData';
 
 const store = useSettingsStore();
 const { sourceFolios } = useTranscriptionData();
+const storage = useWorkspaceStorage();
 
 // Data Management
 const { exportData, analyzeImportFiles, executeImport, clearAllData } = useDataManagement();
@@ -183,6 +185,38 @@ const alignPreview = computed(() => {
 <template>
 <div class="settings-container">
     <h1>Global Settings</h1>
+
+    <!-- PROJECT FOLDER SECTION -->
+    <div class="card section" v-if="storage.isSupported">
+        <h2>Project Folder (Permanent Storage)</h2>
+        <p class="desc">Save your workspace permanently to a local folder. Changes will autosave automatically.</p>
+        
+        <div class="folder-status-panel">
+            <div class="folder-info">
+                <strong>Current Folder:</strong> 
+                <span v-if="storage.folderName" class="folder-name">{{ storage.folderName }}</span>
+                <span v-else class="text-muted">None selected</span>
+            </div>
+            
+            <div class="sync-status" v-if="storage.folderName">
+                <span v-if="storage.status === 'saving'" class="status-saving">Saving...</span>
+                <span v-else-if="storage.status === 'saved'" class="status-saved">✓ Saved {{ storage.lastSavedAt }}</span>
+                <span v-else-if="storage.status === 'error'" class="status-error">⚠ {{ storage.lastError }}</span>
+            </div>
+        </div>
+
+        <div class="folder-actions mt-10">
+            <button @click="storage.chooseFolder()" class="btn-primary">
+                {{ storage.folderName ? 'Change Folder' : 'Select Folder' }}
+            </button>
+            <button v-if="storage.status === 'error' && storage.folderName" @click="storage.reGrantPermission()" class="btn-secondary">
+                Re-grant Permission
+            </button>
+            <button v-if="storage.folderName" @click="storage.saveWorkspace()" class="btn-secondary">
+                Save Now
+            </button>
+        </div>
+    </div>
 
     <div class="card section">
         <h2>Data Backup</h2>
@@ -407,9 +441,18 @@ const alignPreview = computed(() => {
 h1 { margin-bottom: 30px; }
 .section { margin-bottom: 30px; text-align: left; }
 .section h2 { margin-top: 0; border-bottom: 1px solid var(--color-border); padding-bottom: 10px; margin-bottom: 20px; font-size: 1.2em; }
-.desc { color: var(--color-text-muted); font-size: 0.9em; margin-bottom: 20px; }
+.desc { color: var(--color-text-muted); font-size: 14px; margin-top: -5px; margin-bottom: 15px; }
 
-.setting-row { margin-bottom: 15px; }
+.folder-status-panel { background: var(--color-bg); padding: 15px; border-radius: 8px; border: 1px solid var(--color-border); margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+.folder-name { font-family: monospace; background: var(--color-surface); padding: 4px 8px; border-radius: 4px; border: 1px solid var(--color-border); font-size: 13px; }
+.sync-status { font-size: 13px; font-weight: 500; }
+.status-saving { color: var(--color-text-muted); }
+.status-saved { color: var(--color-primary); }
+.status-error { color: var(--color-danger); }
+.folder-actions { display: flex; gap: 10px; }
+.mt-10 { margin-top: 10px; }
+
+.setting-row { margin-bottom: 15px; display: flex; flex-direction: column; }
 .setting-row label { display: block; font-weight: 500; }
 .setting-row select { margin-top: 5px; padding: 8px; width: 200px; }
 .setting-row input[type="checkbox"] { margin-right: 10px; }
