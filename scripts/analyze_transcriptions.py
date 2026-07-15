@@ -28,6 +28,14 @@ def extract_pattern(notes):
     return "".join(directions)
 
 
+def normalize_folio(f_str):
+    if f_str is None:
+        return ""
+    s = str(f_str).strip()
+    if s.isdigit():
+        return s + "r"
+    return s
+
 def analyze_single_source(corpus_path):
     print(f"Loading source from {corpus_path}...")
     corpus = monodikit.Corpus(corpus_path)
@@ -68,10 +76,10 @@ def analyze_single_source(corpus_path):
         
         if hasattr(doc, "meta") and doc.meta:
             if isinstance(doc.meta, dict):
-                initial_folio = doc.meta.get("initial_folio", "")
+                initial_folio = normalize_folio(doc.meta.get("initial_folio", ""))
                 initial_line_str = doc.meta.get("initial_line", "0")
             else:
-                initial_folio = getattr(doc.meta, "initial_folio", "")
+                initial_folio = normalize_folio(getattr(doc.meta, "initial_folio", ""))
                 initial_line_str = getattr(doc.meta, "initial_line", "0")
 
             if source == "Tri 2254" and initial_folio:
@@ -106,7 +114,7 @@ def analyze_single_source(corpus_path):
             # Div/Section labels MIGHT override or supplement, but keeping meta as base
             if hasattr(node, "label") or (isinstance(node, dict) and "label" in node):
                 val = getattr(node, "label", node.get("label")) if isinstance(node, dict) else getattr(node, "label", "")
-                if val: current_context["folio"] = str(val)
+                if val: current_context["folio"] = normalize_folio(val)
             
             # Check for Syllable
             if node_type == "Syllable":
@@ -136,11 +144,11 @@ def analyze_single_source(corpus_path):
             elif node_type == "FolioChange":
                 # Update folio context
                 if isinstance(node, dict):
-                    if "folio" in node: current_context["folio"] = str(node["folio"])
-                    elif "text" in node: current_context["folio"] = str(node["text"])
+                    if "folio" in node: current_context["folio"] = normalize_folio(node["folio"])
+                    elif "text" in node: current_context["folio"] = normalize_folio(node["text"])
                 else:
-                    if hasattr(node, "folio"): current_context["folio"] = str(node.folio)
-                    elif hasattr(node, "text"): current_context["folio"] = str(node.text)
+                    if hasattr(node, "folio"): current_context["folio"] = normalize_folio(node.folio)
+                    elif hasattr(node, "text"): current_context["folio"] = normalize_folio(node.text)
 
             # Reset line count if the folio string changed (e.g. via label or FolioChange)
             if current_context["folio"] != old_folio:
