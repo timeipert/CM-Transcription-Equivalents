@@ -4,11 +4,6 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build:manual": "npm --prefix ../user-manual run build && rm -rf public/manual && cp -r ../user-manual/.vitepress/dist public/manual",
-    "build:data": "(cd .. && python3 scripts/analyze_transcriptions.py)",
-    "build:data:fresh": "rm -f ../transcription_cache.json && npm run build:data",
-    "predev": "npm run build:manual && npm run build:data",
-    "prebuild": "npm run build:manual && npm run build:data",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
