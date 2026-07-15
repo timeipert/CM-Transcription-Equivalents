@@ -5,6 +5,7 @@ import { useSettingsStore } from '../stores/settings';
 import { useRoute, useRouter } from 'vue-router';
 import PatternDisplay from '../components/PatternDisplay.vue';
 import GalleryModal from '../components/gallery/GalleryModal.vue';
+import StateWrapper from '../components/StateWrapper.vue';
 
 // Composables
 import { useTranscriptionData } from '../composables/useTranscriptionData';
@@ -18,7 +19,7 @@ const route = useRoute();
 const router = useRouter();
 
 // Data
-const { rawData, glyphs, loading: dataLoading, patStats, sourceFolios, loadSource } = useTranscriptionData();
+const { rawData, glyphs, loading: dataLoading, error: dataError, patStats, sourceFolios, loadSource } = useTranscriptionData();
 const { generatePdf } = usePdfExport();
 
 const tableId = route.params.id;
@@ -177,11 +178,18 @@ function promoteToGlobal(pattern, id) {
 
 // Gallery Logic
 const showGallery = ref(false);
-const galleryPattern = ref("");
+const galleryPattern = ref(null);
+const patternRefMap = computed(() => {
+    if (!table.value) return {};
+    return Object.fromEntries(table.value.rows.map(r => [r.pattern, r.customId]));
+});
 
 function openGallery(row) {
-    galleryPattern.value = row.pattern;
-    showGallery.value = true;
+    router.push({ query: { ...route.query, gallery: row.pattern } });
+}
+
+function closeGallery() {
+    router.push({ query: { ...route.query, gallery: undefined } });
 }
 
 function onGallerySelect(p) {
@@ -201,27 +209,25 @@ function onGallerySelect(p) {
     });
 }
 
-onMounted(() => {
-    if (route.query.gallery) {
-        // Wait for data and table to load before opening
-        const stop = watch([loading, dataLoading], ([l, dl]) => {
-            if (!l && !dl) {
-                galleryPattern.value = route.query.gallery;
-                showGallery.value = true;
-                stop();
-                
-                // Optional: Clear the query param so it doesn't reopen on refresh?
-                // router.replace({ query: { ...route.query, gallery: undefined } });
-            }
-        });
+watch([() => route.query.gallery, dataLoading], ([gallery, isLoading]) => {
+    if (gallery && !isLoading) {
+        galleryPattern.value = gallery;
+        showGallery.value = true;
+    } else if (!gallery) {
+        showGallery.value = false;
+        galleryPattern.value = null;
     }
-});
+}, { immediate: true });
 
 </script>
 
 <template>
-<div v-if="loading || dataLoading">Loading...</div>
-<div v-else class="editor-container">
+<StateWrapper 
+    :loading="loading || dataLoading" 
+    :error="dataError" 
+    loadingText="Loading Manuscript Data..."
+>
+<div class="editor-container">
     <!-- Header -->
     <div class="editor-header">
         <h2 class="table-title">{{ table.name }}</h2>
@@ -350,9 +356,10 @@ onMounted(() => {
         :sourceData="rawData[table.source]"
         :sourceName="table.source"
         @select="onGallerySelect"
-        @close="showGallery=false"
+        @close="closeGallery"
     />
 </div>
+</StateWrapper>
 </template>
 
 <style scoped>

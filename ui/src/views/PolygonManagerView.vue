@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import ManagerSidebar from '../components/manager/ManagerSidebar.vue';
 import ManagerWorkspace from '../components/manager/ManagerWorkspace.vue';
 
@@ -11,6 +11,7 @@ const highlightPattern = ref(null);
 const returnTo = ref(null);
 const returnId = ref(null);
 const route = useRoute();
+const router = useRouter();
 
 const updateFromQuery = () => {
     selectedSource.value = route.query.source || null;
@@ -25,10 +26,15 @@ onMounted(updateFromQuery);
 watch(() => route.query, updateFromQuery, { deep: true });
 
 function onSelect({ source, folio }) {
-    selectedSource.value = source;
-    selectedFolio.value = folio;
-    initialRegionId.value = null;
-    highlightPattern.value = null; // Clear when navigating away
+    router.push({ 
+        query: { 
+            ...route.query, 
+            source, 
+            folio, 
+            region: undefined, 
+            highlight: undefined 
+        } 
+    });
 }
 </script>
 

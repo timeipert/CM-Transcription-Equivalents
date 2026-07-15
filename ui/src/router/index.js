@@ -38,7 +38,7 @@ const router = createRouter({
       path: '/polygons',
       name: 'polygons',
       component: PolygonManagerView,
-      meta: { title: 'Polygon Manager' }
+      meta: { title: 'Manuscripts' }
     },
     {
       path: '/public',

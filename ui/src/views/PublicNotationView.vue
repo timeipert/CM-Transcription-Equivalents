@@ -8,6 +8,7 @@ import { useSettingsStore } from '../stores/settings';
 import { useTranscriptionData } from '../composables/useTranscriptionData';
 import PatternDisplay from '../components/PatternDisplay.vue';
 import AnnotationCutout from '../components/AnnotationCutout.vue';
+import StateWrapper from '../components/StateWrapper.vue';
 import { useImageManifest } from '../composables/useImageManifest';
 import { comparePatternIds } from '../utils/sorting';
 
@@ -18,10 +19,25 @@ const tableStore = usePersonalTablesStore();
 const annotStore = useAnnotationsStore();
 const iiifStore = useIiifStore();
 const settings = useSettingsStore();
-const { glyphs, rawData, loadSource } = useTranscriptionData();
+const { glyphs, rawData, loadSource, loading: dataLoading, error: dataError } = useTranscriptionData();
 const { hasImage } = useImageManifest();
 
 const source = route.params.source;
+
+const combinedLoading = computed(() => {
+    return dataLoading.value || iiifStore.manifestStatus[source]?.status === 'loading';
+});
+const combinedError = computed(() => {
+    if (iiifStore.manifestStatus[source]?.status === 'error') return iiifStore.manifestStatus[source].error;
+    if (dataError.value) return dataError.value;
+    return null;
+});
+const isDataEmpty = computed(() => {
+    return !combinedLoading.value && table.value && table.value.rows.length === 0;
+});
+function retryLoad() {
+    if (iiifStore.manifestStatus[source]?.status === 'error') iiifStore.ensureLoaded(source);
+}
 
 const zoomedItem = ref(null);
 const isZoomOpen = ref(false);
@@ -31,8 +47,11 @@ const highlightedPattern = ref(null);
 const highlightedAnnotationId = ref(null);
 
 function handleZoom(item) {
-    zoomedItem.value = item;
-    isZoomOpen.value = true;
+    router.push({ query: { ...route.query, zoomId: item.id } });
+}
+
+function closeZoom() {
+    router.push({ query: { ...route.query, zoomId: undefined } });
 }
 
 
@@ -231,6 +250,30 @@ const patternOccurrences = computed(() => {
     return map;
 });
 
+watch([() => route.query.zoomId, groupedLines], ([zId, groups]) => {
+    if (zId && groups && groups.length > 0) {
+        let found = null;
+        for (const group of groups) {
+            for (const item of group.items) {
+                if (String(item.id) === String(zId)) {
+                    found = item;
+                    break;
+                }
+            }
+            if (found) break;
+        }
+        if (found) {
+            zoomedItem.value = found;
+            isZoomOpen.value = true;
+        } else {
+            isZoomOpen.value = false;
+        }
+    } else if (!zId) {
+        isZoomOpen.value = false;
+        zoomedItem.value = null;
+    }
+}, { immediate: true });
+
 </script>
 
 <template>
@@ -256,6 +299,14 @@ const patternOccurrences = computed(() => {
         </div>
     </header>
 
+    <StateWrapper 
+        :loading="combinedLoading"
+        :error="combinedError"
+        :empty="isDataEmpty"
+        loadingText="Loading notation and images..."
+        emptyText="This manuscript currently has no annotations to display."
+        @retry="retryLoad"
+    >
     <div class="main-content">
 
 
@@ -365,18 +416,19 @@ const patternOccurrences = computed(() => {
             </div>
         </section>
     </div>
+    </StateWrapper>
 
     <!-- Magnifier Modal -->
     <Transition name="fade">
-        <div v-if="isZoomOpen" class="zoom-overlay" @click.self="isZoomOpen = false">
+        <div v-if="isZoomOpen" class="zoom-overlay" @click.self="closeZoom">
             <div class="zoom-content">
-                <button class="close-btn" @click="isZoomOpen = false">&times;</button>
+                <button class="close-btn" @click="closeZoom">&times;</button>
                 
                 <div class="zoom-header">
                     <button class="star-toggle-btn" :class="{active: isStarred(zoomedItem)}" @click="toggleStar(zoomedItem)">
                         {{ isStarred(zoomedItem) ? '★ Starred' : '☆ Star' }}
                     </button>
-                    <button class="ref-pill clickable" @click="scrollToPattern(zoomedItem.pattern); isZoomOpen = false">
+                    <button class="ref-pill clickable" @click="scrollToPattern(zoomedItem.pattern); closeZoom()">
                         {{ zoomedItem.displayId }}
                     </button>
                     <div class="zoom-meta">
@@ -398,7 +450,7 @@ const patternOccurrences = computed(() => {
                         :useFullRes="true"
                     />
                 </div>
-                <p class="zoom-caption">Detail View • <span class="clickable" @click="scrollToLine(zoomedItem.regionId); isZoomOpen = false">Ref ID {{ zoomedItem.displayId }}</span></p>
+                <p class="zoom-caption">Detail View • <span class="clickable" @click="scrollToLine(zoomedItem.regionId, zoomedItem.id); closeZoom()">Ref ID {{ zoomedItem.displayId }}</span></p>
             </div>
         </div>
     </Transition>

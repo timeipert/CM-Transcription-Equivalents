@@ -1,278 +1,59 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
-import { useTranscriptionData } from '../../composables/useTranscriptionData';
-import { useAnnotationsStore } from '../../stores/annotations';
-import { usePersonalTablesStore } from '../../stores/personalTables';
-import { useSettingsStore } from '../../stores/settings';
-import { useImageManifest } from '../../composables/useImageManifest';
+import { useRouter } from 'vue-router';
+import { useManagerWorkspace } from '../../composables/useManagerWorkspace';
+
+import ManagerWorkspaceHeader from './ManagerWorkspaceHeader.vue';
+import ManagerWorkspaceOverview from './ManagerWorkspaceOverview.vue';
+import ManagerWorkspaceDetail from './ManagerWorkspaceDetail.vue';
 import PatternDisplay from '../PatternDisplay.vue';
-import AnnotationCutout from '../AnnotationCutout.vue';
 import FolioAnnotator from '../FolioAnnotator.vue';
 import SnippetDetailModal from '../SnippetDetailModal.vue';
-import { useRouter } from 'vue-router';
 
 const props = defineProps(['source', 'folio', 'initialRegionId', 'highlightPattern', 'returnTo', 'returnId']);
 const router = useRouter();
-const annotStore = useAnnotationsStore();
-const tableStore = usePersonalTablesStore();
-const settings = useSettingsStore();
-const { pagePatternsIndex, folioLinesIndex, glyphs, rawData, patStats, sourceFolios, loadSource } = useTranscriptionData();
-const { getImageUrl, getStandardSource, getStandardFolio, getIiifThumbnailUrl, hasTranscriptionData } = useImageManifest();
 
-// --- Utils ---
-function parseLineNumber(name) {
-    if (!name) return null;
-    const m = name.match(/(\d+)/);
-    return m ? parseInt(m[1]) : null;
-}
+const workspace = useManagerWorkspace(props);
 
-// --- Computed Data for Page ---
-const stdSource = computed(() => getStandardSource(props.source, props.folio));
-const stdFolio = computed(() => getStandardFolio(props.source, props.folio));
-
-// Find the key in indices that matches our current source
-const resolvedSrcKey = computed(() => {
-    if (!props.source || !rawData.value) return props.source;
-    const keys = Object.keys(rawData.value);
-    // 1. Exact
-    if (keys.includes(props.source)) return props.source;
-    // 2. Standardized match
-    const targetStd = getStandardSource(props.source);
-    const match = keys.find(k => getStandardSource(k) === targetStd || k.toLowerCase() === props.source.toLowerCase());
-    return match || props.source;
-});
-
-// Global base stats for sorting
-const patternCustomIdMap = computed(() => {
-    let table = null;
-    if (props.returnId) {
-        table = tableStore.getTable(props.returnId);
-    } else {
-        // Fallback search if no specific table ID is provided
-        table = tableStore.tables.find(t => t.source === props.source || getStandardSource(t.source) === stdSource.value);
-    }
-    
-    if (!table) return {};
-    const map = {};
-    for (const row of table.rows) {
-        // Map the base pattern
-        const base = row.pattern.split(' ')[0];
-        map[base] = row.customId;
-    }
-    return map;
-});
-
-const highlightHint = computed(() => {
-    if (!props.highlightPattern || !rawData.value) return null;
-    
-    const srcKey = resolvedSrcKey.value;
-    if (!srcKey || !rawData.value[srcKey]) return null;
-    
-    const patData = rawData.value[srcKey][props.highlightPattern] || [];
-    const targetFolio = stdFolio.value;
-    
-    const onThisPage = patData.filter(o => getStandardFolio(srcKey, o[1]) === targetFolio);
-    if (onThisPage.length === 0) return null;
-    
-    const lines = Array.from(new Set(onThisPage.map(o => Number(o[2])))).sort((a,b) => a-b);
-    
-    const sortedOccs = [...onThisPage].sort((a, b) => {
-        const lineA = parseInt(a[2]) || 0;
-        const lineB = parseInt(b[2]) || 0;
-        return lineA - lineB;
-    });
-
-    return {
-        pattern: props.highlightPattern,
-        lines: lines,
-        occurrences: sortedOccs
-    };
-});
-
-const allLinesOnPage = computed(() => {
-    if (!folioLinesIndex.value) return [];
-    
-    const srcKey = resolvedSrcKey.value;
-    if (!srcKey || !folioLinesIndex.value[srcKey]) return [];
-    
-    // Check original folio name or standardized fallback
-    let lines = folioLinesIndex.value[srcKey][props.folio] || [];
-    if (lines.length === 0) {
-        const targetFolio = stdFolio.value;
-        for (const [idxFolio, fLines] of Object.entries(folioLinesIndex.value[srcKey])) {
-            if (getStandardFolio(srcKey, idxFolio) === targetFolio) {
-                lines = lines.concat(fLines);
-            }
-        }
-        lines = Array.from(new Set(lines));
-    }
-    return lines.map(Number).sort((a,b) => a-b);
-});
-
-const existingRegionLines = computed(() => {
-    return new Set(regions.value.map(r => parseLineNumber(r.name)).filter(n => n !== null));
-});
-
-const linesToAnnotate = computed(() => {
-    const existing = existingRegionLines.value;
-    return allLinesOnPage.value.filter(l => !existing.has(l));
-});
-
-const baseStats = computed(() => {
-    const stats = {};
-    if (!patStats.value) return stats;
-    for (const [pat, data] of Object.entries(patStats.value)) {
-        const base = pat.split(' ')[0]; // Simple getBasePattern equivalent
-        stats[base] = (stats[base] || 0) + data.count;
-    }
-    return stats;
-});
-
-const patternSort = ref('freq'); // freq, alpha, length
-const patternSearch = ref('');
-
-// Patterns available to annotate (Base patterns, sorted by chosen order)
-const pagePatterns = computed(() => {
-    const srcKey = resolvedSrcKey.value;
-    if (!srcKey || !pagePatternsIndex.value) return { list: [], isFallback: false };
-    
-    const sourceData = pagePatternsIndex.value[srcKey];
-    if (!sourceData) return { list: [], isFallback: false };
-
-    // 1. Try exact match for folio
-    let pats = sourceData[props.folio] || [];
-    
-    // 2. Try standardized match
-    if (pats.length === 0) {
-        const targetFolio = stdFolio.value;
-        for (const [idxFolio, fPats] of Object.entries(sourceData)) {
-            if (getStandardFolio(srcKey, idxFolio) === targetFolio) {
-                pats = pats.concat(fPats);
-            }
-        }
-        pats = Array.from(new Set(pats));
-    }
-
-    // 3. Fallback: Show all patterns for the manuscript
-    const isGlobalFallback = ref(false);
-    if (pats.length === 0) {
-        const allPats = new Set();
-        for (const fPats of Object.values(sourceData)) {
-            for (const p of fPats) allPats.add(p);
-        }
-        pats = Array.from(allPats);
-        isGlobalFallback.value = true;
-    }
-    
-    const baseSet = new Set();
-    for (const p of pats) {
-        baseSet.add(p.split(' ')[0]);
-    }
-    
-    let result = Array.from(baseSet);
-
-    // Apply Search Filter
-    if (patternSearch.value.trim()) {
-        const q = patternSearch.value.toLowerCase();
-        result = result.filter(p => p.toLowerCase().includes(q));
-    }
-    
-    if (patternSort.value === 'alpha') {
-        result.sort();
-    } else if (patternSort.value === 'length') {
-        result.sort((a, b) => {
-            if (a.length !== b.length) return a.length - b.length;
-            return a.localeCompare(b);
-        });
-    } else if (patternSort.value === 'freq') {
-        result.sort((a, b) => {
-            if (a === "(Start)") return -1;
-            if (b === "(Start)") return 1;
-            const countA = baseStats.value[a] || 0;
-            const countB = baseStats.value[b] || 0;
-            if (countA !== countB) return countB - countA;
-            return a.localeCompare(b);
-        });
-    }
-    
-    return { list: result, isFallback: isGlobalFallback.value };
-});
-
-// Regions (Lines)
-const regions = computed(() => {
-    if (!stdSource.value || !stdFolio.value) return [];
-    
-    // 1. Get standard line regions
-    const standardRegions = annotStore.getRegions(stdSource.value, stdFolio.value);
-    
-    // 2. Find legacy annotations (saved before line regions existed)
-    const prefix = `${stdSource.value}_${stdFolio.value}_`;
-    let hasLegacy = false;
-    for (const key in annotStore.annotations) {
-        if (key.startsWith(prefix) && annotStore.annotations[key].length > 0) {
-            hasLegacy = true;
-            break;
-        }
-    }
-    
-    // If we have legacy annotations, inject a pseudo-region to view them
-    if (hasLegacy) {
-        return [
-            { 
-                id: 'legacy', 
-                name: 'Legacy Annotations (Whole Page)', 
-                points: '0,0 100,0 100,100 0,100',
-                isLegacy: true
-            },
-            ...standardRegions
-        ];
-    }
-    
-    return standardRegions;
-});
+// Destructure some refs that we need to watch or mutate
+const { 
+    stdSource, stdFolio, highlightHint, allLinesOnPage, regions, existingRegionLines, 
+    linesToAnnotate, pagePatterns, otherPageAnnotations, patternSort, patternSearch,
+    activeRegion, activeRegionRect, activeRegionItems, activePattern, activeVariant, 
+    linkCandidates, patternCustomIdMap, glyphs, getImageUrl, getIiifThumbnailUrl, 
+    hasTranscriptionData, getBasePattern, parseLineNumber, annotStore
+} = workspace;
 
 // Deep Link Watcher
 watch([() => props.initialRegionId, regions], ([id, list]) => {
     if (id && list && list.length > 0) {
         const match = list.find(r => r.id === id);
-        if (match) {
-             activeRegion.value = match;
-        }
+        if (match) activeRegion.value = match;
     }
 }, { immediate: true });
 
-watch(() => props.source, async (newSrc) => {
-    if (newSrc) {
-        await loadSource(newSrc);
-    }
-}, { immediate: true });
-
-// --- State ---
+// --- UI State for Modals/Linker ---
 const showRegionCreator = ref(false);
 const showLinker = ref(false);
 const newRegionName = ref('');
+const customRegionName = ref("");
 
 const isNewRegionNameCustomLine = computed(() => {
-    if (!newRegionName.value) return false;
-    if (newRegionName.value === 'Custom') return false;
-    
+    if (!newRegionName.value || newRegionName.value === 'Custom') return false;
     const lineNum = parseLineNumber(newRegionName.value);
     if (lineNum === null) return true;
-    
     return !allLinesOnPage.value.includes(lineNum);
 });
 
 // Auto-open region creator or select existing when navigating from gallery with a highlight
 watch(highlightHint, (newHint) => {
-    if (props.initialRegionId) return; // We already have a specific region targeted
+    if (props.initialRegionId) return; 
     if (newHint && props.highlightPattern) {
-        // Find if any of the target lines already have a region
         const targetLines = newHint.lines;
         const existing = regions.value.find(r => {
             const num = parseLineNumber(r.name);
             return num !== null && targetLines.includes(num);
         });
-
         if (existing) {
             selectRegion(existing);
         } else {
@@ -284,7 +65,6 @@ watch(highlightHint, (newHint) => {
 // Pre-select the line when modal opens
 watch(showRegionCreator, (open) => {
     if (open) {
-        // If we have a highlight hint, try to pick one of its lines
         if (highlightHint.value && highlightHint.value.lines.length > 0) {
             const firstAvailable = highlightHint.value.lines.find(l => linesToAnnotate.value.includes(l));
             if (firstAvailable) {
@@ -292,244 +72,29 @@ watch(showRegionCreator, (open) => {
                 return;
             }
         }
-        // Fallback to first available line on page
         if (linesToAnnotate.value.length > 0) {
             newRegionName.value = `Line ${linesToAnnotate.value[0]}`;
         } else {
-            // Find the maximum existing line number or transcription line number
             const maxLineInTranscription = allLinesOnPage.value.length > 0 ? Math.max(...allLinesOnPage.value) : 0;
             const maxLineInRegions = regions.value.length > 0 ? Math.max(...regions.value.map(r => parseLineNumber(r.name) || 0)) : 0;
-            const startLine = Math.max(maxLineInTranscription, maxLineInRegions);
-            
-            newRegionName.value = `Line ${startLine + 1}`;
+            newRegionName.value = `Line ${Math.max(maxLineInTranscription, maxLineInRegions) + 1}`;
         }
     }
 });
 
-const activeRegion = ref(null); // The region currently being edited
-const activePattern = ref(""); // The base pattern string (e.g. "Virga")
-const activeVariant = ref(""); // The variant letter (e.g. "a")
-
-// Variant Helper
-function getBasePattern(p) {
-    if (!p) return "";
-    return p.split(' ')[0];
-}
-
 function selectPatternBase(pat) {
-    // If pat contains a variant (e.g. "Virga a"), split it
     const parts = pat.split(' ');
     activePattern.value = parts[0];
-    if (parts.length > 1) {
-        activeVariant.value = parts[1];
-    } else {
-        activeVariant.value = "";
-    }
+    activeVariant.value = parts.length > 1 ? parts[1] : "";
 }
 
 function setVariant(v) {
     activeVariant.value = v;
 }
 
-
-const pendingItemPoints = ref(null); // Points for the item just drawn
+const pendingItemPoints = ref(null); 
 const selectedSnippet = ref(null);
 
-// --- Computed ---
-
-const otherPageAnnotations = computed(() => {
-    const res = {};
-    const currentSrc = stdSource.value;
-    const currentFol = stdFolio.value;
-    
-    // 1. Legacy Annotations
-    for (const key in annotStore.annotations) {
-        const parts = key.split('_');
-        if (parts.length >= 3) {
-            const src = parts[0];
-            const fol = parts[1];
-            if (src === currentSrc && fol === currentFol) continue;
-            
-            const pat = parts.slice(2).join('_');
-            const basePat = getBasePattern(pat);
-            
-            if (!res[basePat]) res[basePat] = [];
-            const count = annotStore.annotations[key].length;
-            if (count > 0) {
-                 res[basePat].push({ folio: fol, line: '', count });
-            }
-        }
-    }
-    
-    // 2. Region Items
-    const regionToLoc = {};
-    for (const key in annotStore.regions) {
-        const parts = key.split('_');
-        if (parts.length >= 2) {
-            const src = parts[0];
-            const fol = parts[1];
-            if (src === currentSrc && fol === currentFol) continue;
-            
-            for (const r of annotStore.regions[key]) {
-                 regionToLoc[r.id] = { folio: fol, name: r.name };
-            }
-        }
-    }
-    
-    for (const rid in annotStore.regionItems) {
-        if (!regionToLoc[rid]) continue;
-        
-        const loc = regionToLoc[rid];
-        const items = annotStore.regionItems[rid];
-        
-        const patCounts = {};
-        for (const item of items) {
-             const basePat = getBasePattern(item.pattern);
-             if (!patCounts[basePat]) patCounts[basePat] = 0;
-             patCounts[basePat]++;
-        }
-        
-        for (const pat in patCounts) {
-             if (!res[pat]) res[pat] = [];
-             res[pat].push({ folio: loc.folio, line: loc.name, count: patCounts[pat] });
-        }
-    }
-    
-    return res;
-});
-
-const activeRegionItems = computed(() => {
-    if (!activeRegion.value) return [];
-    
-    if (activeRegion.value.isLegacy) {
-        const prefix = `${stdSource.value}_${stdFolio.value}_`;
-        const items = [];
-        for (const key in annotStore.annotations) {
-            if (key.startsWith(prefix)) {
-                const pattern = key.substring(prefix.length);
-                 for (const a of annotStore.annotations[key]) {
-                     const basePat = getBasePattern(pattern);
-                     const localId = patternCustomIdMap.value[basePat];
-                     const globalId = settings.getGlobalId(basePat);
-                     const refId = localId || globalId;
-                     
-                     let dId = refId;
-                     if (!dId) dId = basePat;
-                     
-                     // Variant logic
-                     let variant = a.variant || '';
-                     const trans = a.linkData?.transcription || '';
-                     if (!variant && trans && trans.length > basePat.length && trans.startsWith(basePat)) {
-                         variant = trans.substring(basePat.length).trim();
-                     }
-                     // If pattern itself has a variant (legacy)
-                     if (!variant && pattern.includes(' ')) {
-                         variant = pattern.split(' ')[1];
-                     }
-
-                     if (variant) dId = `${dId}${variant}`;
-
-                     items.push({ ...a, pattern, displayId: dId, variant });
-                }
-            }
-        }
-        return items;
-    }
-    
-    const items = annotStore.getRegionItems(activeRegion.value.id);
-    return items.map(item => {
-        const basePat = getBasePattern(item.pattern);
-        const localId = patternCustomIdMap.value[basePat];
-        const globalId = settings.getGlobalId(basePat);
-        const refId = localId || globalId;
-        
-        let dId = refId;
-        if (!dId) {
-             dId = basePat;
-        }
-        
-        // Variant logic
-        let variant = item.variant || '';
-        const trans = item.linkData?.transcription || '';
-        if (!variant && trans && trans.length > basePat.length && trans.startsWith(basePat)) {
-            variant = trans.substring(basePat.length).trim();
-        }
-        if (variant) dId = `${dId}${variant}`;
-
-        return {
-            ...item,
-            displayId: dId,
-            variant
-        };
-    });
-});
-
-const linkCandidates = computed(() => {
-    if (!activePattern.value || !props.source) return [];
-    const srcData = rawData.value[props.source];
-    if (!srcData) return [];
-    const allOccs = srcData[activePattern.value] || [];
-    
-    // Fuzzy match folio
-    const target = String(props.folio).toLowerCase();
-    const stdTarget = String(getStandardFolio(props.source, props.folio)).toLowerCase();
-    
-    const candidates = allOccs.map(o => {
-        const dFolio = String(o[1]).toLowerCase();
-        let score = 0;
-        if (dFolio === target) score = 100;
-        else if (dFolio === stdTarget) score = 90;
-        else if (dFolio.includes(target) || target.includes(dFolio)) score = 50;
-        else if (stdTarget && (dFolio.includes(stdTarget) || stdTarget.includes(dFolio))) score = 40;
-        
-        return { occ: o, score };
-    });
-
-    // Sort by score (best match first)
-    candidates.sort((a, b) => b.score - a.score);
-
-    // If we have some matches, return them. 
-    // If not, return all but warn they aren't on this page.
-    if (candidates[0] && candidates[0].score > 0) {
-        return candidates.filter(c => c.score > 0).map(c => c.occ);
-    }
-    
-    return allOccs; // Fallback: show all if no match
-});
-
-const activeRegionRect = computed(() => {
-    if (!activeRegion.value) return null;
-    return getRectFromPoints(activeRegion.value.points);
-});
-
-// --- Methods ---
-
-function getRectFromPoints(pointsStr) {
-    if (!pointsStr) return null;
-    const parts = pointsStr.split(' ');
-    let minX = 100, minY = 100, maxX = 0, maxY = 0;
-    for (const p of parts) {
-        const [x, y] = p.split(',').map(Number);
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-    }
-    return {
-        x: minX,
-        y: minY,
-        w: maxX - minX,
-        h: maxY - minY
-    };
-}
-
-
-
-function openRegionCreator() {
-    showRegionCreator.value = true;
-}
-
-const customRegionName = ref("");
 function saveRegion(points) {
     let name = newRegionName.value;
     if (name === 'Custom') name = customRegionName.value.trim() || `Line ${regions.value.length + 1}`;
@@ -538,7 +103,6 @@ function saveRegion(points) {
     showRegionCreator.value = false;
     customRegionName.value = "";
 
-    // Auto-select the newly created region
     setTimeout(() => {
         const newlyCreated = regions.value.find(r => r.id === newId || r.name === name);
         if (newlyCreated) selectRegion(newlyCreated);
@@ -556,22 +120,17 @@ function deleteRegion(r) {
 
 function selectRegion(r) {
     activeRegion.value = r;
-    // Auto-select first pattern if none
-    if (!activePattern.value && pagePatterns.value.length > 0) {
-        activePattern.value = pagePatterns.value[0];
+    if (!activePattern.value && pagePatterns.value.list.length > 0) {
+        activePattern.value = pagePatterns.value.list[0];
     }
 }
 
-// 2. Item Annotation (inside Region)
 function onAnnotateItem(points) {
     if (!activePattern.value) {
         alert("Please select a pattern first.");
         return;
     }
-    
     pendingItemPoints.value = points;
-    
-    // Check for link candidates
     if (linkCandidates.value.length > 0) {
         showLinker.value = true;
     } else {
@@ -580,11 +139,7 @@ function onAnnotateItem(points) {
 }
 
 function selectLink(occ) {
-    if (Array.isArray(occ)) {
-        finalizeItem({ sysId: occ.join('|') });
-    } else {
-        finalizeItem({ sysId: String(occ) });
-    }
+    finalizeItem({ sysId: Array.isArray(occ) ? occ.join('|') : String(occ) });
 }
 
 function finalizeItem(linkData = {}) {
@@ -593,12 +148,7 @@ function finalizeItem(linkData = {}) {
     if (activeRegion.value.isLegacy) {
         annotStore.addAnnotation(stdSource.value, stdFolio.value, activePattern.value, pendingItemPoints.value, { linkData, variant: activeVariant.value });
     } else {
-        annotStore.addItemToRegion(
-            activeRegion.value.id,
-            activePattern.value,
-            pendingItemPoints.value,
-            { linkData, variant: activeVariant.value }
-        );
+        annotStore.addItemToRegion(activeRegion.value.id, activePattern.value, pendingItemPoints.value, { linkData, variant: activeVariant.value });
     }
     
     pendingItemPoints.value = null;
@@ -615,7 +165,6 @@ function deleteItem(item) {
     }
 }
 
-// 3. View Details
 function openSnippet(item) {
     selectedSnippet.value = {
         id: item.id,
@@ -627,6 +176,10 @@ function openSnippet(item) {
     };
 }
 
+function handleBackToGallery() {
+    router.push({ name: 'annotations', params: { id: props.returnId }, query: { gallery: props.highlightPattern } });
+}
+
 </script>
 
 <template>
@@ -634,162 +187,61 @@ function openSnippet(item) {
     <div v-if="!source" class="empty-state">Select a Folio from the sidebar.</div>
     <div v-else class="content-wrapper">
         
-        <!-- HEADER -->
-        <div class="header">
-            <div class="left">
-                <button v-if="returnTo === 'annotations'" 
-                        @click="router.push({ name: 'annotations', params: { id: returnId }, query: { gallery: highlightPattern } })" 
-                        class="btn-secondary mr-10">&larr; Back to Gallery</button>
-                <button v-if="activeRegion" @click="activeRegion = null" class="btn-secondary">&larr; Back to Line Regions</button>
-                <h2>
-                    {{ source }} / {{ folio }} 
-                    <span v-if="activeRegion" class="crumb"> / {{ activeRegion.name }}</span>
-                </h2>
-                <div v-if="highlightHint" class="highlight-hint-detailed">
-                    <div class="hint-title">
-                        Searching: <PatternDisplay :pattern="highlightHint.pattern" :glyphs="glyphs" class="hint-visual" /> <strong>{{ highlightHint.pattern }}</strong>
-                    </div>
-                    <div class="hint-occ-list">
-                        <div v-for="(occ, idx) in highlightHint.occurrences" :key="idx" class="hint-occ">
-                            <span class="h-line">L{{ occ[2] }}</span>
-                            <span class="h-syl">"{{ occ[3] }}"</span>
-                            <span class="h-notes">{{ occ[4] }}</span>
-                        </div>
-                    </div>
-                </div>
-                <div v-else-if="allLinesOnPage.length > 0 && !activeRegion" class="general-hint-bubble">
-                    Data available for lines: <strong>{{ allLinesOnPage.join(', ') }}</strong>
-                </div>
-            </div>
-            <div class="stats">
-                <span v-if="!activeRegion">{{ regions.length }} Line Regions</span>
-                <span v-else>{{ activeRegionItems.length }} Items</span>
-            </div>
-        </div>
+        <ManagerWorkspaceHeader 
+            :source="source"
+            :folio="folio"
+            :activeRegion="activeRegion"
+            :highlightHint="highlightHint"
+            :allLinesOnPage="allLinesOnPage"
+            :regions="regions"
+            :activeRegionItems="activeRegionItems"
+            :returnTo="returnTo"
+            :returnId="returnId"
+            :glyphs="glyphs"
+            :highlightPattern="highlightPattern"
+            @backToGallery="handleBackToGallery"
+            @backToRegions="activeRegion = null"
+        />
         
-        <!-- BODY -->
         <div class="main-body">
+            <ManagerWorkspaceOverview 
+                v-if="!activeRegion"
+                :source="source"
+                :folio="folio"
+                :stdSource="stdSource"
+                :stdFolio="stdFolio"
+                :regions="regions"
+                :hasTranscriptionData="hasTranscriptionData"
+                :getIiifThumbnailUrl="getIiifThumbnailUrl"
+                @openRegionCreator="showRegionCreator = true"
+                @selectRegion="selectRegion"
+                @deleteRegion="deleteRegion"
+            />
             
-            <!-- OVERVIEW MODE -->
-            <div v-if="!activeRegion" class="overview-grid">
-                <div class="overview-toolbar">
-                    <button @click="openRegionCreator" class="btn-primary">+ Add Line Region</button>
-                    <span v-if="hasTranscriptionData(stdSource, stdFolio)" class="data-badge" title="This page has imported transcription data">
-                        <span class="dot">•</span> Monodi Data Available
-                    </span>
-                </div>
-                
-                <div class="page-preview-container" v-if="stdSource && stdFolio">
-                    <div class="page-preview" @click="openRegionCreator">
-                        <img :src="getIiifThumbnailUrl(source, folio, 600)" />
-                        <div class="preview-overlay">
-                            <span>Click anywhere to add a new line region</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="regions-list">
-                     <div v-if="regions.length === 0" class="empty-msg">No line regions defined.</div>
-                     <div v-for="r in regions" :key="r.id" class="region-card" @click="selectRegion(r)">
-                         <div class="r-preview">
-                             <AnnotationCutout 
-                                 :source="stdSource" 
-                                 :folio="stdFolio" 
-                                 :points="r.points"
-                                 :width="300" 
-                                 :height="80" 
-                                 fit="contain"
-                                 :hideLabel="true"
-                             />
-                         </div>
-                         <div class="r-info">
-                             <h4>{{ r.name }}</h4>
-                             <button @click.stop="deleteRegion(r)" class="btn-xs delete-btn">Delete</button>
-                         </div>
-                     </div>
-                </div>
-            </div>
-            
-            <!-- DETAIL MODE (Two-Pane) -->
-            <div v-else class="detail-split">
-                <!-- Left: Canvas -->
-                <div class="detail-canvas">
-                    <FolioAnnotator 
-                        :imageUrl="getImageUrl(source, folio)" 
-                        :cropRect="activeRegionRect"
-                        :overlays="activeRegionItems"
-                        @save="onAnnotateItem" 
-                    />
-                </div>
-                
-                <!-- Right: Tools & List -->
-                <div class="detail-sidebar">
-                    <div class="tool-section">
-                        <div class="flex-between-center">
-                            <h4>Select Pattern</h4>
-                            <select v-model="patternSort" class="small-select">
-                                <option value="freq">Frequency</option>
-                                <option value="alpha">Alphabetical</option>
-                                <option value="length">Length</option>
-                            </select>
-                        </div>
-                        
-                        <!-- Variant Controls -->
-                        <div class="variant-controls" v-if="activePattern">
-                             <span class="active-label">{{ activePattern }} <span v-if="activeVariant" class="text-muted">{{ activeVariant }}</span></span>
-                             <div class="letters">
-                                 <button class="btn-xs" :class="{active: !activeVariant}" @click="setVariant('')">Base</button>
-                                 <button v-for="l in ['a','b','c','d','e','f','g']" :key="l"
-                                         class="btn-xs" 
-                                         :class="{active: activeVariant === l}"
-                                         @click="setVariant(l)">
-                                     {{ l }}
-                                 </button>
-                             </div>
-                        </div>
-
-                        <div class="pattern-list-header">
-                            <input v-model="patternSearch" placeholder="Search patterns..." class="pattern-search" />
-                            <div v-if="pagePatterns.isFallback" class="fallback-badge">Manuscript-wide fallback</div>
-                        </div>
-
-                        <div class="pattern-list">
-                            <div v-for="pat in pagePatterns.list" :key="pat" 
-                                 class="pat-option" 
-                                 :class="{active: getBasePattern(activePattern) === pat}"
-                                 @click="selectPatternBase(pat)">
-                                 <PatternDisplay :pattern="pat" :glyphs="glyphs" />
-                                 <span class="pat-name-text">{{ pat }}</span>
-                                 <div v-if="patternCustomIdMap[pat]" class="in-table-badge" title="Present in Transcription Equivalent Table">
-                                     {{ patternCustomIdMap[pat] }}
-                                 </div>
-                                 <div v-if="otherPageAnnotations[pat] && otherPageAnnotations[pat].length > 0" 
-                                      class="other-annot-badge"
-                                      :title="otherPageAnnotations[pat].map(x => `${x.folio} ${x.line || ''} (${x.count}x)`).join('\n')">
-                                     {{ otherPageAnnotations[pat].reduce((sum, x) => sum + x.count, 0) }}
-                                 </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="items-section">
-                        <h4>Items in Region</h4>
-                        <div class="items-list">
-                            <div v-for="item in activeRegionItems" :key="item.id" 
-                                 class="item-row"
-                                 @click="openSnippet(item)">
-                                <span class="pat-tag">
-                                    <span class="d-id">{{ item.displayId }}</span>
-                                    <span class="p-name">{{ item.pattern }}</span>
-                                </span>
-                                <span v-if="item.linkData && item.linkData.sysId" class="link-icon">🔗</span>
-                                <button @click.stop="deleteItem(item)" class="btn-xs delete-item">x</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
+            <ManagerWorkspaceDetail 
+                v-else
+                :source="source"
+                :folio="folio"
+                :getImageUrl="getImageUrl"
+                :activeRegionRect="activeRegionRect"
+                :activeRegionItems="activeRegionItems"
+                :patternSort="patternSort"
+                :activePattern="activePattern"
+                :activeVariant="activeVariant"
+                :patternSearch="patternSearch"
+                :pagePatterns="pagePatterns"
+                :glyphs="glyphs"
+                :patternCustomIdMap="patternCustomIdMap"
+                :otherPageAnnotations="otherPageAnnotations"
+                :getBasePattern="getBasePattern"
+                @onAnnotateItem="onAnnotateItem"
+                @update:patternSort="patternSort = $event"
+                @setVariant="setVariant"
+                @update:patternSearch="patternSearch = $event"
+                @selectPatternBase="selectPatternBase"
+                @openSnippet="openSnippet"
+                @deleteItem="deleteItem"
+            />
         </div>
     </div>
 
@@ -800,7 +252,7 @@ function openSnippet(item) {
         <div class="modal-content annot-modal">
               <div class="modal-header">
                 <div class="flex-center-gap">
-                    <button v-if="returnTo === 'annotations'" @click="router.push({ name: 'annotations', params: { id: returnId } })" class="btn-secondary">&larr; Back to Gallery</button>
+                    <button v-if="returnTo === 'annotations'" @click="handleBackToGallery" class="btn-secondary">&larr; Back to Gallery</button>
                     <h3 class="m-0">Define Line Region</h3>
                     <div class="line-selector-group">
                         <label>Target:</label>
@@ -889,28 +341,7 @@ function openSnippet(item) {
 .empty-state { padding: 40px; color: var(--color-text-light); text-align: center; }
 .content-wrapper { display: flex; flex-direction: column; height: 100%; }
 
-.header { padding: 15px 20px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; background: white; }
-.left { display: flex; align-items: center; gap: 15px; }
-.crumb { color: var(--color-text-light); font-weight: 400; }
-
-.highlight-hint-bubble {
-    margin-left: 20px; background: var(--color-warning-light); border: 1px solid var(--color-warning-light); 
-    padding: 4px 14px; border-radius: 20px; font-size: 13px; color: var(--color-warning-dark);
-    display: flex; gap: 8px; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-}
-.highlight-hint-bubble strong { color: var(--color-warning-dark); }
-.hint-visual { 
-    height: 32px; 
-    width: auto;
-    display: inline-block; 
-    vertical-align: middle; 
-    background: white; 
-    border-radius: 6px; 
-    padding: 2px 8px;
-    margin: 0;
-    border: 1px solid var(--color-warning-light);
-    box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
-}
+.main-body { flex: 1; overflow: hidden; position: relative; background: var(--color-bg); }
 
 .highlight-hint-detailed {
     margin-left: 0; background: var(--color-warning-light); border: 1px solid var(--color-warning-light); 
@@ -925,147 +356,46 @@ function openSnippet(item) {
 .h-line { font-weight: 700; color: var(--color-warning-dark); }
 .h-syl { font-style: italic; color: var(--color-warning-dark); }
 .h-notes { font-family: monospace; font-size: 10px; color: var(--color-warning); background: rgba(255,255,255,0.9); padding: 1px 3px; border-radius: 4px; }
+.hint-visual { 
+    height: 32px; 
+    width: auto;
+    display: inline-block; 
+    vertical-align: middle; 
+    background: white; 
+    border-radius: 6px; 
+    padding: 2px 8px;
+    margin: 0;
+    border: 1px solid var(--color-warning-light);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+}
 
 .line-selector-group { display: flex; align-items: center; gap: 8px; background: var(--color-bg); padding: 4px 10px; border-radius: 8px; border: 1px solid var(--color-border); }
 .line-selector-group label { font-size: 12px; font-weight: 600; color: var(--color-text-muted); }
 .line-select { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--color-border-hover); background: white; font-weight: 600; color: var(--color-text); }
 .custom-input { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--color-border-hover); width: 120px; }
-.general-hint-bubble {
-    margin-left: 20px; background: var(--color-surface-muted); border: 1px solid var(--color-border); 
-    padding: 6px 14px; border-radius: 20px; font-size: 13px; color: var(--color-text);
-    display: flex; gap: 10px; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-}
 
-.main-body { flex: 1; overflow: hidden; position: relative; background: var(--color-bg); }
-
-/* Overview */
-.overview-grid { padding: 20px; height: 100%; overflow-y: auto; }
-.overview-toolbar { margin-bottom: 20px; display: flex; align-items: center; }
-
-.data-badge { margin-left: 15px; background: var(--color-warning-light); color: var(--color-warning-dark); border: 1px solid var(--color-warning-muted); padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; }
-.data-badge .dot { color: var(--color-warning); font-size: 1.5em; margin-right: 6px; line-height: 0.5; }
-
-.page-preview-container { margin-bottom: 25px; }
-.page-preview { position: relative; max-width: 600px; border-radius: 8px; overflow: hidden; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transition: transform 0.2s; }
-.page-preview:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.2); }
-.page-preview img { display: block; width: 100%; height: auto; }
-.preview-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0); display: flex; justify-content: center; align-items: center; transition: background 0.2s; }
-.page-preview:hover .preview-overlay { background: rgba(0,0,0,0.4); }
-.preview-overlay span { opacity: 0; color: white; font-weight: 600; font-size: 16px; background: rgba(0,0,0,0.7); padding: 8px 16px; border-radius: 20px; transition: opacity 0.2s; }
-.page-preview:hover .preview-overlay span { opacity: 1; }
-
-.regions-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; }
-.region-card { background: white; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
-.region-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-.r-preview { height: 100px; background: var(--color-text); display: flex; justify-content: center; align-items: center; }
-.r-info { padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--color-surface-muted); gap: 10px; }
-.r-info h4 { margin: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
-
-/* Detail Split */
-.detail-split { display: flex; height: 100%; }
-.detail-canvas { flex: 1; border-right: 1px solid var(--color-border); background: var(--color-text); position: relative; }
-.detail-sidebar { width: 350px; display: flex; flex-direction: column; background: white; border-left: 1px solid var(--color-border); }
-
-.config-panel { 
-    width: 320px; background: var(--color-surface); border-right: 1px solid var(--color-border); 
-    display: flex; flex-direction: column; height: 100%;
-}
-.tool-section { padding: 15px; border-bottom: 1px solid var(--color-border); display: flex; flex-direction: column; flex: 3; overflow: hidden; }
-.items-section { padding: 15px; border-bottom: 1px solid var(--color-border); display: flex; flex-direction: column; flex: 2; overflow: hidden; background: var(--color-bg); min-height: 200px; }
-
-.variant-controls { margin-bottom: 10px; padding: 10px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 6px; }
-.active-label { display: block; font-weight: bold; margin-bottom: 5px; color: var(--color-primary); text-align: center; font-size: 1.1em; }
-.letters { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; }
-.letters .btn-xs { min-width: 24px; text-align: center; }
-.letters .btn-xs.active { background: var(--color-primary); color: white; border-color: var(--color-primary-hover); }
-
-.pattern-list-header { margin-top: 10px; }
-.pattern-search { width: 100%; padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 13px; box-sizing: border-box; }
-.fallback-badge { font-size: 10px; color: var(--color-warning); background: var(--color-warning-light); border: 1px solid var(--color-warning-light); padding: 2px 6px; border-radius: 4px; margin-top: 4px; text-align: center; }
-
-.pattern-list { overflow-y: auto; flex: 1; margin-top: 6px; border: 1px solid var(--color-border); border-radius: 4px; }
-.pat-option { padding: 8px; display: flex; align-items: center; gap: 8px; cursor: pointer; border-bottom: 1px solid var(--color-surface-muted); }
-.pat-option:hover { background: var(--color-bg); }
-.pat-option.active { background: var(--color-primary-light); border-left: 3px solid var(--color-primary); }
-
-.items-list { overflow-y: auto; flex: 1; margin-top: 10px; }
-.item-row { background: white; padding: 8px; margin-bottom: 6px; border-radius: 4px; border: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: all 0.2s; }
-.item-row:hover { border-color: var(--color-primary); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-.pat-tag { display: flex; align-items: center; gap: 8px; font-family: monospace; }
-.d-id { font-weight: 800; color: var(--color-primary-hover); font-size: 13px; }
-.p-name { color: var(--color-text-muted); font-size: 11px; }
-.link-icon { font-size: 12px; opacity: 0.7; }
-
-/* Buttons & Utils */
 .btn-primary { background: var(--color-primary); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }
 .btn-primary:hover { background: var(--color-primary-hover); }
-.btn-secondary { background: var(--color-surface-muted); color: var(--color-text); border: 1px solid var(--color-border); padding: 6px 12px; border-radius: 6px; cursor: pointer; }
-.btn-xs { padding: 2px 6px; font-size: 11px; border-radius: 3px; cursor: pointer; border: 1px solid var(--color-border); background: white; }
-.delete-btn { color: red; border-color: var(--color-danger-muted); }
-.delete-item { color: inherit; }
+.btn-secondary { background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border-hover); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 500; }
+.btn-secondary:hover { background: var(--color-surface-muted); }
+.btn-sm { padding: 4px 8px; font-size: 12px; }
 
-/* Modals */
-.modal { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); display:flex; justify-content:center; align-items:center; z-index:1000; }
-.annot-modal { width: 95vw; height: 95vh; background:white; display:flex; flex-direction:column; border-radius:8px; overflow:hidden; }
-.link-modal { width: 600px; max-height: 80vh; background: white; display:flex; flex-direction: column; border-radius: 8px; overflow: hidden; padding: 20px; }
-.modal-header { padding:15px; border-bottom:1px solid var(--color-border); display:flex; justify-content:space-between; align-items:center; }
-.creator-guidance { flex: 1; display: flex; justify-content: center; align-items: center; }
-.general-hint { font-size: 13px; color: var(--color-text); background: var(--color-surface-muted); padding: 6px 14px; border-radius: 20px; border: 1px solid var(--color-border); }
-.close { font-size:24px; cursor:pointer; margin-left: 15px; }
-.modal-body-annot { flex:1; overflow:hidden; position: relative; }
-.modal-body-link { flex: 1; overflow-y: auto; margin-top: 10px; }
-table { width: 100%; border-collapse: collapse; }
-th, td { padding: 8px; border-bottom: 1px solid var(--color-border); text-align: left; }
-.notes-cell { font-family: monospace; color: var(--color-text-muted); font-size: 0.9em; }
-.other-annot-badge {
-    margin-left: auto;
-    background: var(--color-border);
-    color: var(--color-text);
-    font-size: 0.7rem;
-    font-weight: bold;
-    padding: 2px 6px;
-    border-radius: 12px;
-    cursor: help;
-}
-.pat-option.active .other-annot-badge {
-    background: rgba(255, 255, 255, 0.2);
-    color: white;
-}
-.in-table-badge {
-    background: var(--color-success-light);
-    color: var(--color-success);
-    font-size: 0.65rem;
-    padding: 1px 5px;
-    border-radius: 4px;
-    border: 1px solid var(--color-success-muted);
-    font-weight: 800;
-    margin-left: 4px;
-}
-.pat-option.active .in-table-badge {
-    background: var(--color-success);
-    color: white;
-    border-color: var(--color-success);
-}
-.pat-name-text { font-size: 13px; }
-
-.mr-10 { margin-right: 10px; }
-.flex-between-center { display: flex; justify-content: space-between; align-items: center; }
-.small-select { padding: 2px; font-size: 11px; border-radius: 4px; }
-.text-muted { color: var(--color-text-muted); }
-.flex-center-gap { display: flex; align-items: center; gap: 12px; }
+.modal { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+.modal-content { background: white; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+.annot-modal { width: 95vw; height: 95vh; }
+.link-modal { width: 600px; max-height: 80vh; }
+.modal-header { padding: 15px 20px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; background: var(--color-surface); }
+.modal-body-annot { flex: 1; overflow: hidden; position: relative; }
+.modal-body-link { padding: 15px; overflow-y: auto; }
+.close { font-size: 24px; cursor: pointer; color: var(--color-text-muted); line-height: 1; }
+.close:hover { color: var(--color-text); }
 .m-0 { margin: 0; }
+.flex-center-gap { display: flex; align-items: center; gap: 15px; }
 
-@media (max-width: 768px) {
-    .header { flex-direction: column; align-items: flex-start; gap: 10px; padding: 10px; }
-    .left { flex-direction: column; align-items: flex-start; gap: 5px; }
-    .detail-split { flex-direction: column; }
-    .detail-canvas { flex: none; height: 50vh; }
-    .detail-sidebar { width: 100%; flex: 1; border-left: none; border-top: 1px solid var(--color-border); }
-    .overview-toolbar { flex-direction: column; align-items: flex-start; gap: 10px; }
-    .data-badge { margin-left: 0; }
-    .modal-header { flex-direction: column; gap: 10px; }
-    .flex-center-gap { flex-wrap: wrap; }
-    .line-selector-group { width: 100%; box-sizing: border-box; }
-    .creator-guidance { margin-top: 10px; }
-}
+.notes-cell { font-family: monospace; font-size: 11px; color: var(--color-text-muted); max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 10px; border-bottom: 1px solid var(--color-border); }
+th { background: var(--color-surface); font-weight: 600; font-size: 13px; }
+tbody tr:hover { background: var(--color-bg); }
 </style>

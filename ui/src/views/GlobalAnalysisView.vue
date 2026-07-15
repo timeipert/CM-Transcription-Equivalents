@@ -13,11 +13,17 @@ import AnnotationCutout from '../components/AnnotationCutout.vue';
 import { useRouter } from 'vue-router';
 import { compareFolios } from '../utils/sorting';
 
+import StateWrapper from '../components/StateWrapper.vue';
+
 // Use Composable
-const { rawData, patStats, glyphs, manifests, overallMax, loading, sourceFolios, loadSource } = useTranscriptionData();
+const { rawData, patStats, glyphs, manifests, overallMax, loading, error, sourceFolios, loadSource } = useTranscriptionData();
 const annotStore = useAnnotationsStore();
 const { getStandardSource } = useImageManifest();
 const router = useRouter();
+
+const isDataEmpty = computed(() => {
+    return !loading.value && (!patStats.value || Object.keys(patStats.value).length === 0);
+});
 
 // ... existing code ...
 
@@ -299,13 +305,11 @@ function getCellStyle(val) {
 }
 
 function onCellClick(source, pattern) {
-    const data = rawData.value[source] && rawData.value[source][pattern];
-    if (data && data.length > 0) {
-        // [doc, fol, line, syl, notes]
-        modalTitle.value = `Source: ${source} | Pattern: ${pattern} (${data.length})`;
-        modalContent.value = { source, pattern, rows: data };
-        showModal.value = true;
-    }
+    router.push({ query: { ...route.query, openSource: source, openPattern: pattern } });
+}
+
+function closeModal() {
+    router.push({ query: { ...route.query, openSource: undefined, openPattern: undefined } });
 }
 
 const showOnlyLinked = ref(false);
@@ -375,28 +379,24 @@ function sortModal(col) {
 import { useRoute } from 'vue-router';
 const route = useRoute();
 
-onMounted(() => {
-    // Check for Deep Link
-    if (route.query.openSource && route.query.openPattern) {
-        // Wait for data? rawData is shallowRef, might be empty initially if not loaded.
-        // But useTranscriptionData handles loading.
-        // We might need to watch `loading`.
-        const tryOpen = () => {
-             if (loading.value) {
-                 // Watch once?
-                 const unwatch = watch(loading, (l) => {
-                     if (!l) {
-                         onCellClick(route.query.openSource, route.query.openPattern);
-                         unwatch();
-                     }
-                 });
-             } else {
-                 onCellClick(route.query.openSource, route.query.openPattern);
-             }
-        };
-        tryOpen();
+watch([() => route.query.openSource, () => route.query.openPattern, loading], ([openSource, openPattern, isLoading]) => {
+    if (openSource && openPattern) {
+        if (!isLoading) {
+            const data = rawData.value[openSource] && rawData.value[openSource][openPattern];
+            if (data && data.length > 0) {
+                modalTitle.value = `Source: ${openSource} | Pattern: ${openPattern} (${data.length})`;
+                modalContent.value = { source: openSource, pattern: openPattern, rows: data };
+                showModal.value = true;
+            } else {
+                showModal.value = false;
+                modalContent.value = null;
+            }
+        }
+    } else {
+        showModal.value = false;
+        modalContent.value = null;
     }
-});
+}, { immediate: true });
 
 function isHighlighted(row) {
     if (!route.query.highlightId) return false;
@@ -442,9 +442,14 @@ function isHighlighted(row) {
         </div>
     </div>
     
-    <div v-if="loading">Loading...</div>
-    
-    <div v-else class="table-scroll">
+    <StateWrapper 
+        :loading="loading" 
+        :error="error" 
+        :empty="isDataEmpty" 
+        loadingText="Loading Global Data..." 
+        emptyText="No pattern statistics found in the dataset."
+    >
+    <div class="table-scroll">
         <table>
             <thead>
                 <tr>
@@ -501,14 +506,15 @@ function isHighlighted(row) {
         </table>
     </div>
     
-    <div class="pagination">
+    <div class="pagination" v-if="totalPages > 1">
         <button @click="changePage(-1)" :disabled="currentPage===1">Prev</button>
         <span>Page {{ currentPage }} of {{ totalPages }}</span>
         <button @click="changePage(1)" :disabled="currentPage===totalPages">Next</button>
     </div>
+    </StateWrapper>
 
     <!-- Modal -->
-    <div v-if="showModal" class="modal" @click.self="showModal=false">
+    <div v-if="showModal" class="modal" @click.self="closeModal">
         <div class="modal-content">
             <div class="modal-header">
                 <h2>{{ modalTitle }}</h2>
@@ -520,9 +526,9 @@ function isHighlighted(row) {
                         Size: <input type="range" min="40" max="250" v-model="settings.snippetSize" />
                     </label>
                     <label class="size-slider">
-                        Context: <input type="range" min="0.1" max="1.5" step="0.1" v-model="settings.snippetPadding" />
+                        Context: <input type="range" min="0.1" max="1.0" step="0.1" v-model="settings.snippetPadding" />
                     </label>
-                    <span class="close" @click="showModal=false">&times;</span>
+                    <span class="close" @click="closeModal">&times;</span>
                 </div>
             </div>
             <div class="modal-body">
