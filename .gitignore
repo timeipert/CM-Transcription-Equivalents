@@ -18,6 +18,7 @@ scripts/__pycache__/
 data/
 export/
 transcription_cache.json
+ui/transcription_cache.json
 transcription_equivalents.html
 
 # Distribution Data (DO NOT IGNORE for GH Pages)
