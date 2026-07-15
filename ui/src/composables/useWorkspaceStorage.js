@@ -25,6 +25,18 @@ export function useWorkspaceStorage() {
     let saveTimeout = null;
     let isHydrating = false;
 
+    const isStorageBypassed = ref(sessionStorage.getItem('workspace_bypassed') === 'true');
+
+    function bypassStorage() {
+        isStorageBypassed.value = true;
+        sessionStorage.setItem('workspace_bypassed', 'true');
+    }
+
+    let _resolveInit;
+    const initPromise = new Promise(resolve => {
+        _resolveInit = resolve;
+    });
+
     // Retrieve full app state as an object compatible with data management schema
     function serializeState() {
         return {
@@ -196,7 +208,10 @@ export function useWorkspaceStorage() {
 
     // Initialization
     onMounted(async () => {
-        if (!isSupported) return;
+        if (!isSupported) {
+            _resolveInit();
+            return;
+        }
         try {
             const handle = await getHandle(HANDLE_KEY);
             if (handle) {
@@ -217,6 +232,8 @@ export function useWorkspaceStorage() {
             }
         } catch (e) {
             console.error("Failed to restore handle", e);
+        } finally {
+            _resolveInit();
         }
     });
 
@@ -226,6 +243,9 @@ export function useWorkspaceStorage() {
         status,
         lastError,
         lastSavedAt,
+        isStorageBypassed,
+        initPromise,
+        bypassStorage,
         chooseFolder,
         saveWorkspace,
         reGrantPermission

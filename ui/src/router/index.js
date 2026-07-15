@@ -6,39 +6,49 @@ import SettingsView from '../views/SettingsView.vue'
 import PolygonManagerView from '../views/PolygonManagerView.vue'
 import PublicManuscriptsView from '../views/PublicManuscriptsView.vue'
 import PublicNotationView from '../views/PublicNotationView.vue'
+import SetupView from '../views/SetupView.vue'
+
+// Import storage for guard
+import { useWorkspaceStorage } from '../composables/useWorkspaceStorage';
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
   routes: [
     {
+      path: '/setup',
+      name: 'setup',
+      component: SetupView,
+      meta: { title: 'Workspace Setup' }
+    },
+    {
       path: '/',
       name: 'home',
       component: GlobalAnalysisView,
-      meta: { title: 'Global Analysis' }
+      meta: { title: 'Global Analysis', requiresWorkspace: true }
     },
     {
       path: '/equivalents',
       name: 'equivalents',
       component: TranscriptionEquivalentsView,
-      meta: { title: 'Transcription Equivalents' }
+      meta: { title: 'Transcription Equivalents', requiresWorkspace: true }
     },
     {
       path: '/annotations/:id?',
       name: 'annotations',
       component: ManuscriptAnnotationsView,
-      meta: { title: 'Manuscript Annotations' }
+      meta: { title: 'Manuscript Annotations', requiresWorkspace: true }
     },
     {
       path: '/settings',
       name: 'settings',
       component: SettingsView,
-      meta: { title: 'Settings' }
+      meta: { title: 'Settings', requiresWorkspace: true }
     },
     {
       path: '/polygons',
       name: 'polygons',
       component: PolygonManagerView,
-      meta: { title: 'Manuscripts' }
+      meta: { title: 'Manuscripts', requiresWorkspace: true }
     },
     {
       path: '/public',
@@ -53,6 +63,20 @@ const router = createRouter({
       meta: { title: 'Public Notation' }
     }
   ]
+})
+
+// Onboarding Gate Navigation Guard
+router.beforeEach(async (to, from) => {
+  if (to.meta.requiresWorkspace) {
+    const storage = useWorkspaceStorage(); // safe after pinia is active
+    
+    // Wait for IDB to finish loading its handle
+    await storage.initPromise;
+    
+    if (!storage.folderName.value && !storage.isStorageBypassed.value) {
+      return { name: 'setup', query: { redirect: to.fullPath } };
+    }
+  }
 })
 
 router.afterEach((to) => {

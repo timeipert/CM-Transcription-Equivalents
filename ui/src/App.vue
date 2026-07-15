@@ -4,12 +4,13 @@ import { RouterLink, RouterView, useRoute } from 'vue-router'
 
 const route = useRoute();
 const isPublic = computed(() => route.path.startsWith('/public'));
+const isSetup = computed(() => route.path === '/setup');
 const isMenuOpen = ref(false);
 </script>
 
 <template>
   <div class="app-shell">
-    <nav v-if="!isPublic" class="top-nav">
+    <nav v-if="!isPublic && !isSetup" class="top-nav">
       <div class="nav-brand">CM Transcription Equivalents</div>
       <button class="hamburger-btn" @click="isMenuOpen = !isMenuOpen" :aria-expanded="isMenuOpen" aria-controls="nav-links" aria-label="Toggle navigation">
         <span v-if="!isMenuOpen">☰</span>
