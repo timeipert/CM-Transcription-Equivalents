@@ -10,6 +10,7 @@ import SetupView from '../views/SetupView.vue'
 
 // Import storage for guard
 import { useWorkspaceStorage } from '../composables/useWorkspaceStorage';
+import { usePersonalTablesStore } from '../stores/personalTables';
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -83,7 +84,19 @@ router.afterEach((to) => {
   let title = to.meta.title || '';
   
   if (to.params.id) {
-    title = `${to.params.id} — ${title}`;
+    try {
+      const tablesStore = usePersonalTablesStore();
+      const table = tablesStore.tables.find(t => t.id === to.params.id);
+      if (table && table.name) {
+        title = `${table.name} — ${title}`;
+      } else if (table && table.source) {
+        title = `${table.source} — ${title}`;
+      } else {
+        title = `${to.params.id} — ${title}`;
+      }
+    } catch (e) {
+      title = `${to.params.id} — ${title}`;
+    }
   } else if (to.params.source) {
     title = `${to.params.source} — ${title}`;
   }

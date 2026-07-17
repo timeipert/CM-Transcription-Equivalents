@@ -12,8 +12,9 @@ const { sourceFolios } = useTranscriptionData();
 const storage = useWorkspaceStorage();
 
 // Data Management
-const { exportData, analyzeImportFiles, executeImport, clearAllData } = useDataManagement();
+const { exportData, exportManuscripts, analyzeImportFiles, executeImport, clearAllData } = useDataManagement();
 const fileInput = ref(null);
+const selectedManuscriptsToExport = ref([]);
 const importMsg = ref("");
 const importStatus = ref(""); // 'success' or 'error'
 
@@ -31,8 +32,14 @@ function doClearAll() {
     }
 }
 
-function doExport() {
+function doExportWorkspace() {
     exportData();
+}
+
+function doExportManuscripts() {
+    if (selectedManuscriptsToExport.value.length > 0) {
+        exportManuscripts(selectedManuscriptsToExport.value);
+    }
 }
 
 async function doImport(event) {
@@ -219,20 +226,37 @@ const alignPreview = computed(() => {
     </div>
 
     <div class="card section">
-        <h2>Data Backup</h2>
-        <p class="desc">Save and load your annotations from a JSON file.</p>
+        <h2>Share / Backup</h2>
+        <p class="desc">Save and load your annotations to portable JSON files.</p>
         
-        <div class="setting-row">
-            <label>Backup Label (included in filename)</label>
-            <input v-model="store.backupLabel" placeholder="transcription_eqv" class="text-input">
-        </div>
-        
-        <div class="backup-actions">
-            <button @click="doExport" class="btn-primary">Export JSON</button>
+        <div class="backup-actions" style="flex-wrap: wrap;">
+            <!-- Whole Workspace -->
+            <div class="backup-group" style="flex: 1; min-width: 250px; background: var(--color-bg); padding: 15px; border-radius: 8px;">
+                <h3 class="mt-0">Whole Workspace</h3>
+                <div class="setting-row">
+                    <label>Backup Label</label>
+                    <input v-model="store.backupLabel" placeholder="transcription_eqv" class="text-input" style="width: 100%; box-sizing: border-box;">
+                </div>
+                <button @click="doExportWorkspace" class="btn-primary">Export Workspace</button>
+            </div>
             
+            <!-- Per-Manuscript -->
+            <div class="backup-group" style="flex: 1; min-width: 250px; background: var(--color-bg); padding: 15px; border-radius: 8px;">
+                <h3 class="mt-0">Specific Manuscripts</h3>
+                <div class="setting-row">
+                    <label>Select Manuscript(s)</label>
+                    <select v-model="selectedManuscriptsToExport" multiple class="text-input" style="height: 60px; width: 100%; box-sizing: border-box;">
+                        <option v-for="src in availableSources" :key="src" :value="src">{{ src }}</option>
+                    </select>
+                </div>
+                <button @click="doExportManuscripts" class="btn-primary" :disabled="!selectedManuscriptsToExport.length">Export Manuscript(s)</button>
+            </div>
+        </div>
+
+        <div class="backup-actions mt-20" style="background: var(--color-bg); padding: 15px; border-radius: 8px;">
             <div class="import-zone">
                 <input type="file" ref="fileInput" @change="doImport" accept=".json" multiple class="d-none">
-                <button @click="$refs.fileInput.click()" class="btn-secondary">Import JSON</button>
+                <button @click="$refs.fileInput.click()" class="btn-secondary">Import File</button>
             </div>
             
             <div class="flex-1"></div>
@@ -417,10 +441,16 @@ const alignPreview = computed(() => {
                             <span class="src-name">{{ src }}</span>
                             <div class="conflict-actions">
                                 <label class="radio-label" :class="{selected: mergeChoices[src]==='skip'}">
-                                    <input type="radio" :name="'merge_'+src" value="skip" v-model="mergeChoices[src]"> Skip
+                                    <input type="radio" :name="'merge_'+src" value="skip" v-model="mergeChoices[src]">
+                                    Skip
                                 </label>
-                                <label class="radio-label overwrite" :class="{selected: mergeChoices[src]==='overwrite'}">
-                                    <input type="radio" :name="'merge_'+src" value="overwrite" v-model="mergeChoices[src]"> Overwrite Local
+                                <label :class="['radio-label', { selected: mergeChoices[src] === 'copy' }]">
+                                    <input type="radio" :name="'merge_'+src" value="copy" v-model="mergeChoices[src]">
+                                    Import as Copy
+                                </label>
+                                <label :class="['radio-label overwrite', { selected: mergeChoices[src] === 'overwrite' }]">
+                                    <input type="radio" :name="'merge_'+src" value="overwrite" v-model="mergeChoices[src]">
+                                    Overwrite Local
                                 </label>
                             </div>
                         </div>

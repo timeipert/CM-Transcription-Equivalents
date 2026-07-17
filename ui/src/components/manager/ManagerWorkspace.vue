@@ -21,8 +21,18 @@ const {
     linesToAnnotate, pagePatterns, otherPageAnnotations, patternSort, patternSearch,
     activeRegion, activeRegionRect, activeRegionItems, activePattern, activeVariant, 
     linkCandidates, patternCustomIdMap, glyphs, getImageUrl, getIiifThumbnailUrl, 
-    hasTranscriptionData, getBasePattern, parseLineNumber, annotStore
+    hasTranscriptionData, getBasePattern, parseLineNumber, annotStore, manualLines
 } = workspace;
+
+function handleAddManualLine(num) {
+    annotStore.addManualLine(stdSource.value, stdFolio.value, num);
+}
+
+function handleRemoveManualLine(num) {
+    if (confirm(`Remove manually added line ${num}?`)) {
+        annotStore.removeManualLine(stdSource.value, stdFolio.value, num);
+    }
+}
 
 // Deep Link Watcher
 watch([() => props.initialRegionId, regions], ([id, list]) => {
@@ -193,6 +203,7 @@ function handleBackToGallery() {
             :activeRegion="activeRegion"
             :highlightHint="highlightHint"
             :allLinesOnPage="allLinesOnPage"
+            :manualLines="manualLines"
             :regions="regions"
             :activeRegionItems="activeRegionItems"
             :returnTo="returnTo"
@@ -201,6 +212,8 @@ function handleBackToGallery() {
             :highlightPattern="highlightPattern"
             @backToGallery="handleBackToGallery"
             @backToRegions="activeRegion = null"
+            @addManualLine="handleAddManualLine"
+            @removeManualLine="handleRemoveManualLine"
         />
         
         <div class="main-body">
@@ -285,7 +298,13 @@ function handleBackToGallery() {
                         </div>
                     </div>
                     <div v-else-if="allLinesOnPage.length > 0" class="general-hint">
-                        <strong>Data available for lines:</strong> {{ allLinesOnPage.join(', ') }}
+                        <strong>Data available for lines:</strong> 
+                        <template v-for="(l, i) in allLinesOnPage" :key="l">
+                            <span :class="{ 'manual-line': manualLines && manualLines.includes(l) }">
+                                {{ l }}
+                                <span v-if="manualLines && manualLines.includes(l)" class="manual-badge">M</span>
+                            </span><span v-if="i < allLinesOnPage.length - 1">, </span>
+                        </template>
                     </div>
                 </div>
                 <span class="close" @click="showRegionCreator=false">&times;</span>

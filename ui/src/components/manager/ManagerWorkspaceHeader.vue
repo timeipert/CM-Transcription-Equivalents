@@ -1,13 +1,26 @@
 <script setup>
+import { ref } from 'vue';
 import PatternDisplay from '../PatternDisplay.vue';
 
 const props = defineProps([
     'source', 'folio', 'activeRegion', 'highlightHint', 
-    'allLinesOnPage', 'regions', 'activeRegionItems', 
+    'allLinesOnPage', 'manualLines', 'regions', 'activeRegionItems', 
     'returnTo', 'returnId', 'glyphs', 'highlightPattern'
 ]);
 
-const emit = defineEmits(['backToGallery', 'backToRegions']);
+const emit = defineEmits(['backToGallery', 'backToRegions', 'addManualLine', 'removeManualLine']);
+
+const isAddingLine = ref(false);
+const newLineNum = ref('');
+
+function submitLine() {
+    const num = parseInt(newLineNum.value);
+    if (!isNaN(num)) {
+        emit('addManualLine', num);
+    }
+    isAddingLine.value = false;
+    newLineNum.value = '';
+}
 </script>
 
 <template>
@@ -34,7 +47,22 @@ const emit = defineEmits(['backToGallery', 'backToRegions']);
             </div>
         </div>
         <div v-else-if="allLinesOnPage.length > 0 && !activeRegion" class="general-hint-bubble">
-            Data available for lines: <strong>{{ allLinesOnPage.join(', ') }}</strong>
+            Data available for lines: 
+            <strong>
+                <template v-for="(l, i) in allLinesOnPage" :key="l">
+                    <span :class="{ 'manual-line': manualLines && manualLines.includes(l) }">
+                        {{ l }}
+                        <span v-if="manualLines && manualLines.includes(l)" class="manual-badge">M</span>
+                        <button v-if="manualLines && manualLines.includes(l)" @click="emit('removeManualLine', l)" class="btn-remove-manual">&times;</button>
+                    </span><span v-if="i < allLinesOnPage.length - 1">, </span>
+                </template>
+            </strong>
+            <button v-if="!isAddingLine" @click="isAddingLine = true" class="btn-add-line">+ Add Line</button>
+            <div v-else class="add-line-form">
+                <input v-model="newLineNum" type="number" placeholder="#" @keyup.enter="submitLine" class="add-line-input" autofocus />
+                <button @click="submitLine" class="btn-submit-line">OK</button>
+                <button @click="isAddingLine = false" class="btn-cancel-line">&times;</button>
+            </div>
         </div>
     </div>
     <div class="stats">
@@ -81,4 +109,40 @@ const emit = defineEmits(['backToGallery', 'backToRegions']);
     padding: 6px 14px; border-radius: 20px; font-size: 13px; color: var(--color-text);
     display: flex; gap: 10px; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
+
+.manual-line {
+    border-bottom: 1px dotted var(--color-primary);
+    position: relative;
+    padding-right: 2px;
+}
+.manual-badge {
+    font-size: 8px;
+    vertical-align: super;
+    color: var(--color-primary);
+    margin-left: 1px;
+}
+.btn-add-line {
+    background: white; border: 1px solid var(--color-border); border-radius: 12px;
+    font-size: 11px; padding: 2px 8px; cursor: pointer; color: var(--color-text-light);
+}
+.btn-add-line:hover { background: var(--color-surface-muted); color: var(--color-text); }
+
+.add-line-form {
+    display: flex; gap: 4px; align-items: center;
+}
+.add-line-input {
+    width: 40px; font-size: 12px; padding: 2px 4px; border: 1px solid var(--color-border); border-radius: 4px;
+}
+.btn-submit-line {
+    background: var(--color-primary); color: white; border: none; border-radius: 4px; font-size: 11px; padding: 3px 6px; cursor: pointer;
+}
+.btn-cancel-line {
+    background: transparent; border: none; font-size: 14px; cursor: pointer; color: var(--color-text-light);
+}
+
+.btn-remove-manual {
+    background: transparent; border: none; font-size: 12px; cursor: pointer; color: var(--color-error); padding: 0 2px;
+    vertical-align: top; line-height: 1; margin-left: 1px; opacity: 0.6;
+}
+.btn-remove-manual:hover { opacity: 1; }
 </style>

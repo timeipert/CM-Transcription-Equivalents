@@ -1,4 +1,4 @@
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch } from 'vue';
 import { getHandle, setHandle, deleteHandle } from '../utils/idb';
 import { useSettingsStore } from '../stores/settings';
 import { useAnnotationsStore } from '../stores/annotations';
@@ -8,34 +8,34 @@ import { useIiifStore } from '../stores/iiif';
 const SCHEMA_VERSION = 1;
 const HANDLE_KEY = 'workspaceDirHandle';
 
+const isSupported = 'showDirectoryPicker' in window;
+const folderName = ref('');
+const status = ref('idle'); // 'idle' | 'saving' | 'saved' | 'error'
+const lastError = ref(null);
+const lastSavedAt = ref(null);
+const isStorageBypassed = ref(sessionStorage.getItem('workspace_bypassed') === 'true');
+
+let directoryHandle = null;
+let saveTimeout = null;
+let isHydrating = false;
+let isInitialized = false;
+
+let _resolveInit;
+const initPromise = new Promise(resolve => {
+    _resolveInit = resolve;
+});
+
+function bypassStorage() {
+    isStorageBypassed.value = true;
+    sessionStorage.setItem('workspace_bypassed', 'true');
+}
+
 export function useWorkspaceStorage() {
     const settings = useSettingsStore();
     const annotStore = useAnnotationsStore();
     const tablesStore = usePersonalTablesStore();
     const iiifStore = useIiifStore();
 
-    const isSupported = 'showDirectoryPicker' in window;
-    
-    const folderName = ref('');
-    const status = ref('idle'); // 'idle' | 'saving' | 'saved' | 'error'
-    const lastError = ref(null);
-    const lastSavedAt = ref(null);
-    
-    let directoryHandle = null;
-    let saveTimeout = null;
-    let isHydrating = false;
-
-    const isStorageBypassed = ref(sessionStorage.getItem('workspace_bypassed') === 'true');
-
-    function bypassStorage() {
-        isStorageBypassed.value = true;
-        sessionStorage.setItem('workspace_bypassed', 'true');
-    }
-
-    let _resolveInit;
-    const initPromise = new Promise(resolve => {
-        _resolveInit = resolve;
-    });
 
     // Retrieve full app state as an object compatible with data management schema
     function serializeState() {
@@ -48,6 +48,7 @@ export function useWorkspaceStorage() {
                 annotations: annotStore.annotations,
                 regions: annotStore.regions,
                 regionItems: annotStore.regionItems,
+                manualLines: annotStore.manualLines,
                 settings: {
                     globalDisplayIds: settings.globalDisplayIds,
                     autoFillIds: settings.autoFillIds,
@@ -64,7 +65,15 @@ export function useWorkspaceStorage() {
 
     // Hydrate stores from the loaded state
     function hydrateState(payload) {
-        if (!payload || !payload.data) return;
+        if (!payload) return;
+        
+        // Backwards compatibility for older workspace files
+        if (payload.version && payload.content && !payload.schemaVersion) {
+            payload.schemaVersion = payload.version;
+            payload.data = payload.content;
+        }
+        
+        if (!payload.data) return;
         isHydrating = true; // Prevent autosave from triggering during load
         const d = payload.data;
         
@@ -72,6 +81,7 @@ export function useWorkspaceStorage() {
         if (d.annotations) annotStore.annotations = d.annotations;
         if (d.regions) annotStore.regions = d.regions;
         if (d.regionItems) annotStore.regionItems = d.regionItems;
+        if (d.manualLines) annotStore.manualLines = d.manualLines;
         if (d.iiifLinks) iiifStore.links = d.iiifLinks;
         
         if (d.settings) {
@@ -192,50 +202,54 @@ export function useWorkspaceStorage() {
         }, 1500);
     }
 
-    // Set up reactive watchers for autosave
-    watch(
-        [
-            () => settings.$state,
-            () => annotStore.$state,
-            () => tablesStore.$state,
-            () => iiifStore.$state
-        ],
-        () => {
-            triggerAutosave();
-        },
-        { deep: true }
-    );
-
     // Initialization
-    onMounted(async () => {
-        if (!isSupported) {
-            _resolveInit();
-            return;
-        }
-        try {
-            const handle = await getHandle(HANDLE_KEY);
-            if (handle) {
-                directoryHandle = handle;
-                folderName.value = handle.name;
-                // Check if we have permission right away (unlikely on fresh load, but possible)
-                if (await verifyPermission(handle, false)) {
-                    // Load it
-                    const fileHandle = await directoryHandle.getFileHandle('workspace.json');
-                    const file = await fileHandle.getFile();
-                    const text = await file.text();
-                    hydrateState(JSON.parse(text));
-                    status.value = 'saved';
-                } else {
-                    status.value = 'error';
-                    lastError.value = "Permission needed to access your workspace folder.";
-                }
+    if (!isInitialized) {
+        isInitialized = true;
+        
+        // Set up reactive watchers for autosave
+        watch(
+            [
+                () => settings.$state,
+                () => annotStore.$state,
+                () => tablesStore.$state,
+                () => iiifStore.$state
+            ],
+            () => {
+                triggerAutosave();
+            },
+            { deep: true }
+        );
+
+        (async () => {
+            if (!isSupported) {
+                _resolveInit();
+                return;
             }
-        } catch (e) {
-            console.error("Failed to restore handle", e);
-        } finally {
-            _resolveInit();
-        }
-    });
+            try {
+                const handle = await getHandle(HANDLE_KEY);
+                if (handle) {
+                    directoryHandle = handle;
+                    folderName.value = handle.name;
+                    // Check if we have permission right away (unlikely on fresh load, but possible)
+                    if (await verifyPermission(handle, false)) {
+                        // Load it
+                        const fileHandle = await directoryHandle.getFileHandle('workspace.json');
+                        const file = await fileHandle.getFile();
+                        const text = await file.text();
+                        hydrateState(JSON.parse(text));
+                        status.value = 'saved';
+                    } else {
+                        status.value = 'error';
+                        lastError.value = "Permission needed to access your workspace folder.";
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to restore handle", e);
+            } finally {
+                _resolveInit();
+            }
+        })();
+    }
 
     return {
         isSupported,

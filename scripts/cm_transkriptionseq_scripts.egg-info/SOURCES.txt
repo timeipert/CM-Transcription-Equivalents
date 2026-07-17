@@ -1,0 +1,9 @@
+analyze_transcriptions.py
+logic.py
+pyproject.toml
+test_normalize_folio.py
+cm_transkriptionseq_scripts.egg-info/PKG-INFO
+cm_transkriptionseq_scripts.egg-info/SOURCES.txt
+cm_transkriptionseq_scripts.egg-info/dependency_links.txt
+cm_transkriptionseq_scripts.egg-info/requires.txt
+cm_transkriptionseq_scripts.egg-info/top_level.txt

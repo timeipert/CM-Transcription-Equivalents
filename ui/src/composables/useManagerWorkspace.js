@@ -95,8 +95,12 @@ export function useManagerWorkspace(props) {
                     lines = lines.concat(fLines);
                 }
             }
-            lines = Array.from(new Set(lines));
         }
+        
+        // Merge with manually added lines
+        const manual = annotStore.getManualLines(stdSource.value, stdFolio.value) || [];
+        lines = Array.from(new Set([...lines, ...manual]));
+        
         return lines.map(Number).sort((a,b) => a-b);
     });
 
@@ -321,7 +325,9 @@ export function useManagerWorkspace(props) {
 
     return {
         stdSource, stdFolio, resolvedSrcKey, highlightHint,
-        allLinesOnPage, regions, existingRegionLines, linesToAnnotate,
+        allLinesOnPage, regions,
+        existingRegionLines,
+        manualLines: computed(() => annotStore.getManualLines(stdSource.value, stdFolio.value)), linesToAnnotate,
         pagePatterns, otherPageAnnotations, patternSort, patternSearch,
         activeRegion, activeRegionRect, activeRegionItems,
         activePattern, activeVariant, linkCandidates, patternCustomIdMap,

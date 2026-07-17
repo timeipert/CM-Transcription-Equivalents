@@ -10,6 +10,32 @@ const stdSourceFoliosCache = new Map();
 
 let cacheWatcherSetup = false;
 
+export function normalizeFolioName(name) {
+    if (!name) return "";
+    if (normCache.has(name)) return normCache.get(name);
+    
+    let s = String(name).toLowerCase();
+    s = s.replace(/\s+/g, '');
+    s = s.replace(/[()]/g, '');
+    s = s.replace(/^p\.?/, '');
+    s = s.replace(/^0+/, '');
+    // Handle explicit recto/verso
+    s = s.replace(/recto/g, 'r');
+    s = s.replace(/verso/g, 'v');
+    // Remove structural suffixes like -a, /1
+    s = s.replace(/[-/][a-g1-9]$/, '');
+    // Remove trailing letter suffixes (22b -> 22)
+    s = s.replace(/([0-9rv])[a-g]$/, '$1');
+    
+    // If resulting string is pure digits, append 'r'
+    if (/^\d+$/.test(s)) {
+        s += 'r';
+    }
+    
+    normCache.set(name, s);
+    return s;
+}
+
 export function compareFolios(a, b) {
     const parse = (f) => {
         const str = String(f || '').toLowerCase().trim();
@@ -137,32 +163,10 @@ export function useImageManifest() {
                 const rest = s.substring(key.length);
                 if (rest === '' || rest.startsWith('-') || rest.startsWith(' ')) {
                     bestMatch = key;
-                    bestLen = key.length;
                 }
             }
         }
         return bestMatch;
-    }
-
-    function normalizeFolioName(name) {
-        if (!name) return "";
-        if (normCache.has(name)) return normCache.get(name);
-        
-        let s = String(name).toLowerCase().trim();
-        s = s.replace(/^p\.?\s*/, '');
-        s = s.replace(/^\((\d+)\)$/, '$1');
-        s = s.replace(/^0+(\d+)/, '$1');
-        // Handle explicit recto/verso
-        s = s.replace(/recto/g, 'r');
-        s = s.replace(/verso/g, 'v');
-        // Remove structural suffixes like -a, /1
-        s = s.replace(/[-/]\s*[a-g1-9]$/, '');
-        // Remove trailing letter suffixes (22b -> 22)
-        s = s.replace(/([0-9rv])\s*[a-g]$/, '$1');
-        
-        const res = s.trim();
-        normCache.set(name, res);
-        return res;
     }
 
     function fuzzyMatchIiifFolio(source, folioName) {

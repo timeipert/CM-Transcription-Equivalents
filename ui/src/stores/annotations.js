@@ -15,6 +15,10 @@ export const useAnnotationsStore = defineStore('annotations', () => {
     // Key: "RegionID" -> [{ id: "ts", pattern: "clef", points: "x1,y1...", linkData: {} }]
     const regionItems = ref({})
 
+    // New: Manual Lines
+    // Key: "Source_Folio" -> [lineNum1, lineNum2, ...]
+    const manualLines = ref({})
+
     // Load
     const stored = localStorage.getItem('annotations_v2') // Versioning 
     if (stored) {
@@ -23,6 +27,7 @@ export const useAnnotationsStore = defineStore('annotations', () => {
             annotations.value = data.annotations || {}
             regions.value = data.regions || {}
             regionItems.value = data.regionItems || {}
+            manualLines.value = data.manualLines || {}
             
             // Ensure all legacy annotations have IDs
             let fallbackId = 0;
@@ -54,11 +59,12 @@ export const useAnnotationsStore = defineStore('annotations', () => {
     }
 
     // Save
-    watch([annotations, regions, regionItems], () => {
+    watch([annotations, regions, regionItems, manualLines], () => {
         localStorage.setItem('annotations_v2', JSON.stringify({
             annotations: annotations.value,
             regions: regions.value,
-            regionItems: regionItems.value
+            regionItems: regionItems.value,
+            manualLines: manualLines.value
         }))
     }, { deep: true })
 
@@ -191,6 +197,29 @@ export const useAnnotationsStore = defineStore('annotations', () => {
         regionItems.value[regionId] = regionItems.value[regionId].filter(i => i.id !== itemId)
     }
 
+    // --- Manual Lines Actions ---
+
+    function getManualLines(source, folio) {
+        const key = `${source}_${folio}`
+        return manualLines.value[key] || []
+    }
+
+    function addManualLine(source, folio, lineNum) {
+        const key = `${source}_${folio}`
+        if (!manualLines.value[key]) manualLines.value[key] = []
+        if (!manualLines.value[key].includes(lineNum)) {
+            manualLines.value[key].push(lineNum)
+            manualLines.value[key].sort((a, b) => a - b)
+        }
+    }
+
+    function removeManualLine(source, folio, lineNum) {
+        const key = `${source}_${folio}`
+        if (manualLines.value[key]) {
+            manualLines.value[key] = manualLines.value[key].filter(l => l !== lineNum)
+        }
+    }
+
     return {
         annotations,
         regions,
@@ -204,6 +233,10 @@ export const useAnnotationsStore = defineStore('annotations', () => {
         removeRegion,
         getRegionItems,
         addItemToRegion,
-        removeItemFromRegion
+        removeItemFromRegion,
+        manualLines,
+        getManualLines,
+        addManualLine,
+        removeManualLine
     }
 })

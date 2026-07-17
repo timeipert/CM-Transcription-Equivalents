@@ -6,3 +6,6 @@ dependencies = [
     "monodikit==0.0.10",
     "pandas==2.1.4"
 ]
+
+[tool.setuptools]
+py-modules = ["analyze_transcriptions", "logic", "test_normalize_folio"]
