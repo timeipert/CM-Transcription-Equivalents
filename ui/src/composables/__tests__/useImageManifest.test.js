@@ -57,3 +57,19 @@ describe('normalizeFolioName', () => {
         expect(normalizeFolioName('12 a')).toBe('12r');
     });
 });
+
+describe('getIiifRegionUrl', () => {
+    it('formats numeric sizes with trailing comma per IIIF specification', () => {
+        const formatSize = (width) => {
+            let sizeParam = width;
+            if (typeof width === 'number' || (typeof width === 'string' && /^\d+$/.test(width))) {
+                sizeParam = `${width},`;
+            }
+            return sizeParam;
+        };
+        expect(formatSize(1600)).toBe('1600,');
+        expect(formatSize('1600')).toBe('1600,');
+        expect(formatSize('full')).toBe('full');
+        expect(formatSize('1600,')).toBe('1600,');
+    });
+});

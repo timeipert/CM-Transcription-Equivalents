@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Scripts for preprocessing chant transcription data"
 dependencies = [
     "monodikit==0.0.10",
-    "pandas==2.1.4"
+    "pandas==2.1.4",
+    "Pillow>=10.0.0",
+    "requests>=2.31.0"
 ]
 
 [tool.setuptools]

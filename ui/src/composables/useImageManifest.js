@@ -277,7 +277,11 @@ export function useImageManifest() {
     function getIiifRegionUrl(source, folio, regionStr, width = "full") {
         const iiifMatch = fuzzyMatchIiifFolio(source, folio);
         if (!iiifMatch || !iiifMatch.serviceUrl) return null;
-        return `${iiifMatch.serviceUrl}/${regionStr}/${width}/0/default.jpg`;
+        let sizeParam = width;
+        if (typeof width === 'number' || (typeof width === 'string' && /^\d+$/.test(width))) {
+            sizeParam = `${width},`;
+        }
+        return `${iiifMatch.serviceUrl}/${regionStr}/${sizeParam}/0/default.jpg`;
     }
 
     /**

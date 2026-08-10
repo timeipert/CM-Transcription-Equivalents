@@ -66,6 +66,14 @@ Run the analyzer:
 python scripts/analyze_transcriptions.py
 ```
 
+### Static Public Site Export (HTML, Markdown & IIIF Cropping)
+The static export runs **in the app** (Settings → Share / Backup → *Download static site*).
+It produces a ZIP that mirrors the public viewer offline: a directory page plus one
+`index.html` + `index.md` per published manuscript, and cropped IIIF image snippets saved as
+files (usable as citation "quotes"). Because it reuses the app's own IIIF resolution and gallery
+logic, the export always matches the live `/public` route. Snippets are fetched live from the IIIF
+servers, so keep the tab connected while it runs.
+
 ## Project Structure
 * `/ui`: The Vue 3 application.
 * `/docs`: Production build for hosting (GitHub Pages).

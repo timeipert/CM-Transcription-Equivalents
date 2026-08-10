@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { usePersonalTablesStore } from '../stores/personalTables';
 import { useAnnotationsStore } from '../stores/annotations';
@@ -11,6 +11,7 @@ import AnnotationCutout from '../components/AnnotationCutout.vue';
 import StateWrapper from '../components/StateWrapper.vue';
 import { useImageManifest } from '../composables/useImageManifest';
 import { comparePatternIds } from '../utils/sorting';
+import { buildPatternRefMap, buildManuscriptLines } from '../composables/usePublicNotation';
 
 
 const route = useRoute();
@@ -105,17 +106,8 @@ onMounted(async () => {
 });
 const table = computed(() => tableStore.tables.find(t => t.source === source));
 
-// Build a map of Ref IDs for each pattern
-const patternRefMap = computed(() => {
-    const map = {};
-    if (!table.value) return map;
-    for (const row of table.value.rows) {
-        const localId = row.customId;
-        const globalId = settings.getGlobalId(row.pattern);
-        map[row.pattern] = localId || globalId || '-';
-    }
-    return map;
-});
+// Build a map of Ref IDs for each pattern (shared with the static exporter)
+const patternRefMap = computed(() => buildPatternRefMap(table.value, settings.getGlobalId));
 
 // Split table rows into two halves for the 2-column layout
 const tableHalves = computed(() => {
@@ -126,107 +118,14 @@ const tableHalves = computed(() => {
     return [rows.slice(0, mid), rows.slice(mid)];
 });
 
-function getBasePattern(p) {
-    if (!p) return "";
-    return p.split(' ')[0];
-}
-
-// Extract all lines from both transcription data AND annotations
-const manuscriptLines = computed(() => {
-    const linesMap = {}; // "folio|lineName" -> { ... }
-    
-    // 1. Process all raw transcription occurrences
-    const rawDataForSource = rawData.value[source];
-    if (rawDataForSource) {
-        for (const [pattern, instances] of Object.entries(rawDataForSource)) {
-            for (const inst of instances) {
-                const [doc, fol, lineName] = inst;
-                const key = `${fol}|${lineName}`;
-                if (!linesMap[key]) {
-                    linesMap[key] = { 
-                        folio: fol, 
-                        lineName, 
-                        items: [], 
-                        regionId: null, 
-                        points: null 
-                    };
-                }
-                
-                const basePat = getBasePattern(pattern);
-                const baseRefId = patternRefMap.value[basePat] || '-';
-                let variant = (pattern.length > basePat.length) ? pattern.substring(basePat.length).trim() : '';
-                const displayId = variant ? `${baseRefId}${variant}` : baseRefId;
-
-                linesMap[key].items.push({
-                    id: inst.join('|'), // Stable ID from transcription
-                    pattern,
-                    displayId,
-                    variant,
-                    folio: fol,
-                    lineName,
-                    syl: inst[3],
-                    notes: inst[4],
-                    isVirtual: true
-                });
-            }
-        }
-    }
-
-    // 2. Overlay with real annotations (polygons)
-    const prefix = source + '_';
-    for (const [key, pageRegions] of Object.entries(annotStore.regions)) {
-        if (!key.startsWith(prefix)) continue;
-        const folio = key.substring(prefix.length);
-        
-        for (const r of pageRegions) {
-            const lKey = `${folio}|${r.name}`;
-            if (!linesMap[lKey]) {
-                linesMap[lKey] = { folio, lineName: r.name, items: [], regionId: r.id, points: r.points };
-            } else {
-                linesMap[lKey].regionId = r.id;
-                linesMap[lKey].points = r.points;
-            }
-            
-            // If real polygons exist, we might want to prioritize them or merge
-            const realItems = annotStore.regionItems[r.id] || [];
-            if (realItems.length > 0) {
-                // Merge real items into the list (avoid duplicates if possible, or just append)
-                // For now, let's just use real items if they exist for this line
-                const enrichedReal = realItems.map(ri => {
-                    const basePat = getBasePattern(ri.pattern);
-                    const baseRefId = patternRefMap.value[basePat] || ri.linkData?.sysId?.split('|')[0] || '-';
-                    let variant = ri.variant || '';
-                    if (!variant && ri.pattern.includes(' ')) variant = ri.pattern.split(' ')[1];
-                    const displayId = variant ? `${baseRefId}${variant}` : baseRefId;
-                    
-                    // Extract syl/notes from linkData if present
-                    let syl = '', notes = '';
-                    if (ri.linkData?.sysId) {
-                        const p = ri.linkData.sysId.split('|');
-                        syl = p[3] || '';
-                        notes = p[4] || '';
-                    }
-
-                    return { ...ri, displayId, folio, regionId: r.id, syl, notes };
-                });
-                
-                // Replace virtual items with real ones for this specific line if polygons exist
-                linesMap[lKey].items = enrichedReal;
-            }
-        }
-    }
-    
-    // Filter: Only include lines that actually HAVE polygons/annotations
-    const lines = Object.values(linesMap).filter(l => l.points && l.items.length > 0);
-    
-    // Sort by Folio and Line
-    lines.sort((a, b) => {
-        if (a.folio !== b.folio) return a.folio.localeCompare(b.folio, undefined, { numeric: true });
-        return a.lineName.localeCompare(b.lineName, undefined, { numeric: true });
-    });
-    
-    return lines;
-});
+// Extract all lines from both transcription data AND annotations (shared with the static exporter)
+const manuscriptLines = computed(() => buildManuscriptLines({
+    source,
+    rawDataForSource: rawData.value[source],
+    regions: annotStore.regions,
+    regionItems: annotStore.regionItems,
+    patternRefMap: patternRefMap.value
+}));
 
 // For the Patterns table: map pattern -> { variant -> Set({ label, regionId, annId }) }
 const patternOccurrences = computed(() => {
@@ -250,7 +149,7 @@ const patternOccurrences = computed(() => {
     return map;
 });
 
-watch([() => route.query.zoomId, groupedLines], ([zId, groups]) => {
+watch([() => route.query.zoomId, manuscriptLines], ([zId, groups]) => {
     if (zId && groups && groups.length > 0) {
         let found = null;
         for (const group of groups) {

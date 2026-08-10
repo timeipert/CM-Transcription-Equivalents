@@ -6,10 +6,36 @@ import SvgPattern from '../components/SvgPattern.vue';
 import { useWorkspaceStorage } from '../composables/useWorkspaceStorage';
 
 import { useTranscriptionData } from '../composables/useTranscriptionData';
+import { exportStaticSite } from '../composables/useStaticExport';
 
 const store = useSettingsStore();
 const { sourceFolios } = useTranscriptionData();
 const storage = useWorkspaceStorage();
+
+// Static site export
+const staticExporting = ref(false);
+const staticExportMsg = ref("");
+const staticExportStatus = ref(""); // 'success' | 'error' | 'progress'
+
+async function doExportStaticSite() {
+    if (staticExporting.value) return;
+    staticExporting.value = true;
+    staticExportStatus.value = "progress";
+    staticExportMsg.value = "Starting export…";
+    try {
+        const res = await exportStaticSite((p) => {
+            staticExportMsg.value = p.message;
+        });
+        staticExportStatus.value = "success";
+        staticExportMsg.value = `Exported ${res.sources} manuscript(s) with ${res.snippets} snippet(s)`
+            + (res.failures ? ` — ${res.failures} snippet(s) could not be fetched (IIIF/CORS).` : ".");
+    } catch (e) {
+        staticExportStatus.value = "error";
+        staticExportMsg.value = e?.message || "Static export failed.";
+    } finally {
+        staticExporting.value = false;
+    }
+}
 
 // Data Management
 const { exportData, exportManuscripts, analyzeImportFiles, executeImport, clearAllData } = useDataManagement();
@@ -80,6 +106,14 @@ async function doImport(event) {
         importStatus.value = "error";
     } finally {
         event.target.value = null; // Clear input
+    }
+}
+
+function setAllMergeChoices(choice) {
+    if (pendingAnalysis.value && pendingAnalysis.value.overlapSources) {
+        pendingAnalysis.value.overlapSources.forEach(src => {
+            mergeChoices.value[src] = choice;
+        });
     }
 }
 
@@ -263,6 +297,21 @@ const alignPreview = computed(() => {
             <button @click="doClearAll" class="btn-danger btn-secondary border-danger">Remove All Data</button>
         </div>
         <div v-if="importMsg" :class="['msg', importStatus]">{{ importMsg }}</div>
+
+        <div class="mt-20" style="background: var(--color-bg); padding: 15px; border-radius: 8px; border-left: 4px solid var(--accent-color);">
+            <h3 class="mt-0" style="color: var(--accent-color);">Static Public Site (HTML &amp; Markdown)</h3>
+            <p class="desc" style="margin-bottom: 10px;">
+                Download a standalone ZIP that mirrors the public viewer offline: one HTML + Markdown page per published manuscript,
+                plus cropped IIIF image snippets saved as files (usable as citation "quotes"). Snippets are fetched live from the
+                IIIF servers, so keep this tab connected while it runs.
+            </p>
+            <button @click="doExportStaticSite" class="btn-primary" :disabled="staticExporting">
+                {{ staticExporting ? 'Exporting…' : 'Download static site' }}
+            </button>
+            <div v-if="staticExportMsg" :class="['msg', staticExportStatus === 'error' ? 'error' : 'success']" style="margin-top: 10px;">
+                {{ staticExportMsg }}
+            </div>
+        </div>
     </div>
 
     <div class="card section">
@@ -434,7 +483,15 @@ const alignPreview = computed(() => {
                 </div>
 
                 <div class="merge-section">
-                    <h4>Overlapping Manuscripts</h4>
+                    <div class="merge-section-header">
+                        <h4>Overlapping Manuscripts</h4>
+                        <div v-if="pendingAnalysis.overlapSources && pendingAnalysis.overlapSources.length > 0" class="bulk-select-bar">
+                            <span class="bulk-label">Select all:</span>
+                            <button type="button" class="btn-bulk" @click="setAllMergeChoices('skip')">Skip All</button>
+                            <button type="button" class="btn-bulk" @click="setAllMergeChoices('copy')">Import All as Copy</button>
+                            <button type="button" class="btn-bulk btn-bulk-danger" @click="setAllMergeChoices('overwrite')">Overwrite All</button>
+                        </div>
+                    </div>
                     <p class="desc">Choose whether to overwrite your local data with the imported data, or skip importing these specific manuscripts.</p>
                     <div class="conflict-list">
                         <div v-for="src in pendingAnalysis.overlapSources" :key="src" class="conflict-item">
@@ -523,6 +580,13 @@ th { background: var(--color-surface-muted); font-weight: 600; }
 .modal-footer { padding: 20px; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; gap: 10px; background: var(--color-bg); }
 
 .merge-section { margin-top: 20px; padding: 15px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-bg); }
+.merge-section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }
+.merge-section-header h4 { margin: 0; color: var(--color-text); }
+.bulk-select-bar { display: flex; align-items: center; gap: 6px; }
+.bulk-label { font-size: 0.85em; color: var(--color-text-muted); font-weight: 500; }
+.btn-bulk { padding: 4px 10px; font-size: 0.8em; border-radius: 4px; border: 1px solid var(--color-border); background: white; cursor: pointer; color: var(--color-text); transition: all 0.15s; font-weight: 500; }
+.btn-bulk:hover { background: var(--color-primary-light); border-color: var(--color-primary); color: var(--color-primary); }
+.btn-bulk-danger:hover { background: var(--color-danger-light, #fee2e2); border-color: var(--color-danger); color: var(--color-danger); }
 .merge-section h4 { margin-top: 0; margin-bottom: 10px; color: var(--color-text); }
 .new-sources-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .badge { background: var(--color-primary-light); color: var(--color-primary-active); padding: 4px 10px; border-radius: 20px; font-size: 0.85em; font-weight: 500; }
