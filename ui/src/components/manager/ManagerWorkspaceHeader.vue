@@ -8,7 +8,7 @@ const props = defineProps([
     'returnTo', 'returnId', 'glyphs', 'highlightPattern'
 ]);
 
-const emit = defineEmits(['backToGallery', 'backToRegions', 'addManualLine', 'removeManualLine']);
+const emit = defineEmits(['backToGallery', 'backToRegions', 'editRegion', 'addManualLine', 'removeManualLine']);
 
 const isAddingLine = ref(false);
 const newLineNum = ref('');
@@ -30,6 +30,7 @@ function submitLine() {
                 @click="$emit('backToGallery')" 
                 class="btn-secondary mr-10">&larr; Back to Gallery</button>
         <button v-if="activeRegion" @click="$emit('backToRegions')" class="btn-secondary">&larr; Back to Line Regions</button>
+        <button v-if="activeRegion && !activeRegion.isLegacy" @click="$emit('editRegion', activeRegion)" class="btn-secondary" title="Edit line boundaries and name">✎ Edit Line</button>
         <h2>
             {{ source }} / {{ folio }} 
             <span v-if="activeRegion" class="crumb"> / {{ activeRegion.name }}</span>

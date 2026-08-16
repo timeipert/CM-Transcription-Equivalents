@@ -232,17 +232,20 @@ watch([() => props.visible, () => iiifStore.parsedData, () => props.pattern], as
                 const std = getStandardSource(p.d, p.f);
                 const stf = getStandardFolio(p.d, p.f);
                 
-                // Check if this page is in our snippets list
+                // Check if this page is in our snippets list or has defined line regions
                 const snippetMatch = currentGalleryItems.value.find(s => s.source === std && s.folio === stf);
                 const hasAnnot = !!snippetMatch;
-                
-
+                const pageKey = `${std}_${stf}`;
+                const pageRegions = annotStore.regions[pageKey] || [];
+                const regionsCount = pageRegions.length;
 
                 result.push({
                     d: p.d, f: p.f, stf,
                     pat: p.pat,
                     label: String(p.f),
                     isAnnotated: hasAnnot,
+                    hasRegions: regionsCount > 0,
+                    regionsCount,
                     regionId: snippetMatch ? snippetMatch.regionId : null,
                     occs: p.occs,
                     allPitches: Array.from(new Set(p.occs.map(o => o.notes))).join(' | ')
@@ -446,12 +449,14 @@ const virtualLines = computed(() => {
                              v-for="p in filteredPages" 
                              :key="p.label" 
                              class="chip" 
-                             :class="{ 'is-annotated': p.isAnnotated }"
+                             :class="{ 'is-annotated': p.isAnnotated, 'has-regions': p.hasRegions }"
                              :title="p.matchSummary"
                              @click="startAnnotating(p)"
                           >
                               <span v-if="p.isAnnotated" class="annot-check">✓</span>
+                              <span v-else-if="p.hasRegions" class="region-dot" title="Has line strips defined">•</span>
                               <span class="folio-lbl">{{ p.label }}</span>
+                              <span v-if="p.regionsCount > 0" class="chip-lines-tag">{{ p.regionsCount }}L</span>
                               <span v-if="p.lineHint" class="line-hint">{{ p.lineHint }}</span>
                               <span v-if="pitchSearch && p.matchSummary" class="pitch-preview">{{ p.matchSummary }}</span>
                           </button>
@@ -628,6 +633,10 @@ const virtualLines = computed(() => {
 
 .faded { opacity: 0.5; pointer-events: none; }
 
+.chip.has-regions { border-color: #86efac; }
+.region-dot { color: var(--color-success); font-size: 1.1em; line-height: 0.5; margin-right: 3px; }
+.chip-lines-tag { font-size: 9px; background: #dcfce7; color: #166534; padding: 1px 4px; border-radius: 4px; font-weight: 700; margin-left: 4px; }
+.chip.active .chip-lines-tag { background: rgba(255,255,255,0.3); color: white; }
 
 .page-filter {
     padding: 4px 10px;

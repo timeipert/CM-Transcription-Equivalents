@@ -56,7 +56,8 @@ export function useWorkspaceStorage() {
                     snippetSize: settings.snippetSize,
                     snippetPadding: settings.snippetPadding,
                     backupLabel: settings.backupLabel,
-                    sourceAlignments: settings.sourceAlignments
+                    sourceAlignments: settings.sourceAlignments,
+                    neumeNames: settings.neumeNames
                 },
                 iiifLinks: iiifStore.links
             }
@@ -92,6 +93,7 @@ export function useWorkspaceStorage() {
             if (d.settings.snippetPadding) settings.snippetPadding = d.settings.snippetPadding;
             if (d.settings.backupLabel) settings.backupLabel = d.settings.backupLabel;
             if (d.settings.sourceAlignments) settings.sourceAlignments = d.settings.sourceAlignments;
+            if (d.settings.neumeNames) settings.neumeNames = d.settings.neumeNames;
         }
 
         if (payload.savedAt) {

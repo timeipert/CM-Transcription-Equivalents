@@ -11,18 +11,22 @@ const isMenuOpen = ref(false);
 <template>
   <div class="app-shell">
     <nav v-if="!isPublic && !isSetup" class="top-nav">
-      <div class="nav-brand">CM Transcription Equivalents</div>
+      <RouterLink to="/" class="nav-brand" aria-label="Neume Viewer home">
+        <span class="brand-text">Neume Viewer</span>
+      </RouterLink>
       <button class="hamburger-btn" @click="isMenuOpen = !isMenuOpen" :aria-expanded="isMenuOpen" aria-controls="nav-links" aria-label="Toggle navigation">
         <span v-if="!isMenuOpen">☰</span>
         <span v-else>✕</span>
       </button>
       <div id="nav-links" class="nav-links" :class="{ 'menu-open': isMenuOpen }" @click="isMenuOpen = false">
         <RouterLink to="/" active-class="active">Overview</RouterLink>
-        <RouterLink to="/equivalents" active-class="active">Transcription Equivalents</RouterLink>
+        <RouterLink to="/equivalents" active-class="active">Equivalents</RouterLink>
         <RouterLink to="/polygons" active-class="active">Manuscripts</RouterLink>
+        <RouterLink to="/ommr" active-class="active">Import</RouterLink>
         <RouterLink to="/settings" active-class="active">Settings</RouterLink>
-        <a href="manual/index.html" target="_blank" class="manual-link">User Manual</a>
-        <a href="#/public" target="_blank" rel="noopener" class="public-ext-link">Public</a>
+        <span class="nav-sep" aria-hidden="true"></span>
+        <a href="manual/index.html" target="_blank" class="nav-util manual-link">Manual</a>
+        <a href="#/public" target="_blank" rel="noopener" class="nav-util public-ext-link">Public&nbsp;↗</a>
       </div>
     </nav>
     
@@ -44,73 +48,91 @@ const isMenuOpen = ref(false);
 
 .top-nav {
   flex: 0 0 auto;
-  min-height: 60px;
-  background: var(--color-nav-bg);
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  min-height: 58px;
+  background: linear-gradient(180deg, #263449 0%, var(--color-nav-bg) 100%);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
   display: flex;
   align-items: center;
-  padding: 0 var(--space-4);
+  padding: 0 var(--space-5);
+  gap: var(--space-5);
   justify-content: space-between;
   position: relative;
   z-index: 100;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.04), 0 4px 16px rgba(0,0,0,0.18);
 }
 
 .nav-brand {
   font-weight: 700;
-  font-size: 1.25em;
-  color: var(--color-surface);
+  font-size: 1.12rem;
+  color: var(--color-surface) !important;
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  white-space: nowrap;
 }
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(59,130,246,0.35);
+}
+.nav-brand:hover .brand-mark { transform: translateY(-1px); }
+.brand-mark, .nav-brand:hover .brand-mark { transition: transform 0.2s ease; }
 
 .nav-links {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 2px;
 }
 
 .nav-links a {
+  position: relative;
   color: var(--color-text-light);
   text-decoration: none;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 500;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  transition: all 0.2s ease;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
 .nav-links a:hover {
   color: var(--color-surface);
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .nav-links a.active {
   color: var(--color-surface);
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.1);
   font-weight: 600;
 }
-
-.public-ext-link {
-  margin-left: var(--space-2);
-  color: #60a5fa !important;
-  background: rgba(96, 165, 250, 0.1);
-}
-.public-ext-link:hover {
-  color: #93c5fd !important;
-  background: rgba(96, 165, 250, 0.2) !important;
+/* Active underline indicator */
+.nav-links a.active::after {
+  content: "";
+  position: absolute;
+  left: 12px; right: 12px; bottom: -1px;
+  height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
 }
 
-.manual-link {
-  color: #4ade80 !important;
-  background: rgba(74, 222, 128, 0.1);
+.nav-sep {
+  width: 1px; height: 22px;
+  background: rgba(255,255,255,0.12);
+  margin: 0 var(--space-2);
 }
-.manual-link:hover {
-  color: #86efac !important;
-  background: rgba(74, 222, 128, 0.2) !important;
+
+.nav-util {
+  color: var(--color-text-light) !important;
+  font-size: 0.85rem;
 }
+.nav-util:hover { color: var(--color-surface) !important; background: rgba(255,255,255,0.07); }
 
 .main-content {
   flex: 1;

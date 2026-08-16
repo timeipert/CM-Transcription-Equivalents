@@ -40,6 +40,14 @@ export function compareFolios(a, b) {
 }
 
 /**
+ * Strip brackets, whitespace, and special notation marks for natural alphabetical sorting.
+ */
+export function cleanPatternForSorting(p) {
+    if (!p) return '';
+    return String(p).replace(/[\[\]\{\}\*\(\)]/g, '').trim();
+}
+
+/**
  * Compares pattern IDs.
  * Pure numbers come first (sorted numerically).
  * Mixed IDs (with suffixes like 10+, 10+20-) come later (sorted naturally).
@@ -57,4 +65,49 @@ export function comparePatternIds(a, b) {
 
     // Both pure numbers OR both mixed strings
     return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+/**
+ * Compare two chant patterns based on a given sort mode: 'freq' | 'length' | 'alpha' | 'id'.
+ * @param {string} a 
+ * @param {string} b 
+ * @param {string} mode - 'freq' | 'length' | 'alpha' | 'id'
+ * @param {Map<string, number>|Object<string, number>} [freqMap={}] 
+ */
+export function compareChantPatterns(a, b, mode = 'freq', freqMap = {}) {
+    if (!a && b) return 1;
+    if (a && !b) return -1;
+    if (!a && !b) return 0;
+
+    // Special Start token always first
+    if (a === "(Start)" && b !== "(Start)") return -1;
+    if (b === "(Start)" && a !== "(Start)") return 1;
+
+    if (mode === 'freq') {
+        const countA = (freqMap instanceof Map ? freqMap.get(a) : freqMap[a]) || 0;
+        const countB = (freqMap instanceof Map ? freqMap.get(b) : freqMap[b]) || 0;
+        if (countA !== countB) return countB - countA; // highest frequency first
+        // Secondary: length then alphabetical
+        const cleanA = cleanPatternForSorting(a);
+        const cleanB = cleanPatternForSorting(b);
+        if (cleanA.length !== cleanB.length) return cleanA.length - cleanB.length;
+        return cleanA.localeCompare(cleanB);
+    }
+
+    if (mode === 'length') {
+        const cleanA = cleanPatternForSorting(a);
+        const cleanB = cleanPatternForSorting(b);
+        if (cleanA.length !== cleanB.length) return cleanA.length - cleanB.length;
+        return cleanA.localeCompare(cleanB);
+    }
+
+    if (mode === 'alpha') {
+        const cleanA = cleanPatternForSorting(a);
+        const cleanB = cleanPatternForSorting(b);
+        if (cleanA !== cleanB) return cleanA.localeCompare(cleanB);
+        return a.localeCompare(b);
+    }
+
+    // Default 'id' / natural sorting
+    return comparePatternIds(a, b);
 }

@@ -43,19 +43,37 @@ watch([() => props.initialRegionId, regions], ([id, list]) => {
 }, { immediate: true });
 
 // --- UI State for Modals/Linker ---
-const showRegionCreator = ref(false);
 const showLinker = ref(false);
-const newRegionName = ref('');
-const customRegionName = ref("");
 
-const isNewRegionNameCustomLine = computed(() => {
-    if (!newRegionName.value || newRegionName.value === 'Custom') return false;
-    const lineNum = parseLineNumber(newRegionName.value);
-    if (lineNum === null) return true;
-    return !allLinesOnPage.value.includes(lineNum);
-});
+function navigateToCreateRegion() {
+    router.push({
+        name: 'region_editor',
+        query: {
+            source: props.source,
+            folio: props.folio,
+            return_to: props.returnTo || undefined,
+            return_id: props.returnId || undefined,
+            highlight: props.highlightPattern || undefined
+        }
+    });
+}
 
-// Auto-open region creator or select existing when navigating from gallery with a highlight
+function navigateToEditRegion(regionObj) {
+    if (!regionObj || regionObj.isLegacy) return;
+    router.push({
+        name: 'region_editor',
+        query: {
+            source: props.source,
+            folio: props.folio,
+            region: regionObj.id,
+            return_to: props.returnTo || undefined,
+            return_id: props.returnId || undefined,
+            highlight: props.highlightPattern || undefined
+        }
+    });
+}
+
+// Auto-select existing or navigate when navigating from gallery with a highlight
 watch(highlightHint, (newHint) => {
     if (props.initialRegionId) return; 
     if (newHint && props.highlightPattern) {
@@ -67,30 +85,10 @@ watch(highlightHint, (newHint) => {
         if (existing) {
             selectRegion(existing);
         } else {
-            showRegionCreator.value = true;
+            navigateToCreateRegion();
         }
     }
 }, { immediate: true });
-
-// Pre-select the line when modal opens
-watch(showRegionCreator, (open) => {
-    if (open) {
-        if (highlightHint.value && highlightHint.value.lines.length > 0) {
-            const firstAvailable = highlightHint.value.lines.find(l => linesToAnnotate.value.includes(l));
-            if (firstAvailable) {
-                newRegionName.value = `Line ${firstAvailable}`;
-                return;
-            }
-        }
-        if (linesToAnnotate.value.length > 0) {
-            newRegionName.value = `Line ${linesToAnnotate.value[0]}`;
-        } else {
-            const maxLineInTranscription = allLinesOnPage.value.length > 0 ? Math.max(...allLinesOnPage.value) : 0;
-            const maxLineInRegions = regions.value.length > 0 ? Math.max(...regions.value.map(r => parseLineNumber(r.name) || 0)) : 0;
-            newRegionName.value = `Line ${Math.max(maxLineInTranscription, maxLineInRegions) + 1}`;
-        }
-    }
-});
 
 function selectPatternBase(pat) {
     const parts = pat.split(' ');
@@ -104,20 +102,6 @@ function setVariant(v) {
 
 const pendingItemPoints = ref(null); 
 const selectedSnippet = ref(null);
-
-function saveRegion(points) {
-    let name = newRegionName.value;
-    if (name === 'Custom') name = customRegionName.value.trim() || `Line ${regions.value.length + 1}`;
-    
-    const newId = annotStore.addRegion(stdSource.value, stdFolio.value, name, points);
-    showRegionCreator.value = false;
-    customRegionName.value = "";
-
-    setTimeout(() => {
-        const newlyCreated = regions.value.find(r => r.id === newId || r.name === name);
-        if (newlyCreated) selectRegion(newlyCreated);
-    }, 50);
-}
 
 function deleteRegion(r) {
     if (confirm(`Delete region "${r.name}" and all its contents?`)) {
@@ -190,6 +174,17 @@ function handleBackToGallery() {
     router.push({ name: 'annotations', params: { id: props.returnId }, query: { gallery: props.highlightPattern } });
 }
 
+function handleBackToOverview() {
+    activeRegion.value = null;
+    router.push({
+        name: 'polygons',
+        query: {
+            ...router.currentRoute.value.query,
+            region: undefined
+        }
+    });
+}
+
 </script>
 
 <template>
@@ -211,7 +206,8 @@ function handleBackToGallery() {
             :glyphs="glyphs"
             :highlightPattern="highlightPattern"
             @backToGallery="handleBackToGallery"
-            @backToRegions="activeRegion = null"
+            @backToRegions="handleBackToOverview"
+            @editRegion="navigateToEditRegion"
             @addManualLine="handleAddManualLine"
             @removeManualLine="handleRemoveManualLine"
         />
@@ -226,8 +222,9 @@ function handleBackToGallery() {
                 :regions="regions"
                 :hasTranscriptionData="hasTranscriptionData"
                 :getIiifThumbnailUrl="getIiifThumbnailUrl"
-                @openRegionCreator="showRegionCreator = true"
+                @openRegionCreator="navigateToCreateRegion"
                 @selectRegion="selectRegion"
+                @editRegion="navigateToEditRegion"
                 @deleteRegion="deleteRegion"
             />
             
@@ -259,64 +256,6 @@ function handleBackToGallery() {
     </div>
 
     <!-- Modals -->
-    
-    <!-- Region Creator Modal -->
-    <div v-if="showRegionCreator" class="modal">
-        <div class="modal-content annot-modal">
-              <div class="modal-header">
-                <div class="flex-center-gap">
-                    <button v-if="returnTo === 'annotations'" @click="handleBackToGallery" class="btn-secondary">&larr; Back to Gallery</button>
-                    <h3 class="m-0">Define Line Region</h3>
-                    <div class="line-selector-group">
-                        <label>Target:</label>
-                        <select v-model="newRegionName" class="line-select">
-                            <optgroup label="Missing Data Lines">
-                                <option v-for="l in linesToAnnotate" :key="'missing-'+l" :value="'Line ' + l">Line {{ l }}</option>
-                            </optgroup>
-                            <optgroup label="Already Created">
-                                <option v-for="l in allLinesOnPage.filter(l => existingRegionLines.has(l))" :key="'all-'+l" :value="'Line ' + l" disabled>
-                                    Line {{ l }} ✓
-                                </option>
-                            </optgroup>
-                            <option v-if="isNewRegionNameCustomLine" :value="newRegionName">{{ newRegionName }}</option>
-                            <option value="Custom">Custom Name...</option>
-                        </select>
-                        <input v-if="newRegionName === 'Custom'" v-model="customRegionName" placeholder="Enter name..." class="custom-input" />
-                    </div>
-                </div>
-                <div class="creator-guidance">
-                    <div v-if="highlightHint" class="highlight-hint-detailed">
-                        <div class="hint-title">
-                            Searching: <PatternDisplay :pattern="highlightHint.pattern" :glyphs="glyphs" class="hint-visual" /> <strong>{{ highlightHint.pattern }}</strong>
-                        </div>
-                        <div class="hint-occ-list">
-                            <div v-for="(occ, idx) in highlightHint.occurrences" :key="idx" class="hint-occ">
-                                <span class="h-line">L{{ occ[2] }}</span>
-                                <span class="h-syl">"{{ occ[3] }}"</span>
-                                <span class="h-notes">{{ occ[4] }}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div v-else-if="allLinesOnPage.length > 0" class="general-hint">
-                        <strong>Data available for lines:</strong> 
-                        <template v-for="(l, i) in allLinesOnPage" :key="l">
-                            <span :class="{ 'manual-line': manualLines && manualLines.includes(l) }">
-                                {{ l }}
-                                <span v-if="manualLines && manualLines.includes(l)" class="manual-badge">M</span>
-                            </span><span v-if="i < allLinesOnPage.length - 1">, </span>
-                        </template>
-                    </div>
-                </div>
-                <span class="close" @click="showRegionCreator=false">&times;</span>
-            </div>
-            <div class="modal-body-annot">
-                <FolioAnnotator 
-                    :imageUrl="getImageUrl(source, folio)" 
-                    @save="saveRegion" 
-                />
-            </div>
-        </div>
-    </div>
     
     <!-- Linker Modal -->
     <div v-if="showLinker" class="modal">

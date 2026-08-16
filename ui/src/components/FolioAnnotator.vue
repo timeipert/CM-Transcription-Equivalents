@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 const props = defineProps({
     imageUrl: { type: String, required: true },
@@ -8,7 +8,7 @@ const props = defineProps({
     overlays: { type: Array, default: () => [] } // [{ id, points, color }]
 });
 
-const emit = defineEmits(['save']);
+const emit = defineEmits(['save', 'cancel']);
 
 // State
 const dragStart = ref(null); // {x, y}
@@ -25,10 +25,34 @@ const startPanY = ref(0);
 
 const containerRef = ref(null);
 const viewportRef = ref(null);
+
+function initFromExistingPoints() {
+    if (props.existingPoints) {
+        const rect = getRectFromPoints(props.existingPoints);
+        if (rect.w > 0.05 && rect.h > 0.05) {
+            dragStart.value = { x: rect.x, y: rect.y };
+            dragCurrent.value = { x: rect.x + rect.w, y: rect.y + rect.h };
+            return;
+        }
+    }
+    dragStart.value = null;
+    dragCurrent.value = null;
+}
+
+onMounted(() => {
+    initFromExistingPoints();
+});
+
+watch(() => props.existingPoints, () => {
+    initFromExistingPoints();
+});
+
 const imageLoaded = ref(false);
+const imageError = ref(false);
 
 function onImageLoad(e) {
     imageLoaded.value = true;
+    imageError.value = false;
     if (viewportRef.value && e.target) {
         const vpWidth = viewportRef.value.clientWidth;
         const imgWidth = e.target.clientWidth;
@@ -39,9 +63,14 @@ function onImageLoad(e) {
     }
 }
 
-import { watch } from 'vue';
+function onImageError() {
+    imageLoaded.value = false;
+    imageError.value = true;
+}
+
 watch(() => props.imageUrl, () => {
     imageLoaded.value = false;
+    imageError.value = false;
 });
 
 // Helpers
@@ -229,8 +258,15 @@ const imageClipStyle = computed(() => {
          @mouseleave="onMouseUp">
          
              <div class="canvas-content" :style="contentStyle" ref="containerRef">
-             <div v-if="!imageLoaded" class="loading-overlay">Loading Image...</div>
-             <img :src="imageUrl" class="bg-image" :style="imageClipStyle" draggable="false" @load="onImageLoad" />
+            <div v-if="!imageLoaded && !imageError" class="loading-overlay">
+                <div class="annotator-spinner"></div>
+                <span>Loading Image...</span>
+            </div>
+            <div v-else-if="imageError" class="error-overlay">
+                <span class="err-icon">⚠️</span>
+                <span>Failed to load folio scan</span>
+            </div>
+            <img :src="imageUrl" class="bg-image" :style="imageClipStyle" draggable="false" @load="onImageLoad" @error="onImageError" />
              
              <!-- Drawing Layer -->
              <svg class="drawing-layer" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -332,9 +368,37 @@ button { margin-left: 8px; }
 
 .loading-overlay {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    display: flex; justify-content: center; align-items: center;
-    background: rgba(15, 23, 42, 0.8); color: white;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    background: rgba(15, 23, 42, 0.85); color: white;
     z-index: 5;
+    gap: 12px;
     font-weight: 500;
+}
+
+.annotator-spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid rgba(255, 255, 255, 0.2);
+    border-top-color: var(--color-primary, #6366f1);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.error-overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    background: rgba(24, 24, 27, 0.95); color: #ef4444;
+    border: 2px dashed rgba(239, 68, 68, 0.4);
+    z-index: 5;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.err-icon {
+    font-size: 32px;
 }
 </style>

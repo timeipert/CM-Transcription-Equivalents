@@ -27,7 +27,7 @@ function continueToApp() {
 <template>
 <div class="setup-view">
     <div class="setup-card">
-        <h1>Welcome to CM Transcription</h1>
+        <h1>Welcome to Neume Viewer</h1>
         <p class="subtitle">Set up your workspace to continue.</p>
 
         <div v-if="storage.isSupported" class="supported-section">

@@ -38,16 +38,60 @@ async function doExportStaticSite() {
 }
 
 // Data Management
-const { exportData, exportManuscripts, analyzeImportFiles, executeImport, clearAllData } = useDataManagement();
+import { getManuscriptStats } from '../utils/workspaceSharing';
+import ManuscriptCleanupModal from '../components/ManuscriptCleanupModal.vue';
+const { 
+    exportData, 
+    exportManuscripts, 
+    exportConfiguration, 
+    importConfiguration, 
+    analyzeImportFiles, 
+    executeImport, 
+    clearAllData,
+    getLocalFullState
+} = useDataManagement();
+
 const fileInput = ref(null);
+const configFileInput = ref(null);
 const selectedManuscriptsToExport = ref([]);
 const importMsg = ref("");
 const importStatus = ref(""); // 'success' or 'error'
+
+// Cleanup Modal State
+const cleanupModalSource = ref('');
+const showCleanupModal = ref(false);
+
+function openCleanup(source) {
+    cleanupModalSource.value = source;
+    showCleanupModal.value = true;
+}
+
+function onManuscriptDeleted(msg) {
+    importMsg.value = msg;
+    importStatus.value = "success";
+    setTimeout(() => importMsg.value = "", 4000);
+}
+
+// Manuscripts that actually contain data
+const manuscriptsWithData = computed(() => {
+    const state = getLocalFullState();
+    const list = availableSources.value.map(src => {
+        const stats = getManuscriptStats(state, src);
+        return {
+            source: src,
+            ...stats
+        };
+    }).filter(m => m.hasData);
+
+    list.sort((a, b) => b.annotationsCount - a.annotationsCount || a.source.localeCompare(b.source));
+    return list;
+});
 
 // Merge Modal State
 const showMergeModal = ref(false);
 const pendingAnalysis = ref(null);
 const mergeChoices = ref({});
+const importSettingsChoice = ref(true);
 
 function doClearAll() {
     if (confirm("Are you sure you want to delete ALL your local annotations, regions, and tables? This cannot be undone! Make sure you export a JSON backup first.")) {
@@ -59,12 +103,47 @@ function doClearAll() {
 }
 
 function doExportWorkspace() {
-    exportData();
+    exportData({ includeSettings: false, onlyWithData: true });
+}
+
+function doExportWorkspaceWithSettings() {
+    exportData({ includeSettings: true, onlyWithData: true });
 }
 
 function doExportManuscripts() {
     if (selectedManuscriptsToExport.value.length > 0) {
-        exportManuscripts(selectedManuscriptsToExport.value);
+        try {
+            exportManuscripts(selectedManuscriptsToExport.value);
+        } catch (e) {
+            alert(e.message);
+        }
+    }
+}
+
+function doExportConfig() {
+    exportConfiguration();
+}
+
+async function doImportConfig(event) {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    try {
+        const results = await analyzeImportFiles(files);
+        const res = results[0];
+        if (!res.success) {
+            importMsg.value = `Error: ${res.error}`;
+            importStatus.value = "error";
+            return;
+        }
+        importConfiguration(res.parsed);
+        importMsg.value = "Configuration loaded successfully!";
+        importStatus.value = "success";
+        setTimeout(() => importMsg.value = "", 4000);
+    } catch (e) {
+        importMsg.value = `Config Error: ${e.message}`;
+        importStatus.value = "error";
+    } finally {
+        event.target.value = null;
     }
 }
 
@@ -77,7 +156,6 @@ async function doImport(event) {
     
     try {
         const results = await analyzeImportFiles(files);
-        // We handle only the first file for simplicity in conflict resolution
         const result = results[0];
         
         if (!result.success) {
@@ -86,18 +164,31 @@ async function doImport(event) {
             return;
         }
 
+        // If it's a standalone config file, apply directly
+        if (result.isConfigOnly) {
+            importConfiguration(result.parsed);
+            importMsg.value = "Configuration file imported successfully!";
+            importStatus.value = "success";
+            setTimeout(() => importMsg.value = "", 4000);
+            return;
+        }
+
         if (result.overlapSources.length > 0) {
             // Need conflict resolution
             pendingAnalysis.value = result;
             mergeChoices.value = {};
-            result.overlapSources.forEach(src => mergeChoices.value[src] = 'skip');
+            importSettingsChoice.value = result.hasSettings;
+            // Default: if incoming has data, default to skip; if incoming empty, force skip
+            result.overlapSources.forEach(item => {
+                mergeChoices.value[item.source] = 'skip';
+            });
             showMergeModal.value = true;
             importMsg.value = "Merge resolution required.";
             importStatus.value = "";
         } else {
             // No overlaps, execute immediately
-            executeImport(result.parsed, {});
-            importMsg.value = "Success! Data imported seamlessly.";
+            executeImport(result.parsed, {}, { importSettings: true });
+            importMsg.value = `Success! Imported ${result.newSources.length} manuscript(s).`;
             importStatus.value = "success";
             setTimeout(() => importMsg.value = "", 4000);
         }
@@ -111,15 +202,19 @@ async function doImport(event) {
 
 function setAllMergeChoices(choice) {
     if (pendingAnalysis.value && pendingAnalysis.value.overlapSources) {
-        pendingAnalysis.value.overlapSources.forEach(src => {
-            mergeChoices.value[src] = choice;
+        pendingAnalysis.value.overlapSources.forEach(item => {
+            // Do not allow overwrite/copy if incoming has no data
+            if (choice !== 'skip' && !item.incomingStats.hasData) return;
+            mergeChoices.value[item.source] = choice;
         });
     }
 }
 
 function confirmMerge() {
     try {
-        executeImport(pendingAnalysis.value.parsed, mergeChoices.value);
+        executeImport(pendingAnalysis.value.parsed, mergeChoices.value, { 
+            importSettings: importSettingsChoice.value 
+        });
         showMergeModal.value = false;
         importMsg.value = "Success! Data imported and merged.";
         importStatus.value = "success";
@@ -147,6 +242,31 @@ function addMapping() {
         store.setGlobalId(newPattern.value, newId.value);
         newPattern.value = "";
         newId.value = "";
+    }
+}
+
+// UI State for Neume Names
+import { DEFAULT_NEUME_NAMES, getNeumeName } from '../config/neumeNames';
+const newNeumePattern = ref("");
+const newNeumeName = ref("");
+
+const allDisplayNeumeNames = computed(() => {
+    // Combine defaults and user overrides
+    const combined = { ...DEFAULT_NEUME_NAMES, ...store.neumeNames };
+    return combined;
+});
+
+function addNeumeNameMapping() {
+    if (newNeumePattern.value && newNeumeName.value) {
+        store.setNeumeName(newNeumePattern.value, newNeumeName.value);
+        newNeumePattern.value = "";
+        newNeumeName.value = "";
+    }
+}
+
+function resetDefaultNeumeNames() {
+    if (confirm("Reset all custom neume names to standard defaults?")) {
+        store.neumeNames = {};
     }
 }
 
@@ -261,42 +381,97 @@ const alignPreview = computed(() => {
 
     <div class="card section">
         <h2>Share / Backup</h2>
-        <p class="desc">Save and load your annotations to portable JSON files.</p>
+        <p class="desc">Save and load your annotations to portable JSON files. Only manuscripts with actual data are included.</p>
         
-        <div class="backup-actions" style="flex-wrap: wrap;">
-            <!-- Whole Workspace -->
-            <div class="backup-group" style="flex: 1; min-width: 250px; background: var(--color-bg); padding: 15px; border-radius: 8px;">
-                <h3 class="mt-0">Whole Workspace</h3>
+        <div class="backup-actions" style="flex-wrap: wrap; gap: 15px;">
+            <!-- Whole Workspace Backup -->
+            <div class="backup-group" style="flex: 1; min-width: 260px; background: var(--color-bg); padding: 15px; border-radius: 8px; border: 1px solid var(--color-border);">
+                <h3 class="mt-0">Annotated Manuscripts</h3>
+                <p class="text-sm-muted-mt0">Exports all manuscripts that have annotations/data.</p>
                 <div class="setting-row">
                     <label>Backup Label</label>
                     <input v-model="store.backupLabel" placeholder="transcription_eqv" class="text-input" style="width: 100%; box-sizing: border-box;">
                 </div>
-                <button @click="doExportWorkspace" class="btn-primary">Export Workspace</button>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button @click="doExportWorkspace" class="btn-primary">Export Manuscripts</button>
+                    <button @click="doExportWorkspaceWithSettings" class="btn-secondary" title="Includes app settings and alignments in the export">Include Settings</button>
+                </div>
             </div>
             
-            <!-- Per-Manuscript -->
-            <div class="backup-group" style="flex: 1; min-width: 250px; background: var(--color-bg); padding: 15px; border-radius: 8px;">
-                <h3 class="mt-0">Specific Manuscripts</h3>
+            <!-- Per-Manuscript Export -->
+            <div class="backup-group" style="flex: 1; min-width: 260px; background: var(--color-bg); padding: 15px; border-radius: 8px; border: 1px solid var(--color-border);">
+                <h3 class="mt-0">Specific Manuscript(s)</h3>
+                <p class="text-sm-muted-mt0">Select specific manuscripts with data to export.</p>
                 <div class="setting-row">
-                    <label>Select Manuscript(s)</label>
-                    <select v-model="selectedManuscriptsToExport" multiple class="text-input" style="height: 60px; width: 100%; box-sizing: border-box;">
-                        <option v-for="src in availableSources" :key="src" :value="src">{{ src }}</option>
+                    <select v-model="selectedManuscriptsToExport" multiple class="text-input" style="height: 85px; width: 100%; box-sizing: border-box;">
+                        <option v-for="ms in manuscriptsWithData" :key="ms.source" :value="ms.source">
+                            {{ ms.source }} ({{ ms.annotationsCount }} snips, {{ ms.foliosCount }} fols)
+                        </option>
                     </select>
                 </div>
-                <button @click="doExportManuscripts" class="btn-primary" :disabled="!selectedManuscriptsToExport.length">Export Manuscript(s)</button>
+                <button @click="doExportManuscripts" class="btn-primary" :disabled="!selectedManuscriptsToExport.length">
+                    Export Selected ({{ selectedManuscriptsToExport.length }})
+                </button>
+            </div>
+
+            <!-- Standalone Configuration File -->
+            <div class="backup-group" style="flex: 1; min-width: 260px; background: var(--color-bg); padding: 15px; border-radius: 8px; border: 1px solid var(--color-border);">
+                <h3 class="mt-0">Configuration Files</h3>
+                <p class="text-sm-muted-mt0">Save display modes, preferred IDs, neume names, and folio alignments separately.</p>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 15px;">
+                    <button @click="doExportConfig" class="btn-primary">Export Config</button>
+                    <div class="import-zone">
+                        <input type="file" ref="configFileInput" @change="doImportConfig" accept=".json" class="d-none">
+                        <button @click="$refs.configFileInput.click()" class="btn-secondary">Import Config</button>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="backup-actions mt-20" style="background: var(--color-bg); padding: 15px; border-radius: 8px;">
+        <div class="backup-actions mt-20" style="background: var(--color-bg); padding: 15px; border-radius: 8px; border: 1px solid var(--color-border);">
             <div class="import-zone">
                 <input type="file" ref="fileInput" @change="doImport" accept=".json" multiple class="d-none">
-                <button @click="$refs.fileInput.click()" class="btn-secondary">Import File</button>
+                <button @click="$refs.fileInput.click()" class="btn-primary">Import Backup / Manuscript File</button>
             </div>
             
             <div class="flex-1"></div>
             <button @click="doClearAll" class="btn-danger btn-secondary border-danger">Remove All Data</button>
         </div>
         <div v-if="importMsg" :class="['msg', importStatus]">{{ importMsg }}</div>
+
+        <!-- Individual Manuscript Management & Deletion Table -->
+        <div v-if="manuscriptsWithData.length" class="mt-20" style="background: var(--color-bg); padding: 15px; border-radius: 8px; border: 1px solid var(--color-border);">
+            <h3 class="mt-0">Manuscripts in Workspace ({{ manuscriptsWithData.length }})</h3>
+            <p class="text-sm-muted-mt0">Manage data, export, or selectively clean annotations for individual manuscripts.</p>
+            
+            <div style="overflow-x: auto; margin-top: 12px;">
+                <table class="ms-manage-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid var(--color-border); text-align: left;">
+                            <th style="padding: 8px;">Manuscript</th>
+                            <th style="padding: 8px;">Annotations / Snippets</th>
+                            <th style="padding: 8px;">Line Regions</th>
+                            <th style="padding: 8px;">Table Rows</th>
+                            <th style="padding: 8px; text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="ms in manuscriptsWithData" :key="ms.source" style="border-bottom: 1px solid var(--color-border);">
+                            <td style="padding: 8px; font-weight: 600;">{{ ms.source }}</td>
+                            <td style="padding: 8px;">{{ ms.annotationsCount }} snippets ({{ ms.foliosCount }} folios)</td>
+                            <td style="padding: 8px;">{{ ms.regionsCount }} lines</td>
+                            <td style="padding: 8px;">{{ ms.patternRowsCount }} patterns</td>
+                            <td style="padding: 8px; text-align: right;">
+                                <div style="display: inline-flex; gap: 6px;">
+                                    <button class="btn-xs" @click="exportManuscripts([ms.source])">Export</button>
+                                    <button class="btn-xs btn-danger-outline" @click="openCleanup(ms.source)" title="Delete or clean annotations for this manuscript">🗑 Manage / Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
         <div class="mt-20" style="background: var(--color-bg); padding: 15px; border-radius: 8px; border-left: 4px solid var(--accent-color);">
             <h3 class="mt-0" style="color: var(--accent-color);">Static Public Site (HTML &amp; Markdown)</h3>
@@ -364,6 +539,48 @@ const alignPreview = computed(() => {
                 </tbody>
             </table>
             <div v-else class="empty">No global ID preferences set</div>
+        </div>
+    </div>
+
+    <div class="card section">
+        <div class="flex-between-mb10">
+            <h2>Neume Names (Neumentabelle)</h2>
+            <button @click="resetDefaultNeumeNames" class="btn-sm btn-secondary" title="Reset custom names to defaults">Reset to Defaults</button>
+        </div>
+        <p class="desc">Define or customize human-readable chant names for patterns (e.g., "*u" &rarr; "Pes", "*d" &rarr; "Clivis"). These will appear in the Neumentabelle column headers.</p>
+
+        <div class="add-row">
+            <input v-model="newNeumePattern" placeholder="Pattern (e.g. *u)" />
+            <input v-model="newNeumeName" placeholder="Neume Name (e.g. Pes)" />
+            <button @click="addNeumeNameMapping" :disabled="!newNeumePattern || !newNeumeName">Save Name</button>
+        </div>
+
+        <div class="ids-list">
+            <table v-if="Object.keys(allDisplayNeumeNames).length > 0">
+                <thead>
+                    <tr>
+                        <th>Pattern</th>
+                        <th>Neume Name</th>
+                        <th>Type</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="(name, pat) in allDisplayNeumeNames" :key="pat">
+                        <td class="code-font">{{ pat }}</td>
+                        <td>{{ name }}</td>
+                        <td>
+                            <span v-if="store.neumeNames && store.neumeNames[pat]" class="badge">Custom</span>
+                            <span v-else class="text-sm-light">Default</span>
+                        </td>
+                        <td>
+                            <button v-if="store.neumeNames && store.neumeNames[pat]" @click="store.removeNeumeName(pat)" class="btn-sm btn-danger">Remove</button>
+                            <span v-else class="text-sm-light">—</span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            <div v-else class="empty">No neume names defined</div>
         </div>
     </div>
 
@@ -467,18 +684,20 @@ const alignPreview = computed(() => {
 
     <!-- Merge Conflict Modal -->
     <div v-if="showMergeModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content" style="width: 750px; max-width: 95vw;">
             <div class="modal-header">
                 <h3>Merge Conflict Resolution</h3>
                 <span class="close" @click="cancelMerge">&times;</span>
             </div>
             <div class="modal-body">
-                <p>The imported file contains data for manuscripts that already exist in your workspace.</p>
+                <p>The imported file <strong>{{ pendingAnalysis.fileName }}</strong> contains data for manuscripts that already exist in your workspace.</p>
                 
-                <div v-if="pendingAnalysis.newSources.length > 0" class="merge-section">
+                <div v-if="pendingAnalysis.newSources && pendingAnalysis.newSources.length > 0" class="merge-section">
                     <h4>New Manuscripts (Will be imported safely)</h4>
                     <div class="new-sources-list">
-                        <span v-for="src in pendingAnalysis.newSources" :key="src" class="badge">{{ src }}</span>
+                        <span v-for="item in pendingAnalysis.newSources" :key="item.source" class="badge">
+                            {{ item.source }} ({{ item.incomingStats.annotationsCount }} snips, {{ item.incomingStats.foliosCount }} fols)
+                        </span>
                     </div>
                 </div>
 
@@ -492,26 +711,59 @@ const alignPreview = computed(() => {
                             <button type="button" class="btn-bulk btn-bulk-danger" @click="setAllMergeChoices('overwrite')">Overwrite All</button>
                         </div>
                     </div>
-                    <p class="desc">Choose whether to overwrite your local data with the imported data, or skip importing these specific manuscripts.</p>
+                    <p class="desc">Compare the incoming vs local data metrics below and select the desired action for each manuscript.</p>
+                    
                     <div class="conflict-list">
-                        <div v-for="src in pendingAnalysis.overlapSources" :key="src" class="conflict-item">
-                            <span class="src-name">{{ src }}</span>
-                            <div class="conflict-actions">
-                                <label class="radio-label" :class="{selected: mergeChoices[src]==='skip'}">
-                                    <input type="radio" :name="'merge_'+src" value="skip" v-model="mergeChoices[src]">
+                        <div v-for="item in pendingAnalysis.overlapSources" :key="item.source" class="conflict-card">
+                            <div class="conflict-header-row">
+                                <span class="src-name">{{ item.source }}</span>
+                                <div class="conflict-stats-row">
+                                    <div class="stat-pill incoming">
+                                        <strong>Incoming File:</strong>
+                                        <span v-if="item.incomingStats.hasData">
+                                            {{ item.incomingStats.annotationsCount }} snips across {{ item.incomingStats.foliosCount }} fols ({{ item.incomingStats.foliosList.slice(0, 4).join(', ') }}{{ item.incomingStats.foliosList.length > 4 ? '...' : '' }})
+                                        </span>
+                                        <span v-else class="text-muted">Empty (0 annotations)</span>
+                                    </div>
+                                    <div class="stat-pill local">
+                                        <strong>Local Workspace:</strong>
+                                        <span v-if="item.localStats.hasData">
+                                            {{ item.localStats.annotationsCount }} snips across {{ item.localStats.foliosCount }} fols ({{ item.localStats.foliosList.slice(0, 4).join(', ') }}{{ item.localStats.foliosList.length > 4 ? '...' : '' }})
+                                        </span>
+                                        <span v-else class="text-muted">Empty</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="conflict-actions mt-10">
+                                <label class="radio-label" :class="{ selected: mergeChoices[item.source] === 'skip' }">
+                                    <input type="radio" :name="'merge_' + item.source" value="skip" v-model="mergeChoices[item.source]">
                                     Skip
                                 </label>
-                                <label :class="['radio-label', { selected: mergeChoices[src] === 'copy' }]">
-                                    <input type="radio" :name="'merge_'+src" value="copy" v-model="mergeChoices[src]">
+                                <label 
+                                    :class="['radio-label', { selected: mergeChoices[item.source] === 'copy', disabled: !item.incomingStats.hasData }]"
+                                    :title="!item.incomingStats.hasData ? 'Cannot copy empty manuscript' : ''"
+                                >
+                                    <input type="radio" :name="'merge_' + item.source" value="copy" v-model="mergeChoices[item.source]" :disabled="!item.incomingStats.hasData">
                                     Import as Copy
                                 </label>
-                                <label :class="['radio-label overwrite', { selected: mergeChoices[src] === 'overwrite' }]">
-                                    <input type="radio" :name="'merge_'+src" value="overwrite" v-model="mergeChoices[src]">
+                                <label 
+                                    :class="['radio-label overwrite', { selected: mergeChoices[item.source] === 'overwrite', disabled: !item.incomingStats.hasData }]"
+                                    :title="!item.incomingStats.hasData ? 'Cannot overwrite with empty manuscript' : ''"
+                                >
+                                    <input type="radio" :name="'merge_' + item.source" value="overwrite" v-model="mergeChoices[item.source]" :disabled="!item.incomingStats.hasData">
                                     Overwrite Local
                                 </label>
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <div v-if="pendingAnalysis.hasSettings" class="merge-section">
+                    <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" v-model="importSettingsChoice" />
+                        <strong>Import App Settings &amp; Preferences</strong> (global IDs, neume names, alignments) from this file
+                    </label>
                 </div>
             </div>
             <div class="modal-footer">
@@ -520,6 +772,14 @@ const alignPreview = computed(() => {
             </div>
         </div>
     </div>
+
+    <!-- Manuscript Cleanup & Deletion Modal -->
+    <ManuscriptCleanupModal
+        :isOpen="showCleanupModal"
+        :source="cleanupModalSource"
+        @close="showCleanupModal = false"
+        @deleted="onManuscriptDeleted"
+    />
 </div>
 </template>
 
@@ -591,15 +851,22 @@ th { background: var(--color-surface-muted); font-weight: 600; }
 .new-sources-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .badge { background: var(--color-primary-light); color: var(--color-primary-active); padding: 4px 10px; border-radius: 20px; font-size: 0.85em; font-weight: 500; }
 
-.conflict-list { display: flex; flex-direction: column; gap: 10px; }
-.conflict-item { display: flex; justify-content: space-between; align-items: center; background: white; padding: 12px 15px; border-radius: 6px; border: 1px solid var(--color-border); }
-.src-name { font-weight: bold; color: var(--color-text); }
-.conflict-actions { display: flex; gap: 10px; }
+.conflict-list { display: flex; flex-direction: column; gap: 12px; }
+.conflict-card { background: white; padding: 14px 16px; border-radius: 8px; border: 1px solid var(--color-border); box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
+.conflict-header-row { display: flex; flex-direction: column; gap: 6px; }
+.conflict-stats-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.stat-pill { font-size: 0.8rem; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--color-border); }
+.stat-pill.incoming { background: var(--color-primary-light); color: var(--color-primary-dark); border-color: var(--color-primary-light); }
+.stat-pill.local { background: var(--color-surface-muted); color: var(--color-text); }
+.src-name { font-weight: 700; font-size: 1.05rem; color: var(--color-text); }
+.conflict-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .radio-label { display: flex; align-items: center; gap: 5px; cursor: pointer; padding: 6px 12px; border-radius: 4px; border: 1px solid var(--color-border); background: var(--color-bg); transition: all 0.2s; font-size: 0.9em; }
-.radio-label:hover { background: #f0f0f0; }
+.radio-label:hover:not(.disabled) { background: #f0f0f0; }
 .radio-label.selected { background: var(--color-success-light, var(--color-success-light)); border-color: var(--color-success); color: var(--color-success); font-weight: 500; }
 .radio-label.overwrite.selected { background: var(--color-danger-light, var(--color-danger-light)); border-color: var(--color-danger); color: var(--color-danger); }
+.radio-label.disabled { opacity: 0.45; cursor: not-allowed; }
 .radio-label input { margin: 0; }
+.text-muted { color: var(--color-text-muted); font-style: italic; }
 
 .alignment-editor { margin-top: 15px; padding: 15px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 6px; }
 .align-grid { display: flex; gap: 40px; margin-bottom: 20px; }

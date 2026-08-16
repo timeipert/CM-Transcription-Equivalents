@@ -28,6 +28,13 @@ transcription_equivalents.html
 # Image Binaries (Ignore large folders)
 ui/public/scans/
 
+# OMMR4all test export (large local data, ~200MB)
+ommr_import/
+
+# Local editor / agent config
+.claude/
+ui/.claude/
+
 # Agentic / Antigrav
 .gemini/
 .agent/

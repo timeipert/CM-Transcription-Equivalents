@@ -4,8 +4,11 @@ import TranscriptionEquivalentsView from '../views/TranscriptionEquivalentsView.
 import ManuscriptAnnotationsView from '../views/ManuscriptAnnotationsView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import PolygonManagerView from '../views/PolygonManagerView.vue'
+import RegionEditorView from '../views/RegionEditorView.vue'
+import OmmrExplorerView from '../views/OmmrExplorerView.vue'
 import PublicManuscriptsView from '../views/PublicManuscriptsView.vue'
 import PublicNotationView from '../views/PublicNotationView.vue'
+import PublicNeumeTableView from '../views/PublicNeumeTableView.vue'
 import SetupView from '../views/SetupView.vue'
 
 // Import storage for guard
@@ -40,6 +43,12 @@ const router = createRouter({
       meta: { title: 'Manuscript Annotations', requiresWorkspace: true }
     },
     {
+      path: '/ommr',
+      name: 'ommr_explorer',
+      component: OmmrExplorerView,
+      meta: { title: 'Import', requiresWorkspace: true }
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: SettingsView,
@@ -52,10 +61,22 @@ const router = createRouter({
       meta: { title: 'Manuscripts', requiresWorkspace: true }
     },
     {
+      path: '/polygons/edit-region',
+      name: 'region_editor',
+      component: RegionEditorView,
+      meta: { title: 'Edit Line Region', requiresWorkspace: true }
+    },
+    {
       path: '/public',
       name: 'public_directory',
       component: PublicManuscriptsView,
       meta: { title: 'Public Directory' }
+    },
+    {
+      path: '/public/table',
+      name: 'public_neume_table',
+      component: PublicNeumeTableView,
+      meta: { title: 'Neumentabelle' }
     },
     {
       path: '/public/:source',
@@ -102,9 +123,9 @@ router.afterEach((to) => {
   }
 
   if (title) {
-    document.title = `${title} — CM Transcription`;
+    document.title = `${title} — Neume Viewer`;
   } else {
-    document.title = 'CM Transcription';
+    document.title = 'Neume Viewer';
   }
 })
 

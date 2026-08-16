@@ -3,14 +3,21 @@ import { ref, watch, computed, reactive } from 'vue';
 import { useTranscriptionData } from '../../composables/useTranscriptionData';
 import { useImageManifest, compareFolios } from '../../composables/useImageManifest';
 import { useIiifStore } from '../../stores/iiif';
+import { useAnnotationsStore } from '../../stores/annotations';
 
 const props = defineProps(['selectedSource', 'selectedFolio']);
 const emits = defineEmits(['select']);
 
 const iiifStore = useIiifStore();
+const annotStore = useAnnotationsStore();
 
 const { sourceFolios, loading: dataLoading } = useTranscriptionData();
 const { manifest, hasImage, loaded: manifestLoaded, getManifestStructure, getStandardFolio, hasTranscriptionData } = useImageManifest();
+
+function getFolioRegionsCount(src, fol) {
+    const key = `${src}_${fol}`;
+    return (annotStore.regions[key] || []).length;
+}
 
 // Tree Structure
 const tree = computed(() => {
@@ -159,11 +166,18 @@ async function submitIiif() {
                        @click.stop />
                 <div v-for="fol in folios.filter(f => !folioSearch[src] || f.toLowerCase().includes(folioSearch[src].toLowerCase()))" :key="fol" 
                      class="folio-item" 
-                     :class="{active: selectedSource===src && selectedFolio===fol, 'has-data': hasTranscriptionData(src, fol)}"
-                     :title="hasTranscriptionData(src, fol) ? 'This page contains Monodi transcription data' : ''"
+                     :class="{
+                         active: selectedSource===src && selectedFolio===fol, 
+                         'has-data': hasTranscriptionData(src, fol),
+                         'has-regions': getFolioRegionsCount(src, fol) > 0
+                      }"
+                     :title="(getFolioRegionsCount(src, fol) > 0 ? `${getFolioRegionsCount(src, fol)} line regions annotated. ` : '') + (hasTranscriptionData(src, fol) ? 'Contains Monodi data' : '')"
                      @click="onSelect(src, fol)">
                     <span v-if="hasTranscriptionData(src, fol)" class="data-indicator">•</span>
-                    {{ fol }}
+                    <span class="folio-name">{{ fol }}</span>
+                    <span v-if="getFolioRegionsCount(src, fol) > 0" class="folio-lines-badge">
+                        {{ getFolioRegionsCount(src, fol) }}L
+                    </span>
                 </div>
             </div>
         </div>
@@ -217,12 +231,16 @@ async function submitIiif() {
 .chevron { font-size: 0.8em; color: var(--color-text-light); }
 .folio-list { padding-left: 15px; padding-bottom: 5px; }
 .folio-search { width: 90%; margin: 4px 0 8px 4px; padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 4px; font-size: 0.85em; }
-.folio-item { padding: 4px 10px; cursor: pointer; border-radius: 4px; font-family: monospace; font-size: 0.9em; margin-bottom: 1px; display: flex; align-items: center; gap: 6px; }
+.folio-item { padding: 4px 10px; cursor: pointer; border-radius: 4px; font-family: monospace; font-size: 0.9em; margin-bottom: 1px; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .folio-item:hover { background: var(--color-border); }
 .folio-item.active { background: var(--color-primary); color: white; }
 .folio-item.has-data { font-weight: 600; color: var(--color-text); }
+.folio-item.has-regions { border-left: 3px solid var(--color-success); }
 .folio-item.active.has-data { color: white; }
-.data-indicator { color: var(--color-warning); font-size: 1.2em; line-height: 0.5; }
+.data-indicator { color: var(--color-warning); font-size: 1.2em; line-height: 0.5; margin-right: 2px; }
+.folio-name { flex: 1; }
+.folio-lines-badge { background: #dcfce7; color: #166534; font-size: 0.72rem; padding: 1px 5px; border-radius: 10px; font-weight: 700; border: 1px solid #bbf7d0; }
+.folio-item.active .folio-lines-badge { background: rgba(255,255,255,0.25); color: white; border-color: rgba(255,255,255,0.4); }
 
 /* Modals */
 .modal { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); display:flex; justify-content:center; align-items:center; z-index:1000; }

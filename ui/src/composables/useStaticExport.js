@@ -20,8 +20,10 @@ import { useSettingsStore } from '../stores/settings';
 import { useTranscriptionData } from './useTranscriptionData';
 import { useImageManifest } from './useImageManifest';
 import { buildPatternRefMap, buildManuscriptLines, pointsBoundingBox } from './usePublicNotation';
-import { comparePatternIds } from '../utils/sorting';
+import { comparePatternIds, compareChantPatterns } from '../utils/sorting';
 import { renderSvg } from '../utils/svgRenderer';
+
+import { getNeumeName } from '../config/neumeNames';
 
 // ---- small utilities -------------------------------------------------------
 
@@ -164,13 +166,13 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Hel
 a{color:var(--color-primary-hover);text-decoration:none;} a:hover{text-decoration:underline;}
 code,.mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;}
 .header{background:linear-gradient(135deg,var(--color-surface) 0%,var(--color-surface-muted) 100%);border-bottom:1px solid var(--color-border);padding:40px 20px;}
-.header-content{max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:12px;}
+.header-content{max-width:1400px;margin:0 auto;display:flex;flex-direction:column;gap:12px;}
 .back-link{color:var(--color-text-muted);font-weight:600;font-size:.85rem;}
 .brand{color:var(--color-primary-hover);font-size:.9rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;}
 h1{margin:4px 0 0;font-size:2.6rem;font-weight:800;letter-spacing:-.02em;}
 .subtitle{margin:2px 0 0;color:var(--color-text-muted);font-size:1.2rem;font-weight:500;}
 .notes-text{margin-top:10px;white-space:pre-wrap;max-width:800px;font-size:1.02rem;}
-.main-content{max-width:1200px;margin:40px auto;padding:0 20px;display:flex;flex-direction:column;gap:50px;}
+.main-content{max-width:1400px;margin:40px auto;padding:0 20px;display:flex;flex-direction:column;gap:50px;}
 .section-header{display:flex;align-items:center;gap:16px;margin-bottom:20px;border-bottom:1px solid var(--color-border);padding-bottom:12px;flex-wrap:wrap;}
 .section-header h2{margin:0;font-size:1.5rem;font-weight:700;}
 .badge{background:var(--color-primary-hover);color:#fff;padding:4px 12px;border-radius:20px;font-size:.85rem;font-weight:700;}
@@ -202,15 +204,39 @@ h1{margin:4px 0 0;font-size:2.6rem;font-weight:800;letter-spacing:-.02em;}
 .labels-layer{position:absolute;inset:0;pointer-events:none;}
 .html-label{position:absolute;transform:translate(-50%,-100%) translateY(-2px);background:#fff;border:1px solid #000;color:#000;padding:1px 4px;font-size:10px;font-family:"JetBrains Mono",monospace;font-weight:600;line-height:1;white-space:nowrap;border-radius:2px;box-shadow:0 2px 4px rgba(0,0,0,.1);}
 .missing-img{padding:20px;text-align:center;color:var(--color-text-light);font-style:italic;background:var(--color-surface-muted);border-radius:8px;}
-/* directory */
+/* directory & nav tabs */
 .dir-container{max-width:1000px;margin:0 auto;padding:40px 20px;}
-.dir-header{text-align:center;margin-bottom:40px;}
+.dir-header{text-align:center;margin-bottom:40px;display:flex;flex-direction:column;align-items:center;gap:12px;}
+.top-nav-bar{display:inline-flex;gap:8px;background:var(--color-surface-muted);padding:4px;border-radius:8px;border:1px solid var(--color-border);margin-bottom:12px;}
+.nav-tab{background:transparent;border:none;padding:6px 16px;border-radius:6px;color:var(--color-text-muted);font-size:.9rem;font-weight:600;text-decoration:none;display:inline-block;}
+.nav-tab:hover{color:var(--color-text);text-decoration:none;}
+.nav-tab.active{background:#fff;color:var(--color-primary-hover);box-shadow:0 1px 3px rgba(0,0,0,.1);}
 .ms-table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--color-border);border-radius:12px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,.05);}
 .ms-table th{background:var(--color-bg);padding:16px 24px;font-size:.85rem;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.025em;border-bottom:1px solid var(--color-border);text-align:left;}
 .ms-table td{padding:16px 24px;border-bottom:1px solid var(--color-surface-muted);}
 .ms-table tr:last-child td{border-bottom:none;}
 .ms-table .num{text-align:right;}
 .pill{background:var(--color-primary-light);color:var(--color-primary-hover);padding:4px 10px;border-radius:20px;font-size:.8rem;font-weight:600;}
+
+/* Neumentabelle Matrix */
+.matrix-wrapper{max-width:100%;overflow-x:auto;margin:20px 0;background:#fff;border:1px solid var(--color-border);border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,.05);}
+.neume-matrix{border-collapse:separate;border-spacing:0;width:100%;text-align:left;}
+.matrix-corner{position:sticky;left:0;top:0;z-index:4;background:var(--color-bg);padding:16px;min-width:200px;border-bottom:2px solid var(--color-border);border-right:2px solid var(--color-border);font-weight:700;font-size:.8rem;color:var(--color-text-muted);text-transform:uppercase;}
+.matrix-pat-th{position:sticky;top:0;z-index:3;background:var(--color-bg);padding:12px 14px;border-bottom:2px solid var(--color-border);border-right:1px solid var(--color-border);text-align:center;min-width:130px;vertical-align:top;}
+.matrix-pat-box{display:flex;flex-direction:column;align-items:center;gap:4px;}
+.matrix-pat-svg{height:36px;display:flex;align-items:center;justify-content:center;}
+.matrix-pat-code{font-family:"JetBrains Mono",monospace;font-size:.85rem;font-weight:700;}
+.matrix-pat-name{font-size:.72rem;font-weight:600;color:var(--color-primary-hover);background:var(--color-primary-light);padding:1px 6px;border-radius:4px;white-space:nowrap;}
+.matrix-ms-td{position:sticky;left:0;z-index:2;background:#fff;padding:16px 20px;border-bottom:1px solid var(--color-border);border-right:2px solid var(--color-border);vertical-align:top;min-width:200px;}
+.matrix-ms-td strong{display:block;font-size:1.05rem;color:var(--color-text);}
+.matrix-ms-td .ms-sub{font-size:.8rem;color:var(--color-text-muted);display:block;}
+.matrix-snip-td{padding:10px;border-bottom:1px solid var(--color-border);border-right:1px solid var(--color-surface-muted);vertical-align:top;}
+.matrix-snip-list{display:flex;flex-wrap:wrap;gap:8px;}
+.matrix-snip-card{background:#fff;border:1px solid var(--color-border);border-radius:6px;padding:4px;display:flex;flex-direction:column;align-items:center;gap:2px;max-width:120px;}
+.matrix-snip-card img{display:block;width:100%;height:auto;border-radius:4px;}
+.matrix-snip-meta{display:flex;justify-content:space-between;width:100%;font-size:.68rem;font-family:"JetBrains Mono",monospace;padding:2px 2px 0;}
+.matrix-snip-id{font-weight:700;color:var(--color-primary-hover);}
+.matrix-snip-fol{color:var(--color-text-muted);}
 @media(max-width:768px){.table-columns{flex-direction:column;} h1{font-size:2rem;}}
 `;
 }
@@ -367,7 +393,12 @@ function directoryHtml(entries) {
 </tr>`).join('');
 
     const body = `<div class="dir-container">
-<div class="dir-header"><div class="brand">Notationsdokumentation</div><h1>Manuscripts</h1><p class="subtitle">Static export — ${todayStr()}</p></div>
+<div class="dir-header">
+<div class="top-nav-bar">
+<span class="nav-tab active">Manuscript Directory</span>
+<a class="nav-tab" href="neumentabelle.html">Neumentabelle (Comparison) &rarr;</a>
+</div>
+<div class="brand">Notationsdokumentation</div><h1>Manuscripts</h1><p class="subtitle">Static export — ${todayStr()}</p></div>
 <table class="ms-table">
 <thead><tr><th>Source</th><th>Manuscript Title</th><th class="num">Patterns</th><th class="num"></th></tr></thead>
 <tbody>${rows || '<tr><td colspan="4">No published manuscripts.</td></tr>'}</tbody>
@@ -378,10 +409,120 @@ function directoryHtml(entries) {
 
 function directoryMarkdown(entries) {
     let md = `# Notationsdokumentation — Manuscripts\n\nStatic export — ${todayStr()}\n\n`;
+    md += `[View Neumentabelle (Comparison)](neumentabelle.md)\n\n`;
     md += `| Source | Manuscript Title | Patterns |\n| --- | --- | --- |\n`;
     for (const e of entries) {
         md += `| [${e.source}](${e.mdHref}) | ${e.name || ''} | ${e.patternCount} |\n`;
     }
+    return md;
+}
+
+// ---- Neumentabelle (Matrix Comparison) -------------------------------------
+
+function neumentabelleHtml({ publishedSources, allPatterns, matrixSnippets, glyphs, displayMode, customNeumeNames }) {
+    // Header row with patterns
+    const ths = allPatterns.map(pat => {
+        const patCell = patternMarkup(pat, glyphs, displayMode);
+        const name = getNeumeName(pat, customNeumeNames);
+        const nameBadge = name ? `<div class="matrix-pat-name">${esc(name)}</div>` : '';
+        return `<th class="matrix-pat-th">
+<div class="matrix-pat-box">
+<div class="matrix-pat-svg">${patCell}</div>
+<div class="matrix-pat-code">${esc(pat)}</div>
+${nameBadge}
+</div>
+</th>`;
+    }).join('');
+
+    // Rows for each manuscript
+    const trs = publishedSources.map(({ source, name, folder }) => {
+        const tds = allPatterns.map(pat => {
+            const snips = matrixSnippets[source]?.[pat] || [];
+            if (snips.length === 0) {
+                return `<td class="matrix-snip-td"><div class="empty-cell"><span style="color:#cbd5e1;">—</span></div></td>`;
+            }
+            const cards = snips.map(s => {
+                const imgTag = s.snippetRelHref ? `<img src="${esc(s.snippetRelHref)}" alt="${esc(s.displayId)}" loading="lazy"/>` : '';
+                return `<div class="matrix-snip-card">
+${imgTag}
+<div class="matrix-snip-meta">
+<span class="matrix-snip-id">${esc(s.displayId)}</span>
+<span class="matrix-snip-fol">${esc(s.folio)}</span>
+</div>
+</div>`;
+            }).join('');
+
+            return `<td class="matrix-snip-td"><div class="matrix-snip-list">${cards}</div></td>`;
+        }).join('');
+
+        return `<tr>
+<td class="matrix-ms-td">
+<strong><a href="${encodeURI(folder)}/index.html">${esc(source)} &rarr;</a></strong>
+<span class="ms-sub">${esc(name || '')}</span>
+</td>
+${tds}
+</tr>`;
+    }).join('');
+
+    const body = `<header class="header">
+<div class="header-content">
+<div class="top-nav-bar">
+<a class="nav-tab" href="index.html">&larr; Manuscript Directory</a>
+<span class="nav-tab active">Neumentabelle (Comparison)</span>
+</div>
+<div class="brand">Comparative Notation Analysis</div>
+<h1>Neumentabelle</h1>
+<p class="subtitle">Side-by-side comparison of annotated neume shapes across published manuscripts.</p>
+</div>
+</header>
+<main class="main-content">
+<div class="matrix-wrapper">
+<table class="neume-matrix">
+<thead>
+<tr>
+<th class="matrix-corner">Manuscript \\ Pattern</th>
+${ths}
+</tr>
+</thead>
+<tbody>
+${trs}
+</tbody>
+</table>
+</div>
+</main>`;
+
+    return htmlDoc('Neumentabelle — Comparative Notation Analysis', body);
+}
+
+function neumentabelleMarkdown({ publishedSources, allPatterns, matrixSnippets, customNeumeNames }) {
+    let md = `# Neumentabelle — Comparative Notation Analysis\n\nStatic export — ${todayStr()}\n\n`;
+    md += `[Back to Manuscript Directory](README.md)\n\n`;
+
+    // Markdown Table
+    const headers = ['Manuscript', ...allPatterns.map(p => {
+        const name = getNeumeName(p, customNeumeNames);
+        return name ? `\`${p}\` (${name})` : `\`${p}\``;
+    })];
+
+    md += `| ${headers.join(' | ')} |\n`;
+    md += `| ${headers.map(() => '---').join(' | ')} |\n`;
+
+    for (const { source, folder } of publishedSources) {
+        const row = [`[${source}](${encodeURI(folder)}/index.md)`];
+        for (const pat of allPatterns) {
+            const snips = matrixSnippets[source]?.[pat] || [];
+            if (snips.length === 0) {
+                row.push('—');
+            } else {
+                const snipList = snips.map(s => {
+                    return s.snippetRelHref ? `![${s.displayId}](${s.snippetRelHref}) *${s.displayId} (${s.folio})*` : `*${s.displayId} (${s.folio})*`;
+                }).join(' <br> ');
+                row.push(snipList);
+            }
+        }
+        md += `| ${row.join(' | ')} |\n`;
+    }
+
     return md;
 }
 
@@ -428,6 +569,11 @@ export async function exportStaticSite(onProgress = () => {}) {
     let totalSnippets = 0;
     let totalFailures = 0;
 
+    // Neumentabelle collection state
+    const publishedSourcesForMatrix = [];
+    const matrixSnippets = {}; // source -> pattern -> Array<{ displayId, folio, snippetRelHref }>
+    const patternCountMap = new Map();
+
     for (let si = 0; si < published.length; si++) {
         const table = published[si];
         const source = table.source;
@@ -452,6 +598,9 @@ export async function exportStaticSite(onProgress = () => {}) {
         let n = 2;
         while (usedSlugs.has(folder)) folder = `${slugify(source)}-${n++}`;
         usedSlugs.add(folder);
+
+        publishedSourcesForMatrix.push({ source, name: table.name, folder });
+        matrixSnippets[source] = {};
 
         // Fetch a snippet crop per gallery line (with limited concurrency)
         const lineHrefById = {};       // for HTML (relative to the source page)
@@ -479,12 +628,26 @@ export async function exportStaticSite(onProgress = () => {}) {
                 const iw = Math.max(300, Math.round(2400 * (ib.w / 100)));
                 const icrop = await fetchCrop(imageManifest, source, line.folio, ib, iw);
                 if (!icrop) { totalFailures++; continue; }
-                zip.file(`${folder}/snippets/item-${slugify(String(item.id))}.${icrop.ext}`, icrop.blob);
+                const itemFname = `item-${slugify(String(item.id))}.${icrop.ext}`;
+                zip.file(`${folder}/snippets/${itemFname}`, icrop.blob);
                 totalSnippets++;
+
+                // Track item snippet for the Neumentabelle matrix
+                const pat = item.pattern.trim();
+                if (!matrixSnippets[source][pat]) matrixSnippets[source][pat] = [];
+                matrixSnippets[source][pat].push({
+                    id: item.id,
+                    displayId: item.displayId,
+                    folio: line.folio,
+                    snippetRelHref: `${folder}/snippets/${itemFname}`
+                });
+
+                const cur = patternCountMap.get(pat) || 0;
+                patternCountMap.set(pat, cur + 1);
             }
         });
 
-        // Generate pages
+        // Generate individual source pages
         const html = sourcePageHtml({ source, table, patternRefMap, lines, glyphs, displayMode, lineHrefById });
         const md = sourcePageMarkdown({ source, table, patternRefMap, lines, snippetPathById: snippetPathRelById });
         zip.file(`${folder}/index.html`, html);
@@ -499,13 +662,37 @@ export async function exportStaticSite(onProgress = () => {}) {
         });
     }
 
-    // 3. Root directory + README
+    // 3. Build Neumentabelle (Comparison Matrix)
+    report('neumentabelle', 'Building Neumentabelle comparative matrix…');
+    const allMatrixPatterns = Array.from(patternCountMap.keys()).sort((a, b) => compareChantPatterns(a, b, 'freq', patternCountMap));
+    const glyphs = useTranscriptionData().glyphs.value;
+
+    const ntHtml = neumentabelleHtml({
+        publishedSources: publishedSourcesForMatrix,
+        allPatterns: allMatrixPatterns,
+        matrixSnippets,
+        glyphs,
+        displayMode,
+        customNeumeNames: settings.neumeNames
+    });
+
+    const ntMd = neumentabelleMarkdown({
+        publishedSources: publishedSourcesForMatrix,
+        allPatterns: allMatrixPatterns,
+        matrixSnippets,
+        customNeumeNames: settings.neumeNames
+    });
+
+    zip.file('neumentabelle.html', ntHtml);
+    zip.file('neumentabelle.md', ntMd);
+
+    // 4. Root directory + README
     report('bundle', 'Building directory and packaging ZIP…');
     directoryEntries.sort((a, b) => String(a.source).localeCompare(String(b.source), undefined, { numeric: true }));
     zip.file('index.html', directoryHtml(directoryEntries));
     zip.file('README.md', directoryMarkdown(directoryEntries));
 
-    // 4. Generate + download
+    // 5. Generate + download
     const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

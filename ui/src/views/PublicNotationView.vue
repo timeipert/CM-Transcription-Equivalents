@@ -183,9 +183,14 @@ watch([() => route.query.zoomId, manuscriptLines], ([zId, groups]) => {
 <div v-else class="public-notation-view">
     <header class="header">
         <div class="header-content">
-            <button class="back-link" @click="router.push('/public')">
-                <span class="icon">&larr;</span> Back to Directory
-            </button>
+            <div class="top-nav-bar">
+                <button class="back-link" @click="router.push('/public')">
+                    <span class="icon">&larr;</span> Back to Directory
+                </button>
+                <button class="back-link" @click="router.push('/public/table')">
+                    Neumentabelle (Comparison) &rarr;
+                </button>
+            </div>
             <div class="title-stack">
                 <div class="brand">
                     Notationsdokumentation
@@ -374,6 +379,13 @@ watch([() => route.query.zoomId, manuscriptLines], ([zId, groups]) => {
     display: flex;
     flex-direction: column;
     gap: 16px;
+}
+
+.top-nav-bar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
 }
 
 .back-link {

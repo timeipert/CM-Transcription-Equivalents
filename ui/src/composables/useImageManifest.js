@@ -17,7 +17,8 @@ export function normalizeFolioName(name) {
     let s = String(name).toLowerCase();
     s = s.replace(/\s+/g, '');
     s = s.replace(/[()]/g, '');
-    s = s.replace(/^p\.?/, '');
+    // Strip leading folio/page/foliation prefixes: "f.", "fol.", "f", "p.", "bl."
+    s = s.replace(/^(fol|f|p|bl|blatt|seite|s)\.?(?=\d)/, '');
     s = s.replace(/^0+/, '');
     // Handle explicit recto/verso
     s = s.replace(/recto/g, 'r');
@@ -287,6 +288,27 @@ export function useImageManifest() {
     /**
      * Returns the base IIIF source key for physical manuscripts.
      */
+    /**
+     * Resolve a canvas by its 0-based position in the manifest (for exports
+     * that name pages by index rather than by folio label). Returns the
+     * canvas's IIIF service URL + label, or null.
+     */
+    function getIiifCanvasByIndex(source, index) {
+        const key = resolveIiifSource(source);
+        const data = key && iiifStore.parsedData[key];
+        if (!data || !Array.isArray(data)) return null;
+        if (index < 0 || index >= data.length) return null;
+        const c = data[index];
+        return { serviceUrl: c.serviceUrl, label: c.folio, imgUrl: c.imgUrl };
+    }
+
+    /** Number of canvases available for a source (0 if unloaded). */
+    function getIiifCanvasCount(source) {
+        const key = resolveIiifSource(source);
+        const data = key && iiifStore.parsedData[key];
+        return Array.isArray(data) ? data.length : 0;
+    }
+
     function getStandardSource(source, folio) {
         const iiifMatch = fuzzyMatchIiifFolio(source, folio);
         if (iiifMatch) {
@@ -399,6 +421,8 @@ export function useImageManifest() {
         getImageUrl,
         getIiifThumbnailUrl,
         getIiifRegionUrl,
+        getIiifCanvasByIndex,
+        getIiifCanvasCount,
         getStandardSource,
         getStandardFolio,
         hasTranscriptionData,

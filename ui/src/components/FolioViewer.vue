@@ -1,20 +1,18 @@
 <script setup>
 import { computed } from 'vue';
+import SmartImage from './SmartImage.vue';
 
 const props = defineProps({
     imageUrl: { type: String, required: true },
     annotations: { type: Array, default: () => [] } // [{ points: "10,10 20,20...", color: "red", id: 1 }]
 });
-
-// Since polygons are relative (%), we use viewBox 0 0 100 100 to map them easily?
-// CSS handles the aspect ratio scaling.
 </script>
 
 <template>
 <div class="folio-viewer">
     <div class="image-container">
-        <!-- Image -->
-        <img :src="imageUrl" alt="Folio Scan" class="scan-image" />
+        <!-- Image with standard loader & crash fallback -->
+        <SmartImage :src="imageUrl" alt="Folio Scan" class="scan-image" fit="contain" />
         
         <!-- SVG Overlay -->
         <svg class="overlay-layer" viewBox="0 0 100 100" preserveAspectRatio="none">

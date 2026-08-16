@@ -10,6 +10,7 @@ export const useSettingsStore = defineStore('settings', () => {
     const snippetPadding = ref(0.3)
     const backupLabel = ref("My Backup")
     const sourceAlignments = ref({}) // { [source]: { iiifType: 'paginated'|'foliated', dataType: 'paginated'|'foliated', offset: 0 } }
+    const neumeNames = ref({}) // { pattern: "Custom Name" }
 
     // Load from LocalStorage
     const stored = localStorage.getItem('globalSettings')
@@ -24,13 +25,14 @@ export const useSettingsStore = defineStore('settings', () => {
             if (parsed.snippetPadding) snippetPadding.value = parsed.snippetPadding
             if (parsed.backupLabel) backupLabel.value = parsed.backupLabel
             if (parsed.sourceAlignments) sourceAlignments.value = parsed.sourceAlignments
+            if (parsed.neumeNames) neumeNames.value = parsed.neumeNames
         } catch (e) {
             console.error("Error loading settings", e)
         }
     }
 
     // Persist to LocalStorage
-    watch([displayMode, autoFillIds, globalDisplayIds, snippetSize, snippetPadding, backupLabel, sourceAlignments], () => {
+    watch([displayMode, autoFillIds, globalDisplayIds, snippetSize, snippetPadding, backupLabel, sourceAlignments, neumeNames], () => {
         localStorage.setItem('globalSettings', JSON.stringify({
             displayMode: displayMode.value,
             autoFillIds: autoFillIds.value,
@@ -38,7 +40,8 @@ export const useSettingsStore = defineStore('settings', () => {
             snippetSize: snippetSize.value,
             snippetPadding: snippetPadding.value,
             backupLabel: backupLabel.value,
-            sourceAlignments: sourceAlignments.value
+            sourceAlignments: sourceAlignments.value,
+            neumeNames: neumeNames.value
         }))
     }, { deep: true })
 
@@ -56,6 +59,20 @@ export const useSettingsStore = defineStore('settings', () => {
 
     function getGlobalId(pattern) {
         return globalDisplayIds.value[pattern] || ''
+    }
+
+    function setNeumeName(pattern, name) {
+        neumeNames.value = { ...neumeNames.value, [pattern]: name }
+    }
+
+    function removeNeumeName(pattern) {
+        const next = { ...neumeNames.value }
+        delete next[pattern]
+        neumeNames.value = next
+    }
+
+    function getNeumeNameValue(pattern) {
+        return neumeNames.value[pattern] || ''
     }
 
     function setSourceAlignment(source, config) {
@@ -76,9 +93,13 @@ export const useSettingsStore = defineStore('settings', () => {
         snippetPadding,
         backupLabel,
         sourceAlignments,
+        neumeNames,
         setGlobalId,
         removeGlobalId,
         getGlobalId,
+        setNeumeName,
+        removeNeumeName,
+        getNeumeNameValue,
         setSourceAlignment,
         removeSourceAlignment
     }

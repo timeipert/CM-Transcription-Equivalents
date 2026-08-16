@@ -75,5 +75,59 @@ export const usePersonalTablesStore = defineStore('personalTables', () => {
         return id
     }
 
-    return { tables, starredItems, toggleStarred, createTable, getTable, updateTable, deleteTable, getOrCreateTableForSource }
+    function ensurePatternsInTable(sourceName, patternList) {
+        if (!sourceName || !Array.isArray(patternList) || !patternList.length) return null;
+        const tableId = getOrCreateTableForSource(sourceName);
+        const table = getTable(tableId);
+        if (!table) return tableId;
+
+        const existingPats = new Set(table.rows.map(r => r.pattern));
+        let added = false;
+        for (const pat of patternList) {
+            if (pat && !existingPats.has(pat)) {
+                table.rows.push({ pattern: pat, customId: pat });
+                if (!table.patterns.includes(pat)) table.patterns.push(pat);
+                existingPats.add(pat);
+                added = true;
+            }
+        }
+        if (added) {
+            updateTable(tableId, { rows: [...table.rows], patterns: [...table.patterns] });
+        }
+        return tableId;
+    }
+
+    function deleteTableForSource(sourceName) {
+        const idx = tables.value.findIndex(t => t.source === sourceName);
+        if (idx !== -1) {
+            tables.value.splice(idx, 1);
+            return true;
+        }
+        return false;
+    }
+
+    function clearTableRowsForSource(sourceName) {
+        const table = tables.value.find(t => t.source === sourceName);
+        if (table) {
+            table.rows = [];
+            table.patterns = [];
+            updateTable(table.id, { rows: [], patterns: [] });
+            return true;
+        }
+        return false;
+    }
+
+    return { 
+        tables, 
+        starredItems, 
+        toggleStarred, 
+        createTable, 
+        getTable, 
+        updateTable, 
+        deleteTable, 
+        deleteTableForSource,
+        clearTableRowsForSource,
+        getOrCreateTableForSource,
+        ensurePatternsInTable
+    }
 })

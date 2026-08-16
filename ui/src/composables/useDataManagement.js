@@ -2,7 +2,8 @@ import { useSettingsStore } from '../stores/settings';
 import { useAnnotationsStore } from '../stores/annotations';
 import { usePersonalTablesStore } from '../stores/personalTables';
 import { useIiifStore } from '../stores/iiif';
-import { extractManuscripts, mergeManuscript } from '../utils/workspaceSharing';
+import { useOmmrStore } from '../stores/ommr';
+import { extractManuscripts, mergeManuscript, getManuscriptStats } from '../utils/workspaceSharing';
 
 const SCHEMA_VERSION = 1;
 
@@ -11,23 +12,42 @@ export function useDataManagement() {
     const annotStore = useAnnotationsStore();
     const tablesStore = usePersonalTablesStore();
     const iiifStore = useIiifStore();
+    const ommrStore = useOmmrStore();
 
-    function exportData() {
+    function getLocalFullState() {
+        return {
+            personalTables: tablesStore.tables,
+            annotations: annotStore.annotations,
+            regions: annotStore.regions,
+            regionItems: annotStore.regionItems,
+            manualLines: annotStore.manualLines,
+            iiifLinks: iiifStore.links
+        };
+    }
+
+    // Export whole workspace (filtering only manuscripts with data)
+    function exportData(options = {}) {
+        const { includeSettings = true, onlyWithData = true } = options;
+        const currentState = getLocalFullState();
+        const allSources = extractSourcesFromContent(currentState);
+        const filteredData = extractManuscripts(currentState, allSources, { onlyWithData });
+
         const payload = {
             schemaVersion: SCHEMA_VERSION,
+            type: 'cm-workspace-backup',
             exportedAt: new Date().toISOString(),
-            label: settings.backupLabel,
+            label: settings.backupLabel || 'Workspace',
             data: {
-                personalTables: tablesStore.tables,
-                annotations: annotStore.annotations,
-                regions: annotStore.regions,
-                regionItems: annotStore.regionItems,
-                settings: {
+                ...filteredData,
+                settings: includeSettings ? {
                     globalDisplayIds: settings.globalDisplayIds,
                     autoFillIds: settings.autoFillIds,
-                    displayMode: settings.displayMode
-                },
-                iiifLinks: iiifStore.links
+                    displayMode: settings.displayMode,
+                    neumeNames: settings.neumeNames,
+                    sourceAlignments: settings.sourceAlignments,
+                    snippetSize: settings.snippetSize,
+                    snippetPadding: settings.snippetPadding
+                } : undefined
             }
         };
 
@@ -37,7 +57,7 @@ export function useDataManagement() {
 
         const a = document.createElement('a');
         a.href = url;
-        const cleanDate = new Date().toLocaleDateString().replace(/\//g, '-');
+        const cleanDate = new Date().toISOString().slice(0, 10);
         const cleanLabel = (settings.backupLabel || 'backup').replace(/[^a-z0-9]/gi, '-');
         a.download = `cm-transkript-backup-${cleanLabel}-${cleanDate}.json`;
         a.click();
@@ -45,21 +65,21 @@ export function useDataManagement() {
         URL.revokeObjectURL(url);
     }
 
+    // Export specific manuscripts (only those with data)
     function exportManuscripts(sourceIds) {
-        const currentState = {
-            personalTables: tablesStore.tables,
-            annotations: annotStore.annotations,
-            regions: annotStore.regions,
-            regionItems: annotStore.regionItems,
-            iiifLinks: iiifStore.links
-        };
+        const currentState = getLocalFullState();
+        const data = extractManuscripts(currentState, sourceIds, { onlyWithData: true });
 
-        const data = extractManuscripts(currentState, sourceIds);
+        const actualExported = extractSourcesFromContent(data);
+        if (actualExported.length === 0) {
+            throw new Error("None of the selected manuscripts contain any annotations, regions, or pattern rows.");
+        }
         
         const payload = {
             schemaVersion: SCHEMA_VERSION,
+            type: 'cm-manuscript-export',
             exportedAt: new Date().toISOString(),
-            exportedManuscripts: sourceIds,
+            exportedManuscripts: actualExported,
             data
         };
 
@@ -69,12 +89,56 @@ export function useDataManagement() {
 
         const a = document.createElement('a');
         a.href = url;
-        const cleanDate = new Date().toLocaleDateString().replace(/\//g, '-');
-        const sourceName = sourceIds.length === 1 ? sourceIds[0].replace(/[^a-z0-9]/gi, '-') : 'multiple';
-        a.download = `cm-manuscript-${sourceName}-${cleanDate}.json`;
+        const cleanDate = new Date().toISOString().slice(0, 10);
+        const sourceName = actualExported.length === 1 ? actualExported[0].replace(/[^a-z0-9]/gi, '-') : 'selected-sources';
+        a.download = `cm-manuscripts-${sourceName}-${cleanDate}.json`;
         a.click();
 
         URL.revokeObjectURL(url);
+    }
+
+    // Export standalone settings / configuration file
+    function exportConfiguration() {
+        const payload = {
+            schemaVersion: SCHEMA_VERSION,
+            type: 'cm-transcription-config',
+            exportedAt: new Date().toISOString(),
+            label: settings.backupLabel || 'Config',
+            settings: {
+                globalDisplayIds: settings.globalDisplayIds,
+                autoFillIds: settings.autoFillIds,
+                displayMode: settings.displayMode,
+                neumeNames: settings.neumeNames,
+                sourceAlignments: settings.sourceAlignments,
+                snippetSize: settings.snippetSize,
+                snippetPadding: settings.snippetPadding
+            }
+        };
+
+        const json = JSON.stringify(payload, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        const cleanDate = new Date().toISOString().slice(0, 10);
+        a.download = `cm-config-${cleanDate}.json`;
+        a.click();
+
+        URL.revokeObjectURL(url);
+    }
+
+    // Apply standalone settings configuration
+    function importConfiguration(configPayload) {
+        if (!configPayload) return;
+        const s = configPayload.settings || configPayload.data?.settings || configPayload;
+        if (s.globalDisplayIds) settings.globalDisplayIds = s.globalDisplayIds;
+        if (s.autoFillIds !== undefined) settings.autoFillIds = s.autoFillIds;
+        if (s.displayMode) settings.displayMode = s.displayMode;
+        if (s.neumeNames) settings.neumeNames = s.neumeNames;
+        if (s.sourceAlignments) settings.sourceAlignments = s.sourceAlignments;
+        if (s.snippetSize) settings.snippetSize = s.snippetSize;
+        if (s.snippetPadding) settings.snippetPadding = s.snippetPadding;
     }
 
     function readFileAsJson(file) {
@@ -93,15 +157,15 @@ export function useDataManagement() {
     }
 
     function extractSourcesFromContent(content) {
+        if (!content) return [];
         const sources = new Set();
-        (content.personalTables || []).forEach(t => sources.add(t.source));
+        (content.personalTables || []).forEach(t => { if (t?.source) sources.add(t.source); });
         Object.keys(content.iiifLinks || {}).forEach(s => sources.add(s));
         
         // Extract from regions (key is Source_Folio)
         Object.keys(content.regions || {}).forEach(key => {
             const parts = key.split('_');
             if (parts.length > 1) {
-                // Assuming Folio is the last part, the rest is Source
                 parts.pop();
                 sources.add(parts.join('_'));
             }
@@ -126,21 +190,28 @@ export function useDataManagement() {
         }
 
         const results = [];
-        // Gather all local sources for comparison
-        const localSourcesSet = new Set(extractSourcesFromContent({
-            personalTables: tablesStore.tables,
-            iiifLinks: iiifStore.links,
-            regions: annotStore.regions,
-            annotations: annotStore.annotations
-        }));
+        const localState = getLocalFullState();
+        const localSources = extractSourcesFromContent(localState);
+        const localSourcesSet = new Set(localSources);
 
         for (const file of Array.from(files)) {
             try {
                 const json = await readFileAsJson(file);
                 
+                // Check if this is a standalone configuration file
+                if (json.type === 'cm-transcription-config' || (json.settings && !json.data?.personalTables && !json.data?.regions)) {
+                    results.push({
+                        success: true,
+                        isConfigOnly: true,
+                        fileName: file.name,
+                        parsed: json,
+                        exportedAt: json.exportedAt
+                    });
+                    continue;
+                }
+
                 // Backwards compatibility check with older `version` / `content` format
                 if (json.version && json.content && !json.schemaVersion) {
-                    // Transparently map old format to new format for migration logic
                     json.schemaVersion = json.version;
                     json.data = json.content;
                 }
@@ -150,24 +221,36 @@ export function useDataManagement() {
                 }
 
                 if (json.schemaVersion !== SCHEMA_VERSION) {
-                    // TODO: Implement actual migration steps for future schemas
-                    // e.g. if (json.schemaVersion === 1 && SCHEMA_VERSION === 2) { ... }
-                    throw new Error(`Schema mismatch! File is v${json.schemaVersion}, app expects v${SCHEMA_VERSION}. Migration path not yet implemented.`);
+                    throw new Error(`Schema mismatch! File is v${json.schemaVersion}, app expects v${SCHEMA_VERSION}.`);
                 }
 
                 const importedSources = extractSourcesFromContent(json.data);
                 const newSources = [];
-                const overlapSources = [];
+                const overlapSources = []; // [{ source, incomingStats, localStats }]
 
                 for (const src of importedSources) {
-                    if (localSourcesSet.has(src)) overlapSources.push(src);
-                    else newSources.push(src);
+                    const incomingStats = getManuscriptStats(json.data, src);
+                    if (localSourcesSet.has(src)) {
+                        const localStats = getManuscriptStats(localState, src);
+                        overlapSources.push({
+                            source: src,
+                            incomingStats,
+                            localStats
+                        });
+                    } else {
+                        newSources.push({
+                            source: src,
+                            incomingStats
+                        });
+                    }
                 }
 
                 results.push({ 
                     success: true, 
+                    isConfigOnly: false,
                     fileName: file.name, 
                     parsed: json, 
+                    hasSettings: !!json.data?.settings,
                     newSources, 
                     overlapSources 
                 });
@@ -178,14 +261,9 @@ export function useDataManagement() {
         return results;
     }
 
-    function executeImport(parsedJson, choices) {
-        let currentState = {
-            personalTables: tablesStore.tables,
-            annotations: annotStore.annotations,
-            regions: annotStore.regions,
-            regionItems: annotStore.regionItems,
-            iiifLinks: iiifStore.links
-        };
+    function executeImport(parsedJson, choices, options = {}) {
+        const { importSettings = true } = options;
+        let currentState = getLocalFullState();
 
         const importedSources = extractSourcesFromContent(parsedJson.data);
 
@@ -201,7 +279,55 @@ export function useDataManagement() {
         annotStore.annotations = currentState.annotations;
         annotStore.regions = currentState.regions;
         annotStore.regionItems = currentState.regionItems;
+        annotStore.manualLines = currentState.manualLines;
         iiifStore.links = currentState.iiifLinks;
+
+        if (importSettings && parsedJson.data?.settings) {
+            importConfiguration(parsedJson.data.settings);
+        }
+    }
+
+    function deleteManuscriptData(source, options = {}) {
+        if (!source) return;
+        const {
+            snippets = true,
+            regions = true,
+            manualLines = true,
+            table = false,
+            tableRowsOnly = false,
+            iiifLink = false,
+            ommrDataset = false,
+            folios = null,
+            patterns = null
+        } = options;
+
+        // 1. Clear annotations and lines
+        if (snippets || regions || manualLines) {
+            annotStore.clearManuscript(source, {
+                snippets,
+                regions,
+                manualLines,
+                folios,
+                patterns
+            });
+        }
+
+        // 2. Personal table
+        if (table) {
+            tablesStore.deleteTableForSource(source);
+        } else if (tableRowsOnly) {
+            tablesStore.clearTableRowsForSource(source);
+        }
+
+        // 3. IIIF manifest link
+        if (iiifLink) {
+            iiifStore.removeManifest(source);
+        }
+
+        // 4. OMMR in-memory dataset
+        if (ommrDataset) {
+            ommrStore.removeDataset(source);
+        }
     }
 
     function clearAllData() {
@@ -209,8 +335,19 @@ export function useDataManagement() {
         annotStore.annotations = {};
         annotStore.regions = {};
         annotStore.regionItems = {};
+        annotStore.manualLines = {};
         iiifStore.links = {};
     }
 
-    return { exportData, exportManuscripts, analyzeImportFiles, executeImport, clearAllData };
+    return { 
+        exportData, 
+        exportManuscripts, 
+        exportConfiguration, 
+        importConfiguration, 
+        analyzeImportFiles, 
+        executeImport, 
+        deleteManuscriptData,
+        clearAllData,
+        getLocalFullState
+    };
 }

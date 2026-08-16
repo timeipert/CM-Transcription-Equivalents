@@ -1,6 +1,7 @@
 <script setup>
-import { computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useImageManifest } from '../composables/useImageManifest';
+import { getCachedItem, setCachedItem } from '../utils/idb';
 
 const props = defineProps({
     source: String,
@@ -21,21 +22,11 @@ const emit = defineEmits(['zoom-item']);
 
 const { getImageUrl, getIiifThumbnailUrl, getIiifRegionUrl } = useImageManifest();
 
-const vbCoords = computed(() => {
-    const parts = viewBox.value.split(' ').map(parseFloat);
-    return { x: parts[0], y: parts[1], w: parts[2], h: parts[3] };
-});
-
-const imgUrl = computed(() => {
-    if (props.useFullRes) {
-        const { x, y, w, h } = vbCoords.value;
-        // Clamp and format for IIIF pct:
-        const region = `pct:${Math.max(0, x).toFixed(2)},${Math.max(0, y).toFixed(2)},${Math.min(100 - x, w).toFixed(2)},${Math.min(100 - y, h).toFixed(2)}`;
-        const url = getIiifRegionUrl(props.source, props.folio, region, "1600"); // Request 1600px width for zoom
-        if (url) return url;
-    }
-    return getIiifThumbnailUrl(props.source, props.folio, 1600); // Increased thumb size for general lists too
-});
+const containerRef = ref(null);
+const isVisible = ref(false);
+const cachedBlobUrl = ref(null);
+const imageStatus = ref('loading'); // 'loading' | 'loaded' | 'error'
+let observer = null;
 
 const polyPoints = computed(() => {
     if (!props.points) return "";
@@ -79,6 +70,71 @@ const viewBox = computed(() => {
     return `${vbX} ${vbY} ${vbW} ${vbH}`;
 });
 
+const vbCoords = computed(() => {
+    const parts = viewBox.value.split(' ').map(parseFloat);
+    return { x: parts[0], y: parts[1], w: parts[2], h: parts[3] };
+});
+
+// Prefer the IIIF Region API: fetch ONLY the cropped area, sized to the display.
+// This keeps small neume crops sharp (instead of cropping a downsized full page)
+// while staying light. Falls back to a full-page thumbnail for non-IIIF scans.
+const imgSpec = computed(() => {
+    const { x, y, w, h } = vbCoords.value;
+    const rx = Math.max(0, x), ry = Math.max(0, y);
+    const rw = Math.min(100 - rx, w), rh = Math.min(100 - ry, h);
+    const region = `pct:${rx.toFixed(2)},${ry.toFixed(2)},${rw.toFixed(2)},${rh.toFixed(2)}`;
+
+    const dpr = (typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1;
+    // Region output width matched to display (×1.6 for a crisp margin), capped.
+    const regionW = props.useFullRes
+        ? 1600
+        : Math.min(1400, Math.max(320, Math.round(props.width * dpr * 1.6)));
+
+    const rurl = getIiifRegionUrl(props.source, props.folio, region, String(regionW));
+    if (rurl) return { url: rurl, region: true };
+
+    const targetWidth = Math.min(1600, Math.max(600, Math.round(props.width * 2)));
+    return { url: getIiifThumbnailUrl(props.source, props.folio, targetWidth), region: false };
+});
+const rawImgUrl = computed(() => imgSpec.value.url);
+const usingRegion = computed(() => imgSpec.value.region);
+
+// Load image when visible
+function loadImage() {
+    if (!isVisible.value || !rawImgUrl.value) {
+        if (isVisible.value && !rawImgUrl.value) imageStatus.value = 'error';
+        return;
+    }
+    imageStatus.value = 'loading';
+    cachedBlobUrl.value = rawImgUrl.value;
+}
+
+onMounted(() => {
+    if ('IntersectionObserver' in window && containerRef.value) {
+        observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    isVisible.value = true;
+                    if (observer && containerRef.value) observer.unobserve(containerRef.value);
+                }
+            });
+        }, { rootMargin: '200px 0px' });
+        observer.observe(containerRef.value);
+    } else {
+        isVisible.value = true;
+    }
+});
+
+onUnmounted(() => {
+    if (observer) observer.disconnect();
+});
+
+watch([isVisible, rawImgUrl], () => {
+    if (isVisible.value) loadImage();
+}, { immediate: true });
+
+const imgUrl = computed(() => isVisible.value ? rawImgUrl.value : '');
+
 const layerStyle = computed(() => ({
     position: 'absolute',
     top: 0,
@@ -109,7 +165,16 @@ const clipId = computed(() => `clip-${props.source}-${props.folio}-${Math.abs(pr
 </script>
 
 <template>
-<div class="cutout-wrapper">
+<div class="cutout-wrapper" ref="containerRef">
+    <!-- Shimmer Loader when image is loading -->
+    <div v-if="imageStatus === 'loading'" class="cutout-loader">
+        <div class="mini-spinner"></div>
+    </div>
+    <!-- Error Fallback -->
+    <div v-else-if="imageStatus === 'error'" class="cutout-error" title="Image unavailable">
+        <span>⚠️</span>
+    </div>
+
     <svg :width="width" :height="height" :viewBox="viewBox" preserveAspectRatio="xMidYMid meet" class="cutout-svg">
         <defs>
             <clipPath :id="clipId">
@@ -117,14 +182,16 @@ const clipId = computed(() => `clip-${props.source}-${props.folio}-${Math.abs(pr
             </clipPath>
         </defs>
         <!-- Map image to correct space -->
-        <image 
-            :href="imgUrl" 
-            :x="useFullRes ? vbCoords.x : 0" 
-            :y="useFullRes ? vbCoords.y : 0" 
-            :width="useFullRes ? vbCoords.w : 100" 
-            :height="useFullRes ? vbCoords.h : 100" 
+        <image
+            :href="imgUrl"
+            :x="usingRegion ? vbCoords.x : 0"
+            :y="usingRegion ? vbCoords.y : 0"
+            :width="usingRegion ? vbCoords.w : 100"
+            :height="usingRegion ? vbCoords.h : 100"
             preserveAspectRatio="none"
             :clip-path="clip ? `url(#${clipId})` : undefined"
+            @load="imageStatus = 'loaded'"
+            @error="imageStatus = 'error'"
         />
         
         <!-- Overlays (Items on the line) -->
@@ -246,5 +313,40 @@ const clipId = computed(() => `clip-${props.source}-${props.folio}-${Math.abs(pr
     padding: 3px 0;
     border-top: 1px solid var(--color-border);
     color: var(--color-text-muted);
+}
+
+.cutout-loader {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #1e293b;
+    z-index: 5;
+}
+
+.mini-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-top-color: var(--color-primary, #6366f1);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.cutout-error {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #18181b;
+    color: #ef4444;
+    font-size: 14px;
+    z-index: 5;
 }
 </style>

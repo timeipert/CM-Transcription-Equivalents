@@ -58,6 +58,11 @@ function goToOverview(source) {
 <template>
 <div class="public-container">
     <div class="header-section">
+        <div class="top-nav-bar">
+            <div class="nav-tab active">Manuscript Directory</div>
+            <button class="nav-tab" @click="router.push('/public/table')">Neumentabelle (Comparison) &rarr;</button>
+        </div>
+
         <h1>Notationsdokumentation</h1>
         <p class="subtitle">Index of manuscripts with notation transcriptions and cross-referenced pattern IDs.</p>
     </div>
@@ -119,6 +124,42 @@ function goToOverview(source) {
 .header-section {
     text-align: center;
     margin-bottom: 50px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.top-nav-bar {
+    display: inline-flex;
+    gap: 8px;
+    background: var(--color-surface-muted);
+    padding: 4px;
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    margin-bottom: 12px;
+}
+
+.nav-tab {
+    background: transparent;
+    border: none;
+    padding: 6px 16px;
+    border-radius: 6px;
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.nav-tab:hover {
+    color: var(--color-text);
+}
+
+.nav-tab.active {
+    background: white;
+    color: var(--color-primary-hover);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 h1 {

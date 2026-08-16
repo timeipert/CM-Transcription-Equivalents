@@ -1,12 +1,16 @@
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
 import { iiifParseRules } from '../config/iiifRules';
+import { getCachedItem, setCachedItem, deleteCachedItem, clearStore } from '../utils/idb';
 
 export const useIiifStore = defineStore('iiif', () => {
     // State
     const links = ref(JSON.parse(localStorage.getItem('iiifLinks') || '{}'));
     const parsedData = ref({}); // source -> array of { folio, imgUrl }
     const manifestStatus = ref({}); // source -> { status: 'loading' | 'ok' | 'error', error: null }
+    
+    // In-flight manifest request deduplication
+    const inflightFetches = new Map();
 
     // Persist links
     watch(links, (newLinks) => {
@@ -20,8 +24,15 @@ export const useIiifStore = defineStore('iiif', () => {
     }
 
     async function addManifest(source, url) {
+        const changed = links.value[source] !== url;
         links.value[source] = url;
-        await fetchAndParseManifest(source, url);
+        if (changed) {
+            // Drop stale caches so the new URL fully takes effect.
+            await deleteCachedItem('manifests', source);
+            delete parsedData.value[source];
+            await clearStore('images'); // region crops were keyed to the old service URL
+        }
+        await fetchAndParseManifest(source, url, true); // force fresh on manual add
     }
 
     function removeManifest(source) {
@@ -29,35 +40,69 @@ export const useIiifStore = defineStore('iiif', () => {
         delete parsedData.value[source];
     }
 
-    async function fetchAndParseManifest(source, url) {
-        manifestStatus.value[source] = { status: 'loading', error: null };
-        try {
-            let attempt = 0;
-            const retries = 3;
-            const timeout = 15000;
-            let res;
+    /** Force a fresh fetch of an already-linked manifest, clearing caches. */
+    async function refreshManifest(source) {
+        const url = links.value[source];
+        if (!url) return;
+        await deleteCachedItem('manifests', source);
+        delete parsedData.value[source];
+        await clearStore('images');
+        await fetchAndParseManifest(source, url, true);
+    }
+
+    async function fetchAndParseManifest(source, url, forceRefresh = false) {
+        if (parsedData.value[source] && !forceRefresh) return;
+        
+        // If already in flight, reuse promise — but a forced refresh must not
+        // piggy-back on a stale in-flight (possibly cache-backed) request.
+        if (!forceRefresh && inflightFetches.has(source)) {
+            return inflightFetches.get(source);
+        }
+
+        const fetchPromise = (async () => {
+            manifestStatus.value[source] = { status: 'loading', error: null };
             
-            while (attempt < retries) {
-                const controller = new AbortController();
-                const id = setTimeout(() => controller.abort(), timeout);
+            // Check IndexedDB cache first
+            if (!forceRefresh) {
                 try {
-                    res = await fetch(url, { signal: controller.signal });
-                    clearTimeout(id);
-                    if (res.ok || res.status === 404 || res.status === 401 || res.status === 403) {
-                        break;
+                    const cached = await getCachedItem('manifests', source);
+                    if (cached && Array.isArray(cached) && cached.length > 0) {
+                        parsedData.value[source] = cached;
+                        manifestStatus.value[source] = { status: 'ok', error: null };
+                        return;
                     }
-                    throw new Error(`HTTP ${res.status}`);
                 } catch (e) {
-                    clearTimeout(id);
-                    attempt++;
-                    if (attempt >= retries) {
-                        if (e.name === 'AbortError') throw new Error(`Manifest fetch timed out after ${timeout/1000}s`);
-                        throw e;
-                    }
-                    // backoff
-                    await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+                    console.warn(`Cache read failed for ${source}`, e);
                 }
             }
+
+            try {
+                let attempt = 0;
+                const retries = 3;
+                const timeout = 15000;
+                let res;
+                
+                while (attempt < retries) {
+                    const controller = new AbortController();
+                    const id = setTimeout(() => controller.abort(), timeout);
+                    try {
+                        res = await fetch(url, { signal: controller.signal });
+                        clearTimeout(id);
+                        if (res.ok || res.status === 404 || res.status === 401 || res.status === 403) {
+                            break;
+                        }
+                        throw new Error(`HTTP ${res.status}`);
+                    } catch (e) {
+                        clearTimeout(id);
+                        attempt++;
+                        if (attempt >= retries) {
+                            if (e.name === 'AbortError') throw new Error(`Manifest fetch timed out after ${timeout/1000}s`);
+                            throw e;
+                        }
+                        // exponential backoff with jitter
+                        await new Promise(r => setTimeout(r, (800 * Math.pow(2, attempt)) + Math.random() * 200));
+                    }
+                }
 
             if (!res.ok) {
                  throw new Error(`Failed to load manifest: HTTP ${res.status}`);
@@ -157,6 +202,8 @@ export const useIiifStore = defineStore('iiif', () => {
             if (folios.length > 0) {
                 parsedData.value[source] = folios;
                 manifestStatus.value[source] = { status: 'ok', error: null };
+                // Cache parsed manifest data in IndexedDB for fast reloads
+                setCachedItem('manifests', source, folios).catch(e => console.warn("Failed caching manifest", e));
             } else {
                 const msg = `No canvases found in manifest for ${source}`;
                 console.warn(msg);
@@ -166,7 +213,13 @@ export const useIiifStore = defineStore('iiif', () => {
         } catch (e) {
             console.error(`Failed to load IIIF manifest for ${source}`, e);
             manifestStatus.value[source] = { status: 'error', error: e.message };
+        } finally {
+            inflightFetches.delete(source);
         }
+        })();
+
+        inflightFetches.set(source, fetchPromise);
+        return fetchPromise;
     }
 
     /**
@@ -203,6 +256,7 @@ export const useIiifStore = defineStore('iiif', () => {
         manifestStatus,
         addManifest,
         removeManifest,
+        refreshManifest,
         importFromDataManifests,
         ensureLoaded
     };

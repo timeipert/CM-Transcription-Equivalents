@@ -1,9 +1,75 @@
 /**
- * Pure functions for extracting and merging manuscript data.
+ * Pure functions for extracting, inspecting, and merging manuscript data.
  * These operate on state objects, not Pinia stores.
  */
 
-export function extractManuscripts(fullState, sourceIds) {
+/**
+ * Calculates summary metrics for a given manuscript in a state object.
+ */
+export function getManuscriptStats(state, sourceId) {
+    let annotationsCount = 0;
+    let regionsCount = 0;
+    const foliosSet = new Set();
+    let patternRowsCount = 0;
+    let isPublished = false;
+
+    // Check personal tables
+    if (state.personalTables) {
+        const table = state.personalTables.find(t => t.source === sourceId);
+        if (table) {
+            patternRowsCount = (table.rows || []).length;
+            isPublished = !!table.isPublished;
+        }
+    }
+
+    const prefix = sourceId + '_';
+
+    // Check regions (lines) and count items
+    if (state.regions) {
+        for (const key in state.regions) {
+            if (key.startsWith(prefix)) {
+                const folio = key.substring(prefix.length);
+                const regList = state.regions[key] || [];
+                regionsCount += regList.length;
+                if (regList.length > 0) foliosSet.add(folio);
+
+                for (const r of regList) {
+                    const items = (state.regionItems && state.regionItems[r.id]) || [];
+                    annotationsCount += items.length;
+                }
+            }
+        }
+    }
+
+    // Check legacy annotations
+    if (state.annotations) {
+        for (const key in state.annotations) {
+            if (key.startsWith(prefix)) {
+                const parts = key.substring(prefix.length).split('_');
+                if (parts[0]) foliosSet.add(parts[0]);
+                const annList = state.annotations[key] || [];
+                annotationsCount += annList.length;
+            }
+        }
+    }
+
+    const foliosList = Array.from(foliosSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const hasData = annotationsCount > 0 || regionsCount > 0 || patternRowsCount > 0;
+
+    return {
+        source: sourceId,
+        annotationsCount,
+        regionsCount,
+        foliosCount: foliosList.length,
+        foliosList,
+        patternRowsCount,
+        isPublished,
+        hasData
+    };
+}
+
+export function extractManuscripts(fullState, sourceIds, options = {}) {
+    const { onlyWithData = false } = options;
     const allowedSet = new Set(sourceIds);
     const filtered = {
         personalTables: [],
@@ -14,13 +80,18 @@ export function extractManuscripts(fullState, sourceIds) {
         iiifLinks: {}
     };
 
+    const targetSources = onlyWithData 
+        ? sourceIds.filter(src => getManuscriptStats(fullState, src).hasData)
+        : sourceIds;
+    const finalAllowedSet = new Set(targetSources);
+
     if (fullState.personalTables) {
-        filtered.personalTables = fullState.personalTables.filter(t => allowedSet.has(t.source));
+        filtered.personalTables = fullState.personalTables.filter(t => finalAllowedSet.has(t.source));
     }
     
     if (fullState.iiifLinks) {
         for (const src in fullState.iiifLinks) {
-            if (allowedSet.has(src)) filtered.iiifLinks[src] = fullState.iiifLinks[src];
+            if (finalAllowedSet.has(src)) filtered.iiifLinks[src] = fullState.iiifLinks[src];
         }
     }
 
@@ -29,7 +100,7 @@ export function extractManuscripts(fullState, sourceIds) {
     if (fullState.regions) {
         for (const key in fullState.regions) {
             // Key is 'Source_Folio'
-            const src = sourceIds.find(s => key.startsWith(s + '_'));
+            const src = targetSources.find(s => key.startsWith(s + '_'));
             if (src) {
                 filtered.regions[key] = fullState.regions[key];
                 fullState.regions[key].forEach(r => keptRegionIds.add(r.id));
@@ -48,7 +119,7 @@ export function extractManuscripts(fullState, sourceIds) {
     if (fullState.annotations) {
         for (const key in fullState.annotations) {
             // Key is 'Source_Folio_Pattern'
-            const src = sourceIds.find(s => key.startsWith(s + '_'));
+            const src = targetSources.find(s => key.startsWith(s + '_'));
             if (src) {
                 filtered.annotations[key] = fullState.annotations[key];
             }
@@ -58,7 +129,7 @@ export function extractManuscripts(fullState, sourceIds) {
     if (fullState.manualLines) {
         for (const key in fullState.manualLines) {
             // Key is 'Source_Folio'
-            const src = sourceIds.find(s => key.startsWith(s + '_'));
+            const src = targetSources.find(s => key.startsWith(s + '_'));
             if (src) {
                 filtered.manualLines[key] = fullState.manualLines[key];
             }
