@@ -82,4 +82,6 @@ servers, so keep the tab connected while it runs.
 * `/export`: (Excluded) Raw data exports from CM.
 
 ## Current Project Status
-This tool is designed for personal research and small-scale collaborative documentation. Data is stored locally in the browser. Future versions may include a backend integration for multi-user access and centralized data storage.
+This tool is designed for personal research and small-scale collaborative documentation. Data is stored locally in the browser. 
+
+The tool was part-wise created with the help of Large Language Models. 
