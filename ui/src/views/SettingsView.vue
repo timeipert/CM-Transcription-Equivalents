@@ -311,6 +311,51 @@ const allCodeVariants = computed(() => {
     return out;
 });
 
+// --- Source metadata ---
+const newMetaLabel = ref('');
+const newMetaDesc = ref('');
+const metaError = ref('');
+const metaSourceSearch = ref('');
+
+function addMetaField() {
+    metaError.value = '';
+    if (!newMetaLabel.value.trim()) return;
+    const f = store.addSourceMetaField(newMetaLabel.value, newMetaDesc.value);
+    if (!f) {
+        metaError.value = 'That attribute already exists (or the name is unusable).';
+        return;
+    }
+    newMetaLabel.value = '';
+    newMetaDesc.value = '';
+}
+
+// Every source we could attach metadata to: transcription sources, personal
+// tables, and direct snippet collections.
+const metaSources = computed(() => {
+    const set = new Set();
+    for (const s of Object.keys(sourceFolios.value || {})) set.add(s);
+    for (const t of tablesStore.tables || []) if (t.source) set.add(t.source);
+    for (const c of directStore.collections || []) if (c.source) set.add(c.source);
+    // Keep any source that already has values, even if it is gone from the data.
+    for (const s of Object.keys(store.sourceMeta || {})) set.add(s);
+    let list = Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const q = metaSourceSearch.value.trim().toLowerCase();
+    if (q) list = list.filter(s => s.toLowerCase().includes(q));
+    return list;
+});
+
+/** Sources that already carry at least one value — shown first for quick review. */
+const metaSourcesWithValues = computed(() =>
+    metaSources.value.filter(s => Object.keys(store.getSourceMeta(s)).length > 0)
+);
+
+const showAllMetaSources = ref(false);
+const visibleMetaSources = computed(() => {
+    if (showAllMetaSources.value || metaSourceSearch.value.trim()) return metaSources.value;
+    // Default to the ones already filled in, so the table isn't 100 empty rows.
+    return metaSourcesWithValues.value;
+});
+
 // Variant editor, reachable from Settings for any pattern (no region needed).
 import VariantEditorModal from '../components/VariantEditorModal.vue';
 const newVariantBase = ref('');
@@ -991,6 +1036,21 @@ h1 { margin-bottom: 30px; }
 .discriminate-toggle { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .discriminate-toggle input { width: auto; }
 .variants-review { margin-top: 20px; }
+.reminder-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.reminder-state { font-weight: 700; font-size: 13px; }
+.reminder-state.on { color: #15803d; }
+.reminder-state.off { color: var(--color-text-muted); }
+
+.meta-values { margin-top: 22px; border-top: 1px solid var(--color-border); padding-top: 16px; }
+.meta-tools { display: flex; align-items: center; gap: 12px; }
+.meta-search { padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 13px; }
+.meta-showall { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--color-text-muted); cursor: pointer; white-space: nowrap; }
+.meta-showall input { width: auto; }
+.meta-table-scroll { overflow-x: auto; max-height: 420px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: 6px; }
+.meta-table-scroll table { margin: 0; }
+.meta-table-scroll thead th { position: sticky; top: 0; background: var(--color-surface); z-index: 1; }
+.meta-src-col { position: sticky; left: 0; background: var(--color-surface); white-space: nowrap; }
+.meta-input { width: 100%; min-width: 120px; padding: 5px 8px; border: 1px solid var(--color-border); border-radius: 4px; font-size: 12px; box-sizing: border-box; }
 .section h2 { margin-top: 0; border-bottom: 1px solid var(--color-border); padding-bottom: 10px; margin-bottom: 20px; font-size: 1.2em; }
 .desc { color: var(--color-text-muted); font-size: 14px; margin-top: -5px; margin-bottom: 15px; }
 

@@ -129,10 +129,32 @@ function goToOverview(source) {
     </div>
 
     <div class="content-section">
+        <!-- Search & metadata filters -->
+        <div class="filter-bar">
+            <input v-model="searchQuery" class="ms-search"
+                   placeholder="Search manuscripts, titles and attributes…" />
+            <div v-for="f in metaFields" :key="f.key" class="filter-group" :title="f.description">
+                <label>{{ f.label }}</label>
+                <select :value="metaFilters[f.key] || ''" @change="setMetaFilter(f.key, $event.target.value)">
+                    <option value="">Any</option>
+                    <option v-for="v in valuesForField(f.key)" :key="v" :value="v">{{ v }}</option>
+                </select>
+            </div>
+            <button v-if="hasActiveFilters" class="btn-clear" @click="clearFilters">Clear</button>
+            <span class="result-count">{{ sortedTables.length }} shown</span>
+        </div>
+
         <div v-if="sortedTables.length === 0" class="empty-state">
             <div class="icon">📚</div>
-            <h3>No Published Manuscripts</h3>
-            <p>Manuscripts must be marked as 'Published' in the editor before they appear here.</p>
+            <template v-if="hasActiveFilters">
+                <h3>No Matching Manuscripts</h3>
+                <p>No manuscript matches your search or attribute filters.</p>
+                <button class="btn-view-sm" @click="clearFilters">Clear filters</button>
+            </template>
+            <template v-else>
+                <h3>No Published Manuscripts</h3>
+                <p>Manuscripts must be marked as 'Published' in the editor before they appear here.</p>
+            </template>
         </div>
 
         <div v-else class="table-container">
@@ -146,6 +168,9 @@ function goToOverview(source) {
                         <th @click="toggleSort('name')" :class="{ active: sortBy === 'name' }">
                             Manuscript Title
                             <span class="sort-icon" v-if="sortBy === 'name'">{{ sortOrder === 1 ? '↑' : '↓' }}</span>
+                        </th>
+                        <th v-for="f in metaFields" :key="f.key" :title="f.description" class="meta-col">
+                            {{ f.label }}
                         </th>
                         <th @click="toggleSort('patterns')" :class="{ active: sortBy === 'patterns' }" class="text-right">
                             Patterns
