@@ -321,19 +321,30 @@ const allCodeVariants = computed(() => {
 // --- Source metadata ---
 const newMetaLabel = ref('');
 const newMetaDesc = ref('');
+const newMetaType = ref('text');
 const metaError = ref('');
 const metaSourceSearch = ref('');
 
 function addMetaField() {
     metaError.value = '';
     if (!newMetaLabel.value.trim()) return;
-    const f = store.addSourceMetaField(newMetaLabel.value, newMetaDesc.value);
+    const f = store.addSourceMetaField(newMetaLabel.value, newMetaDesc.value, newMetaType.value);
     if (!f) {
         metaError.value = 'That attribute already exists (or the name is unusable).';
         return;
     }
     newMetaLabel.value = '';
     newMetaDesc.value = '';
+    newMetaType.value = 'text';
+}
+
+import { META_TYPES, parseCentury, centuryLabel } from '../utils/sourceMeta';
+function metaTypeLabel(t) {
+    return (META_TYPES.find(x => x.key === (t || 'text')) || META_TYPES[0]).label;
+}
+/** How many recorded values of a century field could not be parsed. */
+function unparsedCount(key) {
+    return store.sourceMetaValuesFor(key).filter(v => parseCentury(v) === null).length;
 }
 
 // Every source we could attach metadata to: transcription sources, personal
@@ -728,21 +739,35 @@ const alignPreview = computed(() => {
         <div class="add-row">
             <input v-model="newMetaLabel" placeholder="Attribute name (e.g. Century)" @keyup.enter="addMetaField" />
             <input v-model="newMetaDesc" placeholder="Description (optional)" @keyup.enter="addMetaField" />
+            <select v-model="newMetaType" class="meta-type-select" title="How this attribute is filtered publicly">
+                <option v-for="t in META_TYPES" :key="t.key" :value="t.key">{{ t.label }}</option>
+            </select>
             <button @click="addMetaField" :disabled="!newMetaLabel.trim()">Add Attribute</button>
         </div>
         <div v-if="metaError" class="sign-error">{{ metaError }}</div>
+        <p class="desc type-hint">{{ (META_TYPES.find(t => t.key === newMetaType) || {}).hint }}</p>
 
         <div class="ids-list">
             <table v-if="store.sourceMetaFields.length > 0">
                 <thead>
-                    <tr><th>Attribute</th><th>Key</th><th>Description</th><th>Values in use</th><th>Action</th></tr>
+                    <tr><th>Attribute</th><th>Key</th><th>Type</th><th>Description</th><th>Values in use</th><th>Action</th></tr>
                 </thead>
                 <tbody>
                     <tr v-for="f in store.sourceMetaFields" :key="f.key">
                         <td><strong>{{ f.label }}</strong></td>
                         <td class="code-font">{{ f.key }}</td>
+                        <td>
+                            <span class="type-chip" :class="'t-' + (f.type || 'text')">{{ metaTypeLabel(f.type) }}</span>
+                        </td>
                         <td class="text-sm-light">{{ f.description }}</td>
-                        <td class="text-sm-light">{{ store.sourceMetaValuesFor(f.key).length }}</td>
+                        <td class="text-sm-light">
+                            {{ store.sourceMetaValuesFor(f.key).length }}
+                            <span v-if="(f.type === 'century') && unparsedCount(f.key)"
+                                  class="warn-chip"
+                                  :title="'These values could not be read as a century, so they are excluded from the range filter (but still shown).'">
+                                {{ unparsedCount(f.key) }} unparsed
+                            </span>
+                        </td>
                         <td><button @click="store.removeSourceMetaField(f.key)" class="btn-sm btn-danger">Remove</button></td>
                     </tr>
                 </tbody>
@@ -1155,6 +1180,12 @@ h1 { margin-bottom: 30px; }
 .meta-table-scroll table { margin: 0; }
 .meta-table-scroll thead th { position: sticky; top: 0; background: var(--color-surface); z-index: 1; }
 .meta-src-col { position: sticky; left: 0; background: var(--color-surface); white-space: nowrap; }
+.meta-type-select { padding: 6px 9px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 13px; }
+.type-hint { margin: 6px 0 0; font-size: 11px; font-style: italic; }
+.type-chip { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; padding: 2px 7px; border-radius: 999px; background: var(--color-surface-muted); color: var(--color-text-muted); }
+.type-chip.t-century { background: #dbeafe; color: #1d4ed8; }
+.type-chip.t-location { background: #dcfce7; color: #15803d; }
+.warn-chip { font-size: 10px; font-weight: 700; background: var(--color-warning-light); color: var(--color-warning-dark); padding: 1px 6px; border-radius: 3px; margin-left: 6px; }
 .meta-input { width: 100%; min-width: 120px; padding: 5px 8px; border: 1px solid var(--color-border); border-radius: 4px; font-size: 12px; box-sizing: border-box; }
 .section h2 { margin-top: 0; border-bottom: 1px solid var(--color-border); padding-bottom: 10px; margin-bottom: 20px; font-size: 1.2em; }
 .desc { color: var(--color-text-muted); font-size: 14px; margin-top: -5px; margin-bottom: 15px; }

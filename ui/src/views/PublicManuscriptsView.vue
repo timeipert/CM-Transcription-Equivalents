@@ -5,6 +5,7 @@ import { usePersonalTablesStore } from '../stores/personalTables';
 import { useAnnotationsStore } from '../stores/annotations';
 import { useSettingsStore } from '../stores/settings';
 import { useDirectSnippetsStore } from '../stores/directSnippets';
+import { parseCentury, centuryLabel } from '../utils/sourceMeta';
 
 const tableStore = usePersonalTablesStore();
 const annotStore = useAnnotationsStore();
@@ -21,6 +22,56 @@ const searchQuery = ref('');
 const metaFilters = ref({});
 
 const metaFields = computed(() => settings.sourceMetaFields || []);
+const centuryFields = computed(() => metaFields.value.filter(f => f.type === 'century'));
+const choiceFields = computed(() => metaFields.value.filter(f => f.type !== 'century'));
+
+// --- Century range filters ---
+// { [fieldKey]: [min, max] }; absent means "no range set".
+const centuryRanges = ref({});
+
+/** The span of centuries actually recorded for a field, used as slider bounds. */
+function centuryBounds(key) {
+    const nums = publishedList.value
+        .map(t => parseCentury(settings.getSourceMetaValue(t.source, key)))
+        .filter(n => n !== null);
+    if (!nums.length) return null;
+    return { min: Math.min(...nums), max: Math.max(...nums) };
+}
+
+function rangeFor(key) {
+    const b = centuryBounds(key);
+    if (!b) return null;
+    return centuryRanges.value[key] || [b.min, b.max];
+}
+
+function setRange(key, which, value) {
+    const b = centuryBounds(key);
+    if (!b) return;
+    const cur = rangeFor(key);
+    let [lo, hi] = cur;
+    const v = Number(value);
+    if (which === 'min') lo = Math.min(v, hi);
+    else hi = Math.max(v, lo);
+    centuryRanges.value = { ...centuryRanges.value, [key]: [lo, hi] };
+}
+
+function isRangeNarrowed(key) {
+    const b = centuryBounds(key);
+    const r = centuryRanges.value[key];
+    return !!(b && r && (r[0] > b.min || r[1] < b.max));
+}
+
+/** How many published sources have no readable century for this field. */
+function undatedCount(key) {
+    return publishedList.value.filter(t => {
+        const raw = settings.getSourceMetaValue(t.source, key);
+        return raw && parseCentury(raw) === null;
+    }).length;
+}
+
+// Undated sources would otherwise vanish the moment a range is touched, which
+// silently hides material. They are kept unless the reader opts out.
+const includeUndated = ref(true);
 
 function setMetaFilter(key, value) {
     metaFilters.value = { ...metaFilters.value, [key]: value };
@@ -28,11 +79,16 @@ function setMetaFilter(key, value) {
 
 function clearFilters() {
     metaFilters.value = {};
+    centuryRanges.value = {};
+    includeUndated.value = true;
     searchQuery.value = '';
 }
 
 const hasActiveFilters = computed(() =>
-    !!searchQuery.value.trim() || Object.values(metaFilters.value).some(v => v)
+    !!searchQuery.value.trim()
+    || Object.values(metaFilters.value).some(v => v)
+    || centuryFields.value.some(f => isRangeNarrowed(f.key))
+    || !includeUndated.value
 );
 
 /** Values actually present among the published sources, so filters never dead-end. */
@@ -74,6 +130,17 @@ const sortedTables = computed(() => {
         for (const [key, want] of Object.entries(metaFilters.value)) {
             if (!want) continue;
             if (settings.getSourceMetaValue(t.source, key) !== want) return false;
+        }
+        // Century ranges, compared on the parsed number rather than the text.
+        for (const f of centuryFields.value) {
+            if (!isRangeNarrowed(f.key)) continue;
+            const [lo, hi] = centuryRanges.value[f.key];
+            const n = parseCentury(settings.getSourceMetaValue(t.source, f.key));
+            if (n === null) {
+                if (!includeUndated.value) return false;
+                continue;
+            }
+            if (n < lo || n > hi) return false;
         }
         if (!q) return true;
         // Free-text search covers the siglum, title, and all metadata values.
@@ -137,12 +204,46 @@ function goToOverview(source, isDirect = false) {
         <div class="filter-bar">
             <input v-model="searchQuery" class="ms-search"
                    placeholder="Search manuscripts, titles and attributes…" />
-            <div v-for="f in metaFields" :key="f.key" class="filter-group" :title="f.description">
+            <!-- Text and location attributes: pick one of the values in use -->
+            <div v-for="f in choiceFields" :key="f.key" class="filter-group" :title="f.description">
                 <label>{{ f.label }}</label>
                 <select :value="metaFilters[f.key] || ''" @change="setMetaFilter(f.key, $event.target.value)">
                     <option value="">Any</option>
                     <option v-for="v in valuesForField(f.key)" :key="v" :value="v">{{ v }}</option>
                 </select>
+            </div>
+
+            <!-- Century attributes: a range over the centuries actually present -->
+            <div v-for="f in centuryFields" :key="f.key" class="filter-group range-group" :title="f.description">
+                <template v-if="rangeFor(f.key)">
+                    <label>
+                        {{ f.label }}
+                        <span class="range-value">
+                            {{ centuryLabel(rangeFor(f.key)[0]) }} – {{ centuryLabel(rangeFor(f.key)[1]) }}
+                        </span>
+                    </label>
+                    <div class="range-sliders">
+                        <input type="range" class="range-input"
+                               :min="centuryBounds(f.key).min" :max="centuryBounds(f.key).max" step="1"
+                               :value="rangeFor(f.key)[0]"
+                               :aria-label="f.label + ' from'"
+                               @input="setRange(f.key, 'min', $event.target.value)" />
+                        <input type="range" class="range-input"
+                               :min="centuryBounds(f.key).min" :max="centuryBounds(f.key).max" step="1"
+                               :value="rangeFor(f.key)[1]"
+                               :aria-label="f.label + ' to'"
+                               @input="setRange(f.key, 'max', $event.target.value)" />
+                    </div>
+                    <label v-if="undatedCount(f.key)" class="undated-toggle"
+                           :title="'Sources whose ' + f.label + ' could not be read as a century'">
+                        <input type="checkbox" v-model="includeUndated" />
+                        keep {{ undatedCount(f.key) }} undated
+                    </label>
+                </template>
+                <template v-else>
+                    <label>{{ f.label }}</label>
+                    <span class="range-empty">no dated sources</span>
+                </template>
             </div>
             <button v-if="hasActiveFilters" class="btn-clear" @click="clearFilters">Clear</button>
             <span class="result-count">{{ sortedTables.length }} shown</span>
@@ -220,6 +321,14 @@ function goToOverview(source, isDirect = false) {
 .btn-clear { padding: 7px 12px; border: 1px solid var(--color-border-hover); background: white; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
 .btn-clear:hover { background: var(--color-bg); }
 .result-count { font-size: 12px; color: var(--color-text-muted); margin-left: auto; align-self: center; }
+
+.range-group { min-width: 210px; }
+.range-value { font-weight: 800; color: var(--color-primary-hover); margin-left: 6px; text-transform: none; letter-spacing: 0; }
+.range-sliders { display: flex; flex-direction: column; gap: 2px; }
+.range-input { width: 100%; accent-color: var(--color-primary); margin: 0; }
+.range-empty { font-size: 12px; color: var(--color-text-light); font-style: italic; padding: 6px 0; }
+.undated-toggle { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; color: var(--color-text-muted); text-transform: none; letter-spacing: 0; cursor: pointer; margin-top: 2px; }
+.undated-toggle input { width: auto; }
 
 .meta-col { white-space: nowrap; }
 .meta-chip { display: inline-block; font-size: 12px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 12px; padding: 2px 10px; }

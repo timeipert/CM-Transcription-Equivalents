@@ -137,12 +137,12 @@ export const useSettingsStore = defineStore('settings', () => {
         return String(label).trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
     }
 
-    function addSourceMetaField(label, description = '') {
+    function addSourceMetaField(label, description = '', type = 'text') {
         const clean = String(label).trim()
         if (!clean) return null
         const key = slugifyFieldKey(clean)
         if (!key || sourceMetaFields.value.some(f => f.key === key)) return null
-        const field = { key, label: clean, description: String(description).trim() }
+        const field = { key, label: clean, description: String(description).trim(), type: type || 'text' }
         sourceMetaFields.value = [...sourceMetaFields.value, field]
         return field
     }
