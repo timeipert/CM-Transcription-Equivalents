@@ -1,6 +1,14 @@
 
-export function renderSvg(pattern, glyphs, isGroup) {
+/**
+ * @param {string} pattern
+ * @param {Object} glyphs built-in glyph map
+ * @param {boolean} isGroup
+ * @param {Object} [customSigns] map of custom sign key -> { viewBox, d }, letting
+ *        projects attach per-note signs (e.g. a virga marker) that change the code.
+ */
+export function renderSvg(pattern, glyphs, isGroup, customSigns = {}) {
     if (!pattern || !glyphs) return emptySvg();
+    const signKeys = customSigns ? Object.keys(customSigns) : [];
 
     // 1. Handle (Start) special case: Single Note
     if (pattern === "(Start)") {
@@ -49,7 +57,7 @@ export function renderSvg(pattern, glyphs, isGroup) {
         let suffix = "";
         while (i < p.length) {
             const nextC = p[i];
-            if (['L', 'Q', 'O', 'S', 'A', 'D'].includes(nextC)) {
+            if (['L', 'Q', 'O', 'S', 'A', 'D'].includes(nextC) || signKeys.includes(nextC)) {
                 suffix += nextC;
                 i++;
             } else {
@@ -145,6 +153,14 @@ export function renderSvg(pattern, glyphs, isGroup) {
             gInfo = glyphs["descending"];
         } else if (special.includes("L")) {
             scale = 0.65; // Normal liquescence: just make the note smaller
+        }
+
+        // Custom project signs (code variants) override the note glyph.
+        for (const key of signKeys) {
+            if (special.includes(key) && customSigns[key]) {
+                gInfo = customSigns[key];
+                break;
+            }
         }
 
         // Fallback if glyph missing

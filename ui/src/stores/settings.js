@@ -11,6 +11,15 @@ export const useSettingsStore = defineStore('settings', () => {
     const backupLabel = ref("My Backup")
     const sourceAlignments = ref({}) // { [source]: { iiifType: 'paginated'|'foliated', dataType: 'paginated'|'foliated', offset: 0 } }
     const neumeNames = ref({}) // { pattern: "Custom Name" }
+    // Code-changing variants (project-wide):
+    // customSigns: the reusable sign vocabulary. Each: { key, label, abbrev, description, glyph, glyphSvg }
+    const customSigns = ref([])
+    // codeVariants: per-base-pattern list of derived variant codes.
+    // { [baseCode]: [ { id, code, label, description } ] }
+    const codeVariants = ref({})
+    // When true, overviews/IDs treat a code variant as distinct; when false they
+    // are merged back into their base pattern ("all in one").
+    const discriminateSigns = ref(true)
 
     // Load from LocalStorage
     const stored = localStorage.getItem('globalSettings')
@@ -26,13 +35,16 @@ export const useSettingsStore = defineStore('settings', () => {
             if (parsed.backupLabel) backupLabel.value = parsed.backupLabel
             if (parsed.sourceAlignments) sourceAlignments.value = parsed.sourceAlignments
             if (parsed.neumeNames) neumeNames.value = parsed.neumeNames
+            if (Array.isArray(parsed.customSigns)) customSigns.value = parsed.customSigns
+            if (parsed.codeVariants) codeVariants.value = parsed.codeVariants
+            if (parsed.discriminateSigns !== undefined) discriminateSigns.value = parsed.discriminateSigns
         } catch (e) {
             console.error("Error loading settings", e)
         }
     }
 
     // Persist to LocalStorage
-    watch([displayMode, autoFillIds, globalDisplayIds, snippetSize, snippetPadding, backupLabel, sourceAlignments, neumeNames], () => {
+    watch([displayMode, autoFillIds, globalDisplayIds, snippetSize, snippetPadding, backupLabel, sourceAlignments, neumeNames, customSigns, codeVariants, discriminateSigns], () => {
         localStorage.setItem('globalSettings', JSON.stringify({
             displayMode: displayMode.value,
             autoFillIds: autoFillIds.value,
@@ -41,7 +53,10 @@ export const useSettingsStore = defineStore('settings', () => {
             snippetPadding: snippetPadding.value,
             backupLabel: backupLabel.value,
             sourceAlignments: sourceAlignments.value,
-            neumeNames: neumeNames.value
+            neumeNames: neumeNames.value,
+            customSigns: customSigns.value,
+            codeVariants: codeVariants.value,
+            discriminateSigns: discriminateSigns.value
         }))
     }, { deep: true })
 
@@ -75,6 +90,37 @@ export const useSettingsStore = defineStore('settings', () => {
         return neumeNames.value[pattern] || ''
     }
 
+    // --- Custom signs (code-variant vocabulary) ---
+    function addCustomSign(sign) {
+        customSigns.value = [...customSigns.value, sign]
+    }
+    function updateCustomSign(key, patch) {
+        customSigns.value = customSigns.value.map(s => s.key === key ? { ...s, ...patch } : s)
+    }
+    function removeCustomSign(key) {
+        customSigns.value = customSigns.value.filter(s => s.key !== key)
+    }
+
+    // --- Code variants (per base pattern) ---
+    function getCodeVariants(base) {
+        return codeVariants.value[base] || []
+    }
+    function addCodeVariant(base, variant) {
+        const list = codeVariants.value[base] || []
+        codeVariants.value = { ...codeVariants.value, [base]: [...list, variant] }
+    }
+    function updateCodeVariant(base, id, patch) {
+        const list = (codeVariants.value[base] || []).map(v => v.id === id ? { ...v, ...patch } : v)
+        codeVariants.value = { ...codeVariants.value, [base]: list }
+    }
+    function removeCodeVariant(base, id) {
+        const list = (codeVariants.value[base] || []).filter(v => v.id !== id)
+        const next = { ...codeVariants.value }
+        if (list.length) next[base] = list
+        else delete next[base]
+        codeVariants.value = next
+    }
+
     function setSourceAlignment(source, config) {
         sourceAlignments.value = { ...sourceAlignments.value, [source]: config }
     }
@@ -94,6 +140,16 @@ export const useSettingsStore = defineStore('settings', () => {
         backupLabel,
         sourceAlignments,
         neumeNames,
+        customSigns,
+        codeVariants,
+        discriminateSigns,
+        addCustomSign,
+        updateCustomSign,
+        removeCustomSign,
+        getCodeVariants,
+        addCodeVariant,
+        updateCodeVariant,
+        removeCodeVariant,
         setGlobalId,
         removeGlobalId,
         getGlobalId,

@@ -1,6 +1,10 @@
 <script setup>
 import { computed } from 'vue';
 import { renderSvg } from '../utils/svgRenderer';
+import { resolveSignGlyphs } from '../utils/signs';
+import { useSettingsStore } from '../stores/settings';
+
+const settings = useSettingsStore();
 
 const props = defineProps({
   pattern: { type: String, required: true },
@@ -8,8 +12,10 @@ const props = defineProps({
   isGroup: { type: Boolean, default: false }
 });
 
+const signGlyphs = computed(() => resolveSignGlyphs(settings.customSigns, props.glyphs));
+
 const rendered = computed(() => {
-    return renderSvg(props.pattern, props.glyphs, props.isGroup);
+    return renderSvg(props.pattern, props.glyphs, props.isGroup, signGlyphs.value);
 });
 </script>
 

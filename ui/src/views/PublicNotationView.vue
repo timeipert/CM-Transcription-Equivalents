@@ -7,6 +7,7 @@ import { useIiifStore } from '../stores/iiif';
 import { useSettingsStore } from '../stores/settings';
 import { useTranscriptionData } from '../composables/useTranscriptionData';
 import PatternDisplay from '../components/PatternDisplay.vue';
+import PatternCode from '../components/PatternCode.vue';
 import AnnotationCutout from '../components/AnnotationCutout.vue';
 import StateWrapper from '../components/StateWrapper.vue';
 import { useImageManifest } from '../composables/useImageManifest';
@@ -124,7 +125,9 @@ const manuscriptLines = computed(() => buildManuscriptLines({
     rawDataForSource: rawData.value[source],
     regions: annotStore.regions,
     regionItems: annotStore.regionItems,
-    patternRefMap: patternRefMap.value
+    patternRefMap: patternRefMap.value,
+    signKeys: settings.customSigns.map(s => s.key),
+    discriminateSigns: settings.discriminateSigns
 }));
 
 // For the Patterns table: map pattern -> { variant -> Set({ label, regionId, annId }) }
@@ -242,6 +245,7 @@ watch([() => route.query.zoomId, manuscriptLines], ([zId, groups]) => {
                                 </td>
                                 <td class="pattern-cell">
                                     <PatternDisplay :pattern="row.pattern" :glyphs="glyphs" />
+                                    <PatternCode :pattern="row.pattern" />
                                 </td>
                                 <td class="occurrences-cell">
                                     <div v-if="patternOccurrences?.[row.pattern]" class="variant-groups">
@@ -337,6 +341,7 @@ watch([() => route.query.zoomId, manuscriptLines], ([zId, groups]) => {
                     </button>
                     <div class="zoom-meta">
                         <PatternDisplay :pattern="zoomedItem.pattern" :glyphs="glyphs" />
+                        <PatternCode :pattern="zoomedItem.pattern" />
                     </div>
                 </div>
 
@@ -522,6 +527,11 @@ watch([() => route.query.zoomId, manuscriptLines], ([zId, groups]) => {
 .pattern-table td { padding: 8px 12px; border-bottom: 1px solid var(--color-surface-muted); }
 
 .ref-id { color: var(--color-primary-hover); font-family: 'JetBrains Mono', monospace; font-size: 1rem; font-weight: 700; }
+
+/* Glyphs plus the code beneath: with code variants the distinction can be a
+   single letter, so the code is shown as a caption under the notation. */
+.pattern-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.zoom-meta { display: flex; flex-direction: column; align-items: center; gap: 3px; }
 
 .variant-groups { display: flex; flex-direction: column; gap: 6px; }
 .variant-group { display: flex; flex-direction: column; gap: 2px; }

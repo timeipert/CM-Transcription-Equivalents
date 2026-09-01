@@ -4,6 +4,7 @@ import { useAnnotationsStore } from '../stores/annotations';
 import { usePersonalTablesStore } from '../stores/personalTables';
 import { useSettingsStore } from '../stores/settings';
 import { useImageManifest } from './useImageManifest';
+import { stripSignKeys, signMarker } from '../utils/signs';
 
 function parseLineNumber(name) {
     if (!name) return null;
@@ -238,8 +239,33 @@ export function useManagerWorkspace(props) {
         return res;
     });
 
+    const signKeys = computed(() => settings.customSigns.map(s => s.key));
+
+    // Build a display id for an annotation/item, understanding code-variant signs.
+    function buildDisplay(patternField, classifierVariant, linkTrans) {
+        const basePat = getBasePattern(patternField);
+        const baseCode = stripSignKeys(basePat, signKeys.value);
+        const localId = patternCustomIdMap.value[baseCode] || patternCustomIdMap.value[basePat];
+        const globalId = settings.getGlobalId(baseCode) || settings.getGlobalId(basePat);
+        let dId = localId || globalId || baseCode;
+
+        // Code-variant sign marker (only when discriminating).
+        if (settings.discriminateSigns) {
+            const marker = signMarker(basePat, settings.customSigns);
+            if (marker) dId = `${dId}·${marker}`;
+        }
+
+        // Snippet-classifier variant (a, b, c…) as before.
+        let variant = classifierVariant || '';
+        if (!variant && linkTrans && linkTrans.length > basePat.length && linkTrans.startsWith(basePat)) {
+            variant = linkTrans.substring(basePat.length).trim();
+        }
+        if (variant) dId = `${dId}${variant}`;
+        return { displayId: dId, variant };
+    }
+
     const activeRegion = ref(null);
-    
+
     const activeRegionRect = computed(() => activeRegion.value ? getRectFromPoints(activeRegion.value.points) : null);
 
     const activeRegionItems = computed(() => {
@@ -252,21 +278,10 @@ export function useManagerWorkspace(props) {
                 if (key.startsWith(prefix)) {
                     const pattern = key.substring(prefix.length);
                      for (const a of annotStore.annotations[key]) {
-                         const basePat = getBasePattern(pattern);
-                         const localId = patternCustomIdMap.value[basePat];
-                         const globalId = settings.getGlobalId(basePat);
-                         let dId = localId || globalId || basePat;
-                         
-                         let variant = a.variant || '';
-                         const trans = a.linkData?.transcription || '';
-                         if (!variant && trans && trans.length > basePat.length && trans.startsWith(basePat)) {
-                             variant = trans.substring(basePat.length).trim();
-                         }
-                         if (!variant && pattern.includes(' ')) {
-                             variant = pattern.split(' ')[1];
-                         }
-                         if (variant) dId = `${dId}${variant}`;
-                         items.push({ ...a, pattern, displayId: dId, variant });
+                         let classifier = a.variant || '';
+                         if (!classifier && pattern.includes(' ')) classifier = pattern.split(' ')[1];
+                         const { displayId, variant } = buildDisplay(pattern, classifier, a.linkData?.transcription || '');
+                         items.push({ ...a, pattern, displayId, variant });
                     }
                 }
             }
@@ -275,18 +290,8 @@ export function useManagerWorkspace(props) {
         
         const items = annotStore.getRegionItems(activeRegion.value.id);
         return items.map(item => {
-            const basePat = getBasePattern(item.pattern);
-            const localId = patternCustomIdMap.value[basePat];
-            const globalId = settings.getGlobalId(basePat);
-            let dId = localId || globalId || basePat;
-            
-            let variant = item.variant || '';
-            const trans = item.linkData?.transcription || '';
-            if (!variant && trans && trans.length > basePat.length && trans.startsWith(basePat)) {
-                variant = trans.substring(basePat.length).trim();
-            }
-            if (variant) dId = `${dId}${variant}`;
-            return { ...item, displayId: dId, variant };
+            const { displayId, variant } = buildDisplay(item.pattern, item.variant || '', item.linkData?.transcription || '');
+            return { ...item, displayId, variant };
         });
     });
 
@@ -297,7 +302,8 @@ export function useManagerWorkspace(props) {
         if (!activePattern.value || !props.source) return [];
         const srcData = rawData.value[props.source];
         if (!srcData) return [];
-        const allOccs = srcData[activePattern.value] || [];
+        const baseCode = stripSignKeys(activePattern.value, signKeys.value);
+        const allOccs = srcData[baseCode] || srcData[activePattern.value] || [];
         
         const target = String(props.folio).toLowerCase();
         const stdTarget = String(getStandardFolio(props.source, props.folio)).toLowerCase();
@@ -331,6 +337,7 @@ export function useManagerWorkspace(props) {
         pagePatterns, otherPageAnnotations, patternSort, patternSearch,
         activeRegion, activeRegionRect, activeRegionItems,
         activePattern, activeVariant, linkCandidates, patternCustomIdMap,
+        codeVariants: computed(() => settings.codeVariants),
         glyphs, getImageUrl, getIiifThumbnailUrl, hasTranscriptionData,
         getBasePattern, parseLineNumber, annotStore
     };

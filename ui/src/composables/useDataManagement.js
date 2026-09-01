@@ -46,7 +46,10 @@ export function useDataManagement() {
                     neumeNames: settings.neumeNames,
                     sourceAlignments: settings.sourceAlignments,
                     snippetSize: settings.snippetSize,
-                    snippetPadding: settings.snippetPadding
+                    snippetPadding: settings.snippetPadding,
+                    customSigns: settings.customSigns,
+                    codeVariants: settings.codeVariants,
+                    discriminateSigns: settings.discriminateSigns
                 } : undefined
             }
         };
@@ -111,7 +114,10 @@ export function useDataManagement() {
                 neumeNames: settings.neumeNames,
                 sourceAlignments: settings.sourceAlignments,
                 snippetSize: settings.snippetSize,
-                snippetPadding: settings.snippetPadding
+                snippetPadding: settings.snippetPadding,
+                customSigns: settings.customSigns,
+                codeVariants: settings.codeVariants,
+                discriminateSigns: settings.discriminateSigns
             }
         };
 
@@ -139,6 +145,9 @@ export function useDataManagement() {
         if (s.sourceAlignments) settings.sourceAlignments = s.sourceAlignments;
         if (s.snippetSize) settings.snippetSize = s.snippetSize;
         if (s.snippetPadding) settings.snippetPadding = s.snippetPadding;
+        if (Array.isArray(s.customSigns)) settings.customSigns = s.customSigns;
+        if (s.codeVariants) settings.codeVariants = s.codeVariants;
+        if (s.discriminateSigns !== undefined) settings.discriminateSigns = s.discriminateSigns;
     }
 
     function readFileAsJson(file) {

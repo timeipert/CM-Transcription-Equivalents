@@ -22,6 +22,7 @@ import { useImageManifest } from './useImageManifest';
 import { buildPatternRefMap, buildManuscriptLines, pointsBoundingBox } from './usePublicNotation';
 import { comparePatternIds, compareChantPatterns } from '../utils/sorting';
 import { renderSvg } from '../utils/svgRenderer';
+import { resolveSignGlyphs, splitCodeBySigns } from '../utils/signs';
 
 import { getNeumeName } from '../config/neumeNames';
 
@@ -115,7 +116,7 @@ async function fetchCrop({ getIiifRegionUrl, getImageUrl }, source, folio, bbox,
 
 // ---- pattern rendering (mirrors PatternDisplay.vue) ------------------------
 
-function patternMarkup(pattern, glyphs, displayMode) {
+function patternMarkup(pattern, glyphs, displayMode, signGlyphs = {}) {
     if (displayMode === 'arrow') {
         const a = String(pattern).replace(/u/g, '↗').replace(/d/g, '↘').replace(/e/g, '→');
         return `<span class="mode-arrow">${esc(a)}</span>`;
@@ -124,8 +125,20 @@ function patternMarkup(pattern, glyphs, displayMode) {
         return `<span class="mode-text">${esc(pattern)}</span>`;
     }
     // 'svg' (default): renderSvg returns a complete standalone <svg> string
-    const r = renderSvg(pattern, glyphs, false);
+    const r = renderSvg(pattern, glyphs, false, signGlyphs);
     return r.content || `<span class="mode-text">${esc(pattern)}</span>`;
+}
+
+/**
+ * The code shown as a caption beneath the notation, with custom-sign letters
+ * emphasised. Mirrors the live view's PatternCode.vue — with code variants the
+ * distinction between two patterns can be a single letter.
+ */
+function patternCodeMarkup(pattern, signKeys = []) {
+    const segs = splitCodeBySigns(pattern, signKeys)
+        .map(s => s.isSign ? `<span class="sign">${esc(s.text)}</span>` : esc(s.text))
+        .join('');
+    return `<code class="pattern-code">${segs}</code>`;
 }
 
 // ---- occurrences (mirrors PublicNotationView patternOccurrences) -----------
@@ -183,8 +196,10 @@ h1{margin:4px 0 0;font-size:2.6rem;font-weight:800;letter-spacing:-.02em;}
 .pattern-table th{background:var(--color-bg);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-muted);padding:10px;text-align:left;}
 .pattern-table td{padding:8px 12px;border-bottom:1px solid var(--color-surface-muted);vertical-align:top;}
 .ref-id{color:var(--color-primary-hover);font-family:"JetBrains Mono",monospace;font-size:1rem;font-weight:700;}
-.pattern-cell{min-width:120px;}
+.pattern-cell{min-width:120px;text-align:center;}
 .pattern-cell svg{display:block;margin:0 auto;max-width:100%;height:auto;}
+.pattern-code{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--color-text-muted);letter-spacing:.02em;white-space:nowrap;display:inline-block;margin-top:3px;}
+.pattern-code .sign{color:var(--color-primary-hover);font-weight:800;background:var(--color-primary-light);border-radius:2px;padding:0 2px;}
 .mode-arrow{font-size:1.1em;color:var(--color-text-muted);} .mode-text{font-family:monospace;font-weight:bold;}
 .variant-groups{display:flex;flex-direction:column;gap:6px;}
 .variant-header{font-size:.65rem;font-weight:800;text-transform:uppercase;color:var(--color-text-muted);letter-spacing:.05em;}
@@ -292,7 +307,7 @@ ${overlays}
 </div>`;
 }
 
-function sourcePageHtml({ source, table, patternRefMap, lines, glyphs, displayMode, lineHrefById }) {
+function sourcePageHtml({ source, table, patternRefMap, lines, glyphs, displayMode, lineHrefById, signGlyphs = {}, signKeys = [] }) {
     const occ = buildPatternOccurrences(lines);
     const rows = [...(table.rows || [])].sort((a, b) => comparePatternIds(a.customId, b.customId));
     const mid = Math.ceil(rows.length / 2);
@@ -301,7 +316,7 @@ function sourcePageHtml({ source, table, patternRefMap, lines, glyphs, displayMo
     const columnsHtml = halves.map(half => {
         const body = half.map(row => {
             const refId = patternRefMap[row.pattern] || '-';
-            const patCell = patternMarkup(row.pattern, glyphs, displayMode);
+            const patCell = patternMarkup(row.pattern, glyphs, displayMode, signGlyphs);
             let occCell = '<span class="no-data">None</span>';
             if (occ[row.pattern]) {
                 occCell = '<div class="variant-groups">' + Object.entries(occ[row.pattern]).map(([variant, locs]) => {
@@ -310,7 +325,8 @@ function sourcePageHtml({ source, table, patternRefMap, lines, glyphs, displayMo
                     return `<div class="variant-group">${vh}<div class="loc-list">${tags}</div></div>`;
                 }).join('') + '</div>';
             }
-            return `<tr><td class="ref-id">${esc(refId)}</td><td class="pattern-cell">${patCell}</td><td>${occCell}</td></tr>`;
+            const codeCell = patternCodeMarkup(row.pattern, signKeys);
+            return `<tr><td class="ref-id">${esc(refId)}</td><td class="pattern-cell">${patCell}${codeCell}</td><td>${occCell}</td></tr>`;
         }).join('');
         return `<div class="table-column"><table class="pattern-table"><thead><tr><th>Ref ID</th><th>Pattern</th><th>Occurrences</th></tr></thead><tbody>${body}</tbody></table></div>`;
     }).join('');
@@ -419,16 +435,16 @@ function directoryMarkdown(entries) {
 
 // ---- Neumentabelle (Matrix Comparison) -------------------------------------
 
-function neumentabelleHtml({ publishedSources, allPatterns, matrixSnippets, glyphs, displayMode, customNeumeNames }) {
+function neumentabelleHtml({ publishedSources, allPatterns, matrixSnippets, glyphs, displayMode, customNeumeNames, signGlyphs = {}, signKeys = [] }) {
     // Header row with patterns
     const ths = allPatterns.map(pat => {
-        const patCell = patternMarkup(pat, glyphs, displayMode);
+        const patCell = patternMarkup(pat, glyphs, displayMode, signGlyphs);
         const name = getNeumeName(pat, customNeumeNames);
         const nameBadge = name ? `<div class="matrix-pat-name">${esc(name)}</div>` : '';
         return `<th class="matrix-pat-th">
 <div class="matrix-pat-box">
 <div class="matrix-pat-svg">${patCell}</div>
-<div class="matrix-pat-code">${esc(pat)}</div>
+<div class="matrix-pat-code">${patternCodeMarkup(pat, signKeys)}</div>
 ${nameBadge}
 </div>
 </th>`;
@@ -590,7 +606,9 @@ export async function exportStaticSite(onProgress = () => {}) {
             rawDataForSource: rawData.value[source],
             regions: annotStore.regions,
             regionItems: annotStore.regionItems,
-            patternRefMap
+            patternRefMap,
+            signKeys: settings.customSigns.map(s => s.key),
+            discriminateSigns: settings.discriminateSigns
         });
 
         // Unique folder per source
@@ -648,7 +666,11 @@ export async function exportStaticSite(onProgress = () => {}) {
         });
 
         // Generate individual source pages
-        const html = sourcePageHtml({ source, table, patternRefMap, lines, glyphs, displayMode, lineHrefById });
+        const signGlyphs = resolveSignGlyphs(settings.customSigns, glyphs);
+        const html = sourcePageHtml({
+            source, table, patternRefMap, lines, glyphs, displayMode, lineHrefById,
+            signGlyphs, signKeys: settings.customSigns.map(s => s.key)
+        });
         const md = sourcePageMarkdown({ source, table, patternRefMap, lines, snippetPathById: snippetPathRelById });
         zip.file(`${folder}/index.html`, html);
         zip.file(`${folder}/index.md`, md);
@@ -666,6 +688,7 @@ export async function exportStaticSite(onProgress = () => {}) {
     report('neumentabelle', 'Building Neumentabelle comparative matrix…');
     const allMatrixPatterns = Array.from(patternCountMap.keys()).sort((a, b) => compareChantPatterns(a, b, 'freq', patternCountMap));
     const glyphs = useTranscriptionData().glyphs.value;
+    const ntSignGlyphs = resolveSignGlyphs(settings.customSigns, glyphs);
 
     const ntHtml = neumentabelleHtml({
         publishedSources: publishedSourcesForMatrix,
@@ -673,7 +696,9 @@ export async function exportStaticSite(onProgress = () => {}) {
         matrixSnippets,
         glyphs,
         displayMode,
-        customNeumeNames: settings.neumeNames
+        customNeumeNames: settings.neumeNames,
+        signGlyphs: ntSignGlyphs,
+        signKeys: settings.customSigns.map(s => s.key)
     });
 
     const ntMd = neumentabelleMarkdown({
