@@ -10,6 +10,13 @@ import { exportStaticSite } from '../composables/useStaticExport';
 
 const store = useSettingsStore();
 const { sourceFolios } = useTranscriptionData();
+
+import { usePersonalTablesStore } from '../stores/personalTables';
+import { useDirectSnippetsStore } from '../stores/directSnippets';
+import { useSaveReminderStore } from '../stores/saveReminder';
+const tablesStore = usePersonalTablesStore();
+const directStore = useDirectSnippetsStore();
+const reminder = useSaveReminderStore();
 const storage = useWorkspaceStorage();
 
 // Static site export
@@ -689,6 +696,104 @@ const alignPreview = computed(() => {
                 </tbody>
             </table>
             <div v-else class="empty">No neume names defined</div>
+        </div>
+    </div>
+
+    <div class="card section">
+        <h2>Backup Reminder</h2>
+        <p class="desc">A reminder appears when you have unsaved work and haven't exported a backup
+            in a while. The status pill in the toolbar always shows where your work stands.</p>
+        <div class="reminder-row">
+            <span v-if="reminder.disabled" class="reminder-state off">Reminders are turned off</span>
+            <span v-else class="reminder-state on">Reminders are on</span>
+            <button v-if="reminder.disabled" @click="reminder.enableReminder()" class="btn-sm btn-secondary">
+                Turn reminders back on
+            </button>
+            <button v-else @click="reminder.disableReminder()" class="btn-sm btn-secondary">
+                Turn off reminders
+            </button>
+            <span class="text-sm-light">
+                {{ reminder.changeCount }} change(s) since last backup ·
+                last backup {{ reminder.sinceExportLabel }}
+            </span>
+        </div>
+    </div>
+
+    <div class="card section">
+        <h2>Source Metadata</h2>
+        <p class="desc">Define free-text attributes for manuscripts (e.g. <em>Century</em>, <em>Region</em>,
+            <em>Notation type</em>), then fill in a value per source. Readers can filter and search by these
+            attributes in the public manuscript directory.</p>
+
+        <div class="add-row">
+            <input v-model="newMetaLabel" placeholder="Attribute name (e.g. Century)" @keyup.enter="addMetaField" />
+            <input v-model="newMetaDesc" placeholder="Description (optional)" @keyup.enter="addMetaField" />
+            <button @click="addMetaField" :disabled="!newMetaLabel.trim()">Add Attribute</button>
+        </div>
+        <div v-if="metaError" class="sign-error">{{ metaError }}</div>
+
+        <div class="ids-list">
+            <table v-if="store.sourceMetaFields.length > 0">
+                <thead>
+                    <tr><th>Attribute</th><th>Key</th><th>Description</th><th>Values in use</th><th>Action</th></tr>
+                </thead>
+                <tbody>
+                    <tr v-for="f in store.sourceMetaFields" :key="f.key">
+                        <td><strong>{{ f.label }}</strong></td>
+                        <td class="code-font">{{ f.key }}</td>
+                        <td class="text-sm-light">{{ f.description }}</td>
+                        <td class="text-sm-light">{{ store.sourceMetaValuesFor(f.key).length }}</td>
+                        <td><button @click="store.removeSourceMetaField(f.key)" class="btn-sm btn-danger">Remove</button></td>
+                    </tr>
+                </tbody>
+            </table>
+            <div v-else class="empty">No attributes defined yet</div>
+        </div>
+
+        <div v-if="store.sourceMetaFields.length > 0" class="meta-values">
+            <div class="flex-between-mb10">
+                <h3 class="mt-0">Values per Manuscript</h3>
+                <div class="meta-tools">
+                    <input v-model="metaSourceSearch" placeholder="Search manuscripts…" class="meta-search" />
+                    <label class="meta-showall">
+                        <input type="checkbox" v-model="showAllMetaSources" />
+                        Show all ({{ metaSources.length }})
+                    </label>
+                </div>
+            </div>
+            <p class="desc" v-if="!showAllMetaSources && !metaSourceSearch.trim()">
+                Showing the {{ metaSourcesWithValues.length }} manuscript(s) that already have values.
+                Tick “Show all” or search to add more.
+            </p>
+
+            <div class="meta-table-scroll">
+                <table v-if="visibleMetaSources.length > 0">
+                    <thead>
+                        <tr>
+                            <th class="meta-src-col">Manuscript</th>
+                            <th v-for="f in store.sourceMetaFields" :key="f.key" :title="f.description">{{ f.label }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="src in visibleMetaSources" :key="src">
+                            <td class="meta-src-col"><strong>{{ src }}</strong></td>
+                            <td v-for="f in store.sourceMetaFields" :key="f.key">
+                                <input class="meta-input"
+                                       :value="store.getSourceMetaValue(src, f.key)"
+                                       :placeholder="f.label"
+                                       :list="`metavals-${f.key}`"
+                                       @input="store.setSourceMetaValue(src, f.key, $event.target.value)" />
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div v-else class="empty">No manuscripts match.</div>
+            </div>
+
+            <!-- Suggest values already used elsewhere, to keep them consistent -->
+            <datalist v-for="f in store.sourceMetaFields" :key="f.key" :id="`metavals-${f.key}`">
+                <option v-for="v in store.sourceMetaValuesFor(f.key)" :key="v" :value="v" />
+            </datalist>
         </div>
     </div>
 

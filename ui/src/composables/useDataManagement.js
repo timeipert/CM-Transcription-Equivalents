@@ -4,6 +4,7 @@ import { usePersonalTablesStore } from '../stores/personalTables';
 import { useIiifStore } from '../stores/iiif';
 import { useOmmrStore } from '../stores/ommr';
 import { useDirectSnippetsStore } from '../stores/directSnippets';
+import { useSaveReminderStore } from '../stores/saveReminder';
 import { extractManuscripts, mergeManuscript, getManuscriptStats } from '../utils/workspaceSharing';
 
 const SCHEMA_VERSION = 1;
@@ -73,6 +74,7 @@ export function useDataManagement() {
         a.click();
 
         URL.revokeObjectURL(url);
+
     }
 
     // Export specific manuscripts (only those with data)

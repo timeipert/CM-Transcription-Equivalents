@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { RouterLink, RouterView, useRoute } from 'vue-router'
+import SaveReminder from './components/SaveReminder.vue';
 
 const route = useRoute();
 const isPublic = computed(() => route.path.startsWith('/public'));
