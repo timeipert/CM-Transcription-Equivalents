@@ -2,10 +2,10 @@
  * Types for source metadata attributes.
  *
  * Values are always stored as the text the user typed — a manuscript's date is
- * often "11th c. (2nd half)" or "s. XI/XII", and normalising that away would
+ * often "s. XI/XII" or "11th c. (2nd half)", and normalising that away would
  * lose scholarship. Types only add interpretation on top: a `century` field is
- * additionally *parsed* to a number so the public view can offer a range
- * filter, and a value that cannot be parsed still displays, it just sits
+ * additionally parsed to a *year range*, so the public view can offer a
+ * timeline filter. A value that cannot be parsed still displays; it simply sits
  * outside the range filter.
  */
 
@@ -17,8 +17,8 @@ export const META_TYPES = [
     },
     {
         key: 'century',
-        label: 'Century / dating',
-        hint: 'Parsed to a century number (11, "11th c.", "s. XI" all work). Filtered with a range slider.'
+        label: 'Date / century',
+        hint: 'Read as a year range ("11th c.", "s. XI/XII", "c. 1100", "1050–1075"). Filtered on a draggable timeline.'
     },
     {
         key: 'location',
@@ -44,51 +44,170 @@ function romanToInt(s) {
     return total || null;
 }
 
+/** Inclusive first and last year of a century: 11 -> [1001, 1100]. */
+function centurySpan(c) {
+    return [(c - 1) * 100 + 1, c * 100];
+}
+
 /**
- * Best-effort century number from a free-text dating.
- *
- * Handles the forms that actually turn up in catalogues:
- *   "11", "11th", "11th c.", "s. XI", "XI", "saec. XI/XII" -> 11
- *   "c. 1100", "1150"                                      -> 12
- * A range takes its first element, since that is what sorting should key on.
- *
- * @returns {number|null} the century, or null when nothing sensible parses out
+ * Qualifiers that narrow a century, in Latin, English and German forms.
+ * Each maps to a fraction of the century as [from, to] in 0..1.
  */
-export function parseCentury(value) {
+const QUALIFIERS = [
+    { re: /\b(in\.?|init\.?|initium|beginning|anfang|early|frühe?)\b/i, span: [0, 1 / 3] },
+    { re: /\b(med\.?|medio|middle|mitte|mid)\b/i, span: [1 / 3, 2 / 3] },
+    { re: /\b(ex\.?|exeunte|end|ende|late|späte?)\b/i, span: [2 / 3, 1] },
+    { re: /\b(1\s*\/\s*2|1st half|first half|1\.?\s*hälfte|erste hälfte)\b/i, span: [0, 0.5] },
+    { re: /\b(2\s*\/\s*2|2nd half|second half|2\.?\s*hälfte|zweite hälfte)\b/i, span: [0.5, 1] },
+    { re: /\b(1\s*\/\s*4|1st quarter|first quarter|1\.?\s*viertel)\b/i, span: [0, 0.25] },
+    { re: /\b(2\s*\/\s*4|2nd quarter|second quarter|2\.?\s*viertel)\b/i, span: [0.25, 0.5] },
+    { re: /\b(3\s*\/\s*4|3rd quarter|third quarter|3\.?\s*viertel)\b/i, span: [0.5, 0.75] },
+    { re: /\b(4\s*\/\s*4|4th quarter|fourth quarter|last quarter|4\.?\s*viertel)\b/i, span: [0.75, 1] }
+];
+
+function applyQualifier(text, [lo, hi]) {
+    for (const q of QUALIFIERS) {
+        if (q.re.test(text)) {
+            const width = hi - lo + 1;
+            return [
+                Math.round(lo + width * q.span[0]),
+                Math.round(lo + width * q.span[1]) - 1
+            ];
+        }
+    }
+    return [lo, hi];
+}
+
+/** How much slack "c." / "ca." / "um" implies around a single year. */
+const CIRCA_SLACK = 25;
+
+/**
+ * Read a free-text dating into an inclusive year range.
+ *
+ * Handles the forms that actually turn up in manuscript catalogues:
+ *   "11th c.", "s. XI", "saec. XI", "11. Jh."   -> 1001–1100
+ *   "s. XI in." / "11th c., 1st half"           -> narrowed within the century
+ *   "s. XI/XII"                                 -> straddles the turn (1076–1125)
+ *   "11th-12th c.", "s. XI-XII"                 -> 1001–1200
+ *   "1050"                                      -> 1050
+ *   "c. 1100", "ca. 1100", "um 1100"            -> 1075–1125
+ *   "1050-1075", "1050/75"                      -> 1050–1075
+ *   "before 1100" / "ante 1100"                 -> open start
+ *   "after 1100" / "post 1100"                  -> open end
+ *
+ * @returns {{start:number, end:number}|null} inclusive years, or null if unreadable
+ */
+export function parseDateRange(value) {
     if (value === null || value === undefined) return null;
     const s = String(value).trim();
     if (!s) return null;
 
-    // A 3-4 digit year ("1150", "c. 1100") -> the century containing it.
-    const year = s.match(/\b(\d{3,4})\b/);
-    if (year) {
-        const y = parseInt(year[1], 10);
-        if (y > 0) return Math.floor((y - 1) / 100) + 1;
+    const circa = /\b(c\.|ca\.?|circa|um|about|etwa|~)\s*\d/i.test(s);
+
+    // --- Explicit year forms -------------------------------------------------
+    // "before 1100" / "ante 1100"
+    const before = s.match(/\b(?:before|ante|vor|bis)\s+(?:c\.|ca\.?|circa|um)?\s*(\d{3,4})\b/i);
+    if (before) return { start: -Infinity, end: parseInt(before[1], 10) };
+
+    // "after 1100" / "post 1100"
+    const after = s.match(/\b(?:after|post|nach|ab)\s+(?:c\.|ca\.?|circa|um)?\s*(\d{3,4})\b/i);
+    if (after) return { start: parseInt(after[1], 10), end: Infinity };
+
+    // A year range: "1050-1075", "1050–1075", "1050/1075", "1050/75"
+    const yearRange = s.match(/\b(\d{3,4})\s*[-–—/]\s*(\d{2,4})\b/);
+    if (yearRange) {
+        const a = parseInt(yearRange[1], 10);
+        let b = parseInt(yearRange[2], 10);
+        // "1050/75" means 1075, not the year 75.
+        if (b < 100) b = Math.floor(a / 100) * 100 + b;
+        if (b >= a) return { start: a, end: b };
     }
 
-    // A plain/ordinal century number ("11", "11th c.", "11.-12.").
-    // No trailing \b: an ordinal suffix is a word character, so "11th" would not
-    // match — only assert that the number does not continue.
-    const num = s.match(/\b(\d{1,2})(?!\d)/);
-    if (num) {
-        const n = parseInt(num[1], 10);
-        if (n >= 1 && n <= 21) return n;
+    // A single year, possibly circa.
+    const singleYear = s.match(/\b(\d{3,4})\b/);
+    if (singleYear && !/\d{1,2}\s*(?:st|nd|rd|th|\.)\s*(?:c|cent|jh)/i.test(s)) {
+        const y = parseInt(singleYear[1], 10);
+        return circa
+            ? { start: y - CIRCA_SLACK, end: y + CIRCA_SLACK }
+            : { start: y, end: y };
     }
 
-    // Roman numerals, optionally after "s." / "saec." and before a range.
-    const roman = s.match(/\b([ivxlcdm]+)\b/i);
-    if (roman) {
-        const n = romanToInt(roman[1]);
-        if (n && n >= 1 && n <= 21) return n;
+    // --- Century forms -------------------------------------------------------
+    // Fraction qualifiers ("2/2", "4/4") must not be mistaken for century
+    // numbers, so match the qualifier on the original text but strip fractions
+    // before looking for centuries.
+    const sCentury = s.replace(/\b\d\s*\/\s*\d\b/g, ' ');
+    const centuries = [];
+
+    // Arabic centuries: "11th c.", "11. Jh.", "11.-12. Jh."
+    const arabicRe = /\b(\d{1,2})\s*(?:st|nd|rd|th|\.)?\s*(?=[-–—/]|\s*(?:c\b|c\.|cent|century|jh|jahrh))/gi;
+    let m;
+    while ((m = arabicRe.exec(sCentury)) !== null) {
+        const n = parseInt(m[1], 10);
+        if (n >= 1 && n <= 21) centuries.push(n);
     }
 
-    return null;
+    // Roman centuries: "s. XI", "saec. XI/XII", "XI-XII"
+    if (centuries.length === 0) {
+        const romanRe = /\b([ivxlcdm]{1,6})\b/gi;
+        while ((m = romanRe.exec(sCentury)) !== null) {
+            // Skip qualifier words that happen to be valid roman numerals
+            // ("in.", "med.", "ex." are handled separately; "i" alone is rare).
+            const n = romanToInt(m[1]);
+            if (n && n >= 1 && n <= 21) centuries.push(n);
+        }
+    }
+
+    if (centuries.length === 0) return null;
+
+    const first = Math.min(...centuries);
+    const last = Math.max(...centuries);
+
+    // "XI/XII" (a slash, not a dash) means the turn of the century, not both in
+    // full — conventionally a band straddling the boundary.
+    const isTurn = centuries.length > 1 && /\d\s*\/\s*[ivxlcdm\d]|[ivxlcdm]\s*\/\s*[ivxlcdm]/i.test(sCentury);
+    if (isTurn && last === first + 1) {
+        const boundary = centurySpan(first)[1]; // last year of the earlier century
+        return { start: boundary - 24, end: boundary + 25 };
+    }
+
+    const lo = centurySpan(first)[0];
+    const hi = centurySpan(last)[1];
+
+    // A qualifier only makes sense for a single century.
+    if (first === last) {
+        const [qLo, qHi] = applyQualifier(s, [lo, hi]);
+        return { start: qLo, end: qHi };
+    }
+    return { start: lo, end: hi };
 }
 
-/** Century -> a compact label for axis ends and chips, e.g. 11 -> "11th c." */
+/** Century number for a value, kept for sorting and compact display. */
+export function parseCentury(value) {
+    const r = parseDateRange(value);
+    if (!r) return null;
+    const y = Number.isFinite(r.start) ? r.start : r.end;
+    if (!Number.isFinite(y)) return null;
+    return Math.floor((y - 1) / 100) + 1;
+}
+
+/** Century -> a compact label, e.g. 11 -> "11th c." */
 export function centuryLabel(n) {
     if (n === null || n === undefined) return '';
     const s = ['th', 'st', 'nd', 'rd'];
     const v = n % 100;
     return `${n}${s[(v - 20) % 10] || s[v] || s[0]} c.`;
+}
+
+/** A short readout for a year, used on the timeline. */
+export function yearLabel(y) {
+    if (y === -Infinity) return 'earliest';
+    if (y === Infinity) return 'latest';
+    return String(Math.round(y));
+}
+
+/** Do two inclusive ranges overlap at all? */
+export function rangesOverlap(a, b) {
+    if (!a || !b) return false;
+    return a.start <= b.end && b.start <= a.end;
 }

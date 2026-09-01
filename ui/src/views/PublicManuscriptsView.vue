@@ -5,7 +5,8 @@ import { usePersonalTablesStore } from '../stores/personalTables';
 import { useAnnotationsStore } from '../stores/annotations';
 import { useSettingsStore } from '../stores/settings';
 import { useDirectSnippetsStore } from '../stores/directSnippets';
-import { parseCentury, centuryLabel } from '../utils/sourceMeta';
+import { parseDateRange, rangesOverlap, yearLabel } from '../utils/sourceMeta';
+import DateRangeTimeline from '../components/DateRangeTimeline.vue';
 
 const tableStore = usePersonalTablesStore();
 const annotStore = useAnnotationsStore();
@@ -22,50 +23,77 @@ const searchQuery = ref('');
 const metaFilters = ref({});
 
 const metaFields = computed(() => settings.sourceMetaFields || []);
-const centuryFields = computed(() => metaFields.value.filter(f => f.type === 'century'));
+const dateFields = computed(() => metaFields.value.filter(f => f.type === 'century'));
 const choiceFields = computed(() => metaFields.value.filter(f => f.type !== 'century'));
 
-// --- Century range filters ---
-// { [fieldKey]: [min, max] }; absent means "no range set".
-const centuryRanges = ref({});
+// --- Date range filters ---
+// The timeline always spans at least this, so the axis reads as a period rather
+// than a window tightly cropped to whatever happens to be entered.
+const DEFAULT_MIN = 400;
+const DEFAULT_MAX = 1600;
 
-/** The span of centuries actually recorded for a field, used as slider bounds. */
-function centuryBounds(key) {
-    const nums = publishedList.value
-        .map(t => parseCentury(settings.getSourceMetaValue(t.source, key)))
-        .filter(n => n !== null);
-    if (!nums.length) return null;
-    return { min: Math.min(...nums), max: Math.max(...nums) };
+// { [fieldKey]: [fromYear, toYear] }; absent means "the full extent".
+const dateRanges = ref({});
+
+/** Every parsed dating recorded for a field, with its source, for the marks. */
+function datedPoints(key) {
+    const out = [];
+    for (const t of publishedList.value) {
+        const raw = settings.getSourceMetaValue(t.source, key);
+        const r = parseDateRange(raw);
+        if (!r) continue;
+        // Open-ended datings are clamped to the axis so they stay drawable.
+        out.push({
+            start: Number.isFinite(r.start) ? r.start : DEFAULT_MIN,
+            end: Number.isFinite(r.end) ? r.end : DEFAULT_MAX,
+            label: `${t.source} — ${raw}`
+        });
+    }
+    return out;
+}
+
+/** Axis extent: the default period, widened by any data lying outside it. */
+function dateBounds(key) {
+    const pts = datedPoints(key);
+    let min = DEFAULT_MIN, max = DEFAULT_MAX;
+    for (const p of pts) {
+        if (p.start < min) min = p.start;
+        if (p.end > max) max = p.end;
+    }
+    // Round outwards to a tidy century so the axis labels stay readable.
+    min = Math.floor(min / 100) * 100;
+    max = Math.ceil(max / 100) * 100;
+    return { min, max };
 }
 
 function rangeFor(key) {
-    const b = centuryBounds(key);
-    if (!b) return null;
-    return centuryRanges.value[key] || [b.min, b.max];
+    const b = dateBounds(key);
+    return dateRanges.value[key] || [b.min, b.max];
 }
 
-function setRange(key, which, value) {
-    const b = centuryBounds(key);
-    if (!b) return;
+function setRangeEnd(key, which, year) {
     const cur = rangeFor(key);
-    let [lo, hi] = cur;
-    const v = Number(value);
-    if (which === 'min') lo = Math.min(v, hi);
-    else hi = Math.max(v, lo);
-    centuryRanges.value = { ...centuryRanges.value, [key]: [lo, hi] };
+    const next = which === 'from' ? [year, cur[1]] : [cur[0], year];
+    dateRanges.value = { ...dateRanges.value, [key]: next };
 }
 
 function isRangeNarrowed(key) {
-    const b = centuryBounds(key);
-    const r = centuryRanges.value[key];
-    return !!(b && r && (r[0] > b.min || r[1] < b.max));
+    const b = dateBounds(key);
+    const r = dateRanges.value[key];
+    return !!(r && (r[0] > b.min || r[1] < b.max));
 }
 
-/** How many published sources have no readable century for this field. */
+function resetRange(key) {
+    const next = { ...dateRanges.value };
+    delete next[key];
+    dateRanges.value = next;
+}
+
+/** How many published sources have a dating that could not be read. */
 function undatedCount(key) {
     return publishedList.value.filter(t => {
         const raw = settings.getSourceMetaValue(t.source, key);
-        return raw && parseCentury(raw) === null;
+        return raw && parseDateRange(raw) === null;
     }).length;
 }
 
@@ -79,7 +107,7 @@ function setMetaFilter(key, value) {
 
 function clearFilters() {
     metaFilters.value = {};
-    centuryRanges.value = {};
+    dateRanges.value = {};
     includeUndated.value = true;
     searchQuery.value = '';
 }
@@ -87,7 +115,7 @@ function clearFilters() {
 const hasActiveFilters = computed(() =>
     !!searchQuery.value.trim()
     || Object.values(metaFilters.value).some(v => v)
-    || centuryFields.value.some(f => isRangeNarrowed(f.key))
+    || dateFields.value.some(f => isRangeNarrowed(f.key))
     || !includeUndated.value
 );
 
@@ -131,16 +159,17 @@ const sortedTables = computed(() => {
             if (!want) continue;
             if (settings.getSourceMetaValue(t.source, key) !== want) return false;
         }
-        // Century ranges, compared on the parsed number rather than the text.
-        for (const f of centuryFields.value) {
+        // Date ranges match by OVERLAP: a source dated "11th-12th c." should
+        // surface when looking at 1150, even though it is not wholly inside.
+        for (const f of dateFields.value) {
             if (!isRangeNarrowed(f.key)) continue;
-            const [lo, hi] = centuryRanges.value[f.key];
-            const n = parseCentury(settings.getSourceMetaValue(t.source, f.key));
-            if (n === null) {
+            const [lo, hi] = dateRanges.value[f.key];
+            const r = parseDateRange(settings.getSourceMetaValue(t.source, f.key));
+            if (!r) {
                 if (!includeUndated.value) return false;
                 continue;
             }
-            if (n < lo || n > hi) return false;
+            if (!rangesOverlap(r, { start: lo, end: hi })) return false;
         }
         if (!q) return true;
         // Free-text search covers the siglum, title, and all metadata values.
@@ -213,38 +242,28 @@ function goToOverview(source, isDirect = false) {
                 </select>
             </div>
 
-            <!-- Century attributes: a range over the centuries actually present -->
-            <div v-for="f in centuryFields" :key="f.key" class="filter-group range-group" :title="f.description">
-                <template v-if="rangeFor(f.key)">
-                    <label>
-                        {{ f.label }}
-                        <span class="range-value">
-                            {{ centuryLabel(rangeFor(f.key)[0]) }} – {{ centuryLabel(rangeFor(f.key)[1]) }}
-                        </span>
-                    </label>
-                    <div class="range-sliders">
-                        <input type="range" class="range-input"
-                               :min="centuryBounds(f.key).min" :max="centuryBounds(f.key).max" step="1"
-                               :value="rangeFor(f.key)[0]"
-                               :aria-label="f.label + ' from'"
-                               @input="setRange(f.key, 'min', $event.target.value)" />
-                        <input type="range" class="range-input"
-                               :min="centuryBounds(f.key).min" :max="centuryBounds(f.key).max" step="1"
-                               :value="rangeFor(f.key)[1]"
-                               :aria-label="f.label + ' to'"
-                               @input="setRange(f.key, 'max', $event.target.value)" />
-                    </div>
-                    <label v-if="undatedCount(f.key)" class="undated-toggle"
-                           :title="'Sources whose ' + f.label + ' could not be read as a century'">
-                        <input type="checkbox" v-model="includeUndated" />
-                        keep {{ undatedCount(f.key) }} undated
-                    </label>
-                </template>
-                <template v-else>
+            <!-- Date attributes: a timeline showing where the material sits -->
+            <div v-for="f in dateFields" :key="f.key" class="filter-group timeline-group" :title="f.description">
+                <div class="tl-head">
                     <label>{{ f.label }}</label>
-                    <span class="range-empty">no dated sources</span>
-                </template>
+                    <button v-if="isRangeNarrowed(f.key)" class="tl-reset" @click="resetRange(f.key)">reset</button>
+                </div>
+                <DateRangeTimeline
+                    :from="rangeFor(f.key)[0]"
+                    :to="rangeFor(f.key)[1]"
+                    :min="dateBounds(f.key).min"
+                    :max="dateBounds(f.key).max"
+                    :points="datedPoints(f.key)"
+                    @update:from="setRangeEnd(f.key, 'from', $event)"
+                    @update:to="setRangeEnd(f.key, 'to', $event)"
+                />
+                <label v-if="undatedCount(f.key)" class="undated-toggle"
+                       :title="'Sources whose ' + f.label + ' could not be read as a date'">
+                    <input type="checkbox" v-model="includeUndated" />
+                    keep {{ undatedCount(f.key) }} undated
+                </label>
             </div>
+
             <button v-if="hasActiveFilters" class="btn-clear" @click="clearFilters">Clear</button>
             <span class="result-count">{{ sortedTables.length }} shown</span>
         </div>
@@ -322,7 +341,10 @@ function goToOverview(source, isDirect = false) {
 .btn-clear:hover { background: var(--color-bg); }
 .result-count { font-size: 12px; color: var(--color-text-muted); margin-left: auto; align-self: center; }
 
-.range-group { min-width: 210px; }
+.timeline-group { flex: 1 1 460px; min-width: 320px; }
+.tl-head { display: flex; align-items: baseline; gap: 10px; }
+.tl-reset { background: none; border: none; color: var(--color-primary); font-size: 10px; font-weight: 700; cursor: pointer; text-transform: none; letter-spacing: 0; padding: 0; }
+.tl-reset:hover { text-decoration: underline; }
 .range-value { font-weight: 800; color: var(--color-primary-hover); margin-left: 6px; text-transform: none; letter-spacing: 0; }
 .range-sliders { display: flex; flex-direction: column; gap: 2px; }
 .range-input { width: 100%; accent-color: var(--color-primary); margin: 0; }
