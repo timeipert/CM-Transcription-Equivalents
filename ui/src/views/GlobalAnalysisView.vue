@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
 import { useSettingsStore } from '../stores/settings';
+import { stripSignKeys } from '../utils/signs';
 import PatternDisplay from '../components/PatternDisplay.vue';
 import SvgPattern from '../components/SvgPattern.vue'; // Keep for group headers if needed, or refactorGroups?
 
@@ -127,12 +128,48 @@ const modalSortDir = ref(1); // 1 = asc, -1 = desc
 function getBasicType(pattern) {
     let p = pattern.replace(/[\*\[\]]/g, "");
     p = p.replace(/[LQOSAD]/g, "");
+    // Strip project custom-sign keys so code variants collapse under their base.
+    for (const s of settings.customSigns) {
+        if (s.key) p = p.split(s.key).join("");
+    }
     if (p === "") return "(Start)";
     return p;
 }
 
 const sources = computed(() => Object.keys(sourceFolios.value || {}).sort());
-const allPatterns = computed(() => Object.keys(patStats.value));
+
+const signKeys = computed(() => settings.customSigns.map(s => s.key).filter(Boolean));
+
+/**
+ * When "Separate code variants" is off, a variant code (e.g. *uuVdd) is folded
+ * back onto its base code (*uudd) so the two share a single column ("all in one").
+ */
+function normalizePattern(p) {
+    if (settings.discriminateSigns) return p;
+    return stripSignKeys(p, signKeys.value) || p;
+}
+
+/** Displayed pattern -> the raw pattern keys whose counts it aggregates. */
+const patternVariants = computed(() => {
+    const map = {};
+    for (const p of Object.keys(patStats.value)) {
+        const key = normalizePattern(p);
+        if (!map[key]) map[key] = [];
+        map[key].push(p);
+    }
+    return map;
+});
+
+const allPatterns = computed(() => Object.keys(patternVariants.value));
+
+/** Total occurrences for a displayed pattern, summed over the codes it merges. */
+function patternCount(pattern) {
+    let total = 0;
+    for (const raw of patternVariants.value[pattern] || [pattern]) {
+        if (patStats.value[raw]) total += patStats.value[raw].count;
+    }
+    return total;
+}
 
 const patternGroups = computed(() => {
     const groups = {};
@@ -151,9 +188,7 @@ const groupStats = computed(() => {
     for (const g of allBasicTypes.value) {
         let total = 0;
         for (const v of patternGroups.value[g]) {
-            if (patStats.value[v]) {
-                total += patStats.value[v].count;
-            }
+            total += patternCount(v);
         }
         stats[g] = total;
     }
@@ -203,9 +238,8 @@ const visibleCols = computed(() => {
             const sortedVars = [...variants].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
             for (const v of sortedVars) {
                  if (hideEmpty.value) {
-                     // check if empty across all sources?
-                     // patStats has global count
-                     if (patStats.value[v].count === 0) continue; 
+                     // Global count across all sources (summed over merged variants).
+                     if (patternCount(v) === 0) continue;
                  }
                 cols.push({ type: 'pattern', name: v, label: v, parent: g });
             }
@@ -268,18 +302,20 @@ function changePage(d) {
 }
 
 function getCellValue(source, pattern) {
-    if (rawData.value[source] && rawData.value[source][pattern]) {
-        return rawData.value[source][pattern].length;
+    const srcData = rawData.value[source];
+    if (!srcData) return 0;
+    let sum = 0;
+    for (const raw of patternVariants.value[pattern] || [pattern]) {
+        if (srcData[raw]) sum += srcData[raw].length;
     }
-    return 0;
+    return sum;
 }
 
 function getGroupValue(source, groupName) {
-    let sum = 0;
     if (!rawData.value[source]) return 0;
-    const variants = patternGroups.value[groupName];
-    for (const v of variants) {
-        if (rawData.value[source][v]) sum += rawData.value[source][v].length;
+    let sum = 0;
+    for (const v of patternGroups.value[groupName]) {
+        sum += getCellValue(source, v);
     }
     return sum;
 }
@@ -435,6 +471,16 @@ function isHighlighted(row) {
         </div>
         <div class="control-group">
              <label><input type="checkbox" v-model="showHeatmap"> Heatmap</label>
+        </div>
+        <div class="control-group signs-control" v-if="settings.customSigns.length > 0"
+             :title="settings.discriminateSigns
+                ? 'Each code variant (e.g. *uuVdd) counts as its own column'
+                : 'Code variants are merged into their base pattern (e.g. *uuVdd counts as *uudd)'">
+             <label>
+                <input type="checkbox" v-model="settings.discriminateSigns">
+                Separate code variants
+             </label>
+             <span class="signs-hint">{{ settings.discriminateSigns ? 'separate' : 'all in one' }}</span>
         </div>
          <div class="control-group">
             <button @click="collapseAll">Collapse All</button>
@@ -617,6 +663,14 @@ function isHighlighted(row) {
     align-items: center;
     font-size: 12px;
 }
+.signs-control {
+    padding: 4px 10px;
+    border: 1px solid var(--color-primary);
+    border-radius: 6px;
+    background: var(--color-primary-light);
+}
+.signs-control label { display: flex; align-items: center; gap: 6px; font-weight: 600; cursor: pointer; }
+.signs-hint { font-size: 11px; color: var(--color-primary-hover); font-style: italic; }
 .app-container {
     height: 100%; /* Changed from 100vh */
     display: flex;

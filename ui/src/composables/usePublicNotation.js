@@ -9,6 +9,8 @@
  * can run inside a computed() in the view and inside a plain loop in the exporter.
  */
 
+import { stripSignKeys, extractSignKeys } from '../utils/signs';
+
 /** First whitespace-delimited token of a pattern (the "base" pattern). */
 export function getBasePattern(p) {
     if (!p) return '';
@@ -49,8 +51,17 @@ export function buildPatternRefMap(table, getGlobalId) {
  * @param {Object<string, string>} args.patternRefMap      from buildPatternRefMap
  * @returns {Array<{folio: string, lineName: string, items: Array, regionId: string|null, points: string|null}>}
  */
-export function buildManuscriptLines({ source, rawDataForSource, regions, regionItems, patternRefMap }) {
+export function buildManuscriptLines({ source, rawDataForSource, regions, regionItems, patternRefMap, signKeys = [], discriminateSigns = true }) {
     const linesMap = {}; // "folio|lineName" -> line
+
+    // Resolve a Ref-ID for a pattern, understanding code-variant signs: strip the
+    // signs to find the base row's Ref ID, then (when discriminating) append a marker.
+    const refIdFor = (basePat) => {
+        const baseCode = stripSignKeys(basePat, signKeys);
+        let refId = patternRefMap[baseCode] || patternRefMap[basePat] || null;
+        const signStr = extractSignKeys(basePat, signKeys).join('');
+        return { refId, signStr };
+    };
 
     // 1. Process all raw transcription occurrences (virtual items)
     if (rawDataForSource) {
@@ -63,9 +74,14 @@ export function buildManuscriptLines({ source, rawDataForSource, regions, region
                 }
 
                 const basePat = getBasePattern(pattern);
-                const baseRefId = patternRefMap[basePat] || '-';
-                const variant = (pattern.length > basePat.length) ? pattern.substring(basePat.length).trim() : '';
-                const displayId = variant ? `${baseRefId}${variant}` : baseRefId;
+                const { refId, signStr } = refIdFor(basePat);
+                const baseRefId = refId || '-';
+                const baseNoSigns = stripSignKeys(basePat, signKeys);
+                const variant = (basePat.length > baseNoSigns.length) ? '' :
+                    ((pattern.length > basePat.length) ? pattern.substring(basePat.length).trim() : '');
+                let displayId = baseRefId;
+                if (discriminateSigns && signStr) displayId += `·${signStr}`;
+                if (variant) displayId += variant;
 
                 linesMap[key].items.push({
                     id: inst.join('|'), // Stable ID from transcription
@@ -102,10 +118,13 @@ export function buildManuscriptLines({ source, rawDataForSource, regions, region
             if (realItems.length > 0) {
                 linesMap[lKey].items = realItems.map(ri => {
                     const basePat = getBasePattern(ri.pattern);
-                    const baseRefId = patternRefMap[basePat] || ri.linkData?.sysId?.split('|')[0] || '-';
+                    const { refId, signStr } = refIdFor(basePat);
+                    const baseRefId = refId || ri.linkData?.sysId?.split('|')[0] || '-';
                     let variant = ri.variant || '';
                     if (!variant && ri.pattern.includes(' ')) variant = ri.pattern.split(' ')[1];
-                    const displayId = variant ? `${baseRefId}${variant}` : baseRefId;
+                    let displayId = baseRefId;
+                    if (discriminateSigns && signStr) displayId += `·${signStr}`;
+                    if (variant) displayId += variant;
 
                     // Extract syl/notes from linkData if present
                     let syl = '', notes = '';

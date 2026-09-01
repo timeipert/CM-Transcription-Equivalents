@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useManagerWorkspace } from '../../composables/useManagerWorkspace';
+import { useSettingsStore } from '../../stores/settings';
 
 import ManagerWorkspaceHeader from './ManagerWorkspaceHeader.vue';
 import ManagerWorkspaceOverview from './ManagerWorkspaceOverview.vue';
@@ -9,9 +10,11 @@ import ManagerWorkspaceDetail from './ManagerWorkspaceDetail.vue';
 import PatternDisplay from '../PatternDisplay.vue';
 import FolioAnnotator from '../FolioAnnotator.vue';
 import SnippetDetailModal from '../SnippetDetailModal.vue';
+import VariantEditorModal from '../VariantEditorModal.vue';
 
 const props = defineProps(['source', 'folio', 'initialRegionId', 'highlightPattern', 'returnTo', 'returnId']);
 const router = useRouter();
+const settings = useSettingsStore();
 
 const workspace = useManagerWorkspace(props);
 
@@ -19,10 +22,38 @@ const workspace = useManagerWorkspace(props);
 const { 
     stdSource, stdFolio, highlightHint, allLinesOnPage, regions, existingRegionLines, 
     linesToAnnotate, pagePatterns, otherPageAnnotations, patternSort, patternSearch,
-    activeRegion, activeRegionRect, activeRegionItems, activePattern, activeVariant, 
-    linkCandidates, patternCustomIdMap, glyphs, getImageUrl, getIiifThumbnailUrl, 
+    activeRegion, activeRegionRect, activeRegionItems, activePattern, activeVariant,
+    linkCandidates, patternCustomIdMap, codeVariants, glyphs, getImageUrl, getIiifThumbnailUrl,
     hasTranscriptionData, getBasePattern, parseLineNumber, annotStore, manualLines
 } = workspace;
+
+// --- Code variant editor ---
+const showVariantEditor = ref(false);
+const variantBaseCode = ref('');
+const editingVariant = ref(null);
+
+function openVariantEditor(pat) {
+    variantBaseCode.value = getBasePattern(pat);
+    editingVariant.value = null;
+    showVariantEditor.value = true;
+}
+
+function editVariant({ base, variant }) {
+    variantBaseCode.value = base;
+    editingVariant.value = variant;
+    showVariantEditor.value = true;
+}
+
+function selectVariantCode(code) {
+    activePattern.value = code;
+    activeVariant.value = "";
+}
+
+function deleteVariant({ base, id }) {
+    if (confirm("Delete this code-variant definition? Existing snippets already saved with it are not changed.")) {
+        settings.removeCodeVariant(base, id);
+    }
+}
 
 function handleAddManualLine(num) {
     annotStore.addManualLine(stdSource.value, stdFolio.value, num);
@@ -244,11 +275,16 @@ function handleBackToOverview() {
                 :patternCustomIdMap="patternCustomIdMap"
                 :otherPageAnnotations="otherPageAnnotations"
                 :getBasePattern="getBasePattern"
+                :codeVariants="codeVariants"
                 @onAnnotateItem="onAnnotateItem"
                 @update:patternSort="patternSort = $event"
                 @setVariant="setVariant"
                 @update:patternSearch="patternSearch = $event"
                 @selectPatternBase="selectPatternBase"
+                @selectVariantCode="selectVariantCode"
+                @createVariant="openVariantEditor"
+                @editVariant="editVariant"
+                @deleteVariant="deleteVariant"
                 @openSnippet="openSnippet"
                 @deleteItem="deleteItem"
             />
@@ -286,10 +322,19 @@ function handleBackToOverview() {
         </div>
     </div>
     
-    <SnippetDetailModal 
+    <SnippetDetailModal
         :visible="!!selectedSnippet"
         :annotation="selectedSnippet"
         @close="selectedSnippet = null"
+    />
+
+    <VariantEditorModal
+        :visible="showVariantEditor"
+        :baseCode="variantBaseCode"
+        :editing="editingVariant"
+        :glyphs="glyphs"
+        @close="showVariantEditor = false"
+        @saved="selectVariantCode($event.code)"
     />
 </div>
 </template>

@@ -51,11 +51,28 @@ describe('renderSvg (pure logic)', () => {
     it('applies other special note suffixes (O, Q, S)', () => {
         const res1 = renderSvg('uO', dummyGlyphs, false);
         expect(res1.content).toContain('M4'); // oriscus
-        
+
         const res2 = renderSvg('dQ', dummyGlyphs, false);
         expect(res2.content).toContain('M5'); // quilisma
-        
+
         const res3 = renderSvg('eS', dummyGlyphs, false);
         expect(res3.content).toContain('M6'); // strophicus
+    });
+
+    it('renders a custom code-variant sign glyph', () => {
+        const customSigns = { V: { viewBox: '0 0 10 10', d: 'M99' } };
+        // *uuVdd: the second 'u' carries the custom V sign.
+        const res = renderSvg('*uuVdd', dummyGlyphs, false, customSigns);
+        expect(res.content).toContain('M99'); // custom virga glyph
+        // Base notes still render.
+        expect(res.content).toContain('M1');
+    });
+
+    it('ignores custom sign letters when no definition is provided', () => {
+        // Without a customSigns map, 'V' is treated as an unknown suffix and skipped,
+        // so it never crashes and the base notes still render.
+        const res = renderSvg('*uuVdd', dummyGlyphs, false);
+        expect(res.content).toContain('M1');
+        expect(res.content).not.toContain('M99');
     });
 });

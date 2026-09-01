@@ -10,6 +10,7 @@ import { useImageManifest } from '../composables/useImageManifest';
 import { comparePatternIds } from '../utils/sorting';
 import { getNeumeName } from '../config/neumeNames';
 import PatternDisplay from '../components/PatternDisplay.vue';
+import PatternCode from '../components/PatternCode.vue';
 import AnnotationCutout from '../components/AnnotationCutout.vue';
 import StateWrapper from '../components/StateWrapper.vue';
 
@@ -306,7 +307,7 @@ function selectAllManuscripts() {
                                 <div class="pat-svg-box">
                                     <PatternDisplay :pattern="pat" :glyphs="glyphs" />
                                 </div>
-                                <div class="pat-code">{{ pat }}</div>
+                                <div class="pat-code"><PatternCode :pattern="pat" /></div>
                                 <div class="pat-name" v-if="getNeumeName(pat, settings.neumeNames)">
                                     {{ getNeumeName(pat, settings.neumeNames) }}
                                 </div>

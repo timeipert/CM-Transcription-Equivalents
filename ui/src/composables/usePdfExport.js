@@ -2,11 +2,14 @@ import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
 import { Canvg } from 'canvg';
 import { renderSvg } from '../utils/svgRenderer.js';
+import { resolveSignGlyphs } from '../utils/signs';
 import { useAnnotationsStore } from '../stores/annotations';
+import { useSettingsStore } from '../stores/settings';
 import { useImageManifest } from './useImageManifest';
 
 export function usePdfExport() {
     const annotStore = useAnnotationsStore();
+    const settings = useSettingsStore();
     const { getImageUrl, getStandardSource } = useImageManifest();
 
     /**
@@ -92,10 +95,11 @@ export function usePdfExport() {
         const ctx = canvas.getContext('2d');
 
         const rows = tableConfig.rows;
+        const signGlyphs = resolveSignGlyphs(settings.customSigns, glyphs);
 
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
-            const { width, height, content } = renderSvg(row.pattern, glyphs);
+            const { width, height, content } = renderSvg(row.pattern, glyphs, false, signGlyphs);
 
             if (width > 0 && height > 0) {
                 const scale = 4;
