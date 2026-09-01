@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useDirectSnippetsStore } from '../stores/directSnippets';
+import { useSettingsStore } from '../stores/settings';
 import { useTranscriptionData } from '../composables/useTranscriptionData';
 import { getNeumeName } from '../config/neumeNames';
 import { fileToSnippet, imageFromPaste, imagesFromDrop, formatBytes } from '../utils/snippetImages';
@@ -8,6 +9,7 @@ import PatternDisplay from '../components/PatternDisplay.vue';
 import PatternCode from '../components/PatternCode.vue';
 
 const store = useDirectSnippetsStore();
+const settings = useSettingsStore();
 const { glyphs } = useTranscriptionData();
 
 const activeId = ref('');
@@ -212,6 +214,25 @@ const grouped = computed(() => {
                     Publish
                 </label>
             </div>
+            <div v-if="settings.sourceMetaFields.length" class="meta-block">
+                <div class="meta-block-head">
+                    Metadata
+                    <span class="meta-hint">shown publicly and filterable in the directory</span>
+                </div>
+                <div class="meta-grid">
+                    <label v-for="f in settings.sourceMetaFields" :key="f.key" class="meta-field">
+                        <span :title="f.description">{{ f.label }}</span>
+                        <input :value="settings.getSourceMetaValue(active.source, f.key)"
+                               :placeholder="f.description || f.label"
+                               :list="`cmmeta-${f.key}`"
+                               @input="settings.setSourceMetaValue(active.source, f.key, $event.target.value)" />
+                        <datalist :id="`cmmeta-${f.key}`">
+                            <option v-for="v in settings.sourceMetaValuesFor(f.key)" :key="v" :value="v" />
+                        </datalist>
+                    </label>
+                </div>
+            </div>
+
             <div class="size-note">
                 Stored images: {{ formatBytes(store.collectionBytes(active.id)) }}
                 <span class="size-total">(all collections: {{ formatBytes(store.totalBytes) }})</span>
@@ -359,6 +380,12 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .ff.grow { flex: 1; }
 .ff input { padding: 7px 10px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 13px; font-weight: 400; }
 .pub-toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; cursor: pointer; padding-bottom: 8px; }
+.meta-block { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--color-border); }
+.meta-block-head { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; font-weight: 800; color: var(--color-text-muted); margin-bottom: 10px; }
+.meta-hint { text-transform: none; letter-spacing: 0; font-weight: 400; font-style: italic; }
+.meta-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.meta-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: var(--color-text-muted); }
+.meta-field input { padding: 7px 10px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 13px; font-weight: 400; color: var(--color-text); }
 .size-note { margin-top: 10px; font-size: 11px; color: var(--color-text-muted); }
 .size-total { opacity: .8; }
 .size-warn { margin-top: 8px; font-size: 12px; padding: 8px 10px; background: var(--color-warning-light); color: var(--color-warning-dark); border-radius: 6px; }
