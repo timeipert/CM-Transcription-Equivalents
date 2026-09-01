@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { useDirectSnippetsStore } from '../stores/directSnippets';
 import { useSettingsStore } from '../stores/settings';
 import { useTranscriptionData } from '../composables/useTranscriptionData';
@@ -15,6 +15,65 @@ const { glyphs } = useTranscriptionData();
 const activeId = ref('');
 const active = computed(() => store.getCollection(activeId.value));
 
+// --- Manuscript list: search, sort, paginate ---
+// A chip cloud stops being usable somewhere around a dozen entries, and this is
+// meant to hold a whole project's worth of sources.
+const listSearch = ref('');
+const listSort = ref('source');
+const listDir = ref(1);
+const page = ref(1);
+const PAGE_SIZE = 10;
+
+function sortBy(col) {
+    if (listSort.value === col) listDir.value *= -1;
+    else { listSort.value = col; listDir.value = 1; }
+    page.value = 1;
+}
+
+const filteredCollections = computed(() => {
+    const q = listSearch.value.trim().toLowerCase();
+    let list = store.collections.filter(c =>
+        !q || `${c.source} ${c.name} ${c.notes}`.toLowerCase().includes(q)
+    );
+    list = [...list].sort((a, b) => {
+        let va, vb;
+        switch (listSort.value) {
+            case 'patterns': va = a.patterns.length; vb = b.patterns.length; break;
+            case 'snippets': va = a.snippets.length; vb = b.snippets.length; break;
+            case 'size': va = store.collectionBytes(a.id); vb = store.collectionBytes(b.id); break;
+            case 'published': va = a.isPublished ? 1 : 0; vb = b.isPublished ? 1 : 0; break;
+            case 'name': va = a.name || ''; vb = b.name || ''; break;
+            default: va = a.source || ''; vb = b.source || '';
+        }
+        if (typeof va === 'string') {
+            return va.localeCompare(vb, undefined, { numeric: true, sensitivity: 'base' }) * listDir.value;
+        }
+        return (va - vb) * listDir.value;
+    });
+    return list;
+});
+
+const pageCount = computed(() => Math.max(1, Math.ceil(filteredCollections.value.length / PAGE_SIZE)));
+
+// Keep the page in range when filtering or deleting shrinks the list.
+watch([filteredCollections, pageCount], () => {
+    if (page.value > pageCount.value) page.value = pageCount.value;
+});
+
+const pagedCollections = computed(() =>
+    filteredCollections.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE)
+);
+
+function goToPage(n) {
+    page.value = Math.min(pageCount.value, Math.max(1, n));
+}
+
+/** Jump to the page holding a given manuscript, so a new one is never off-screen. */
+function revealCollection(id) {
+    const idx = filteredCollections.value.findIndex(c => c.id === id);
+    if (idx >= 0) page.value = Math.floor(idx / PAGE_SIZE) + 1;
+}
+
 // --- Collection creation ---
 const newSource = ref('');
 const newName = ref('');
@@ -25,6 +84,9 @@ function createCollection() {
     activeId.value = c.id;
     newSource.value = '';
     newName.value = '';
+    listSearch.value = '';
+    // Land on whichever page now holds it rather than silently adding off-screen.
+    nextTick(() => revealCollection(c.id));
 }
 
 function deleteCollection(c) {
@@ -183,16 +245,76 @@ const grouped = computed(() => {
         </div>
 
         <div v-if="store.collections.length === 0" class="empty">No custom manuscripts yet — add one above to begin.</div>
-        <div v-else class="coll-list">
-            <div v-for="c in store.collections" :key="c.id"
-                 class="coll-chip" :class="{ active: c.id === activeId }"
-                 @click="activeId = c.id">
-                <strong>{{ c.source }}</strong>
-                <span class="coll-meta">{{ c.patterns.length }} patterns · {{ c.snippets.length }} snippets</span>
-                <span v-if="c.isPublished" class="pub-badge" title="Shown in the public views">public</span>
-                <button class="del" @click.stop="deleteCollection(c)" title="Delete manuscript">×</button>
+
+        <template v-else>
+            <div class="list-toolbar">
+                <input v-model="listSearch" class="list-search" placeholder="Search manuscripts…" />
+                <span class="list-count">
+                    {{ filteredCollections.length }} of {{ store.collections.length }}
+                </span>
             </div>
-        </div>
+
+            <div class="table-wrap">
+                <table class="coll-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable" @click="sortBy('source')">
+                                Siglum <span v-if="listSort==='source'" class="sort-ind">{{ listDir===1?'▲':'▼' }}</span>
+                            </th>
+                            <th class="sortable" @click="sortBy('name')">
+                                Title <span v-if="listSort==='name'" class="sort-ind">{{ listDir===1?'▲':'▼' }}</span>
+                            </th>
+                            <th class="sortable num" @click="sortBy('patterns')">
+                                Patterns <span v-if="listSort==='patterns'" class="sort-ind">{{ listDir===1?'▲':'▼' }}</span>
+                            </th>
+                            <th class="sortable num" @click="sortBy('snippets')">
+                                Snippets <span v-if="listSort==='snippets'" class="sort-ind">{{ listDir===1?'▲':'▼' }}</span>
+                            </th>
+                            <th class="sortable num" @click="sortBy('size')">
+                                Size <span v-if="listSort==='size'" class="sort-ind">{{ listDir===1?'▲':'▼' }}</span>
+                            </th>
+                            <th class="sortable" @click="sortBy('published')">
+                                Public <span v-if="listSort==='published'" class="sort-ind">{{ listDir===1?'▲':'▼' }}</span>
+                            </th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="c in pagedCollections" :key="c.id"
+                            class="coll-row" :class="{ active: c.id === activeId }"
+                            @click="activeId = c.id">
+                            <td class="c-source">
+                                <strong>{{ c.source }}</strong>
+                                <span v-if="c.id === activeId" class="editing-badge">editing</span>
+                            </td>
+                            <td class="c-name">{{ c.name || '—' }}</td>
+                            <td class="num">{{ c.patterns.length }}</td>
+                            <td class="num">{{ c.snippets.length }}</td>
+                            <td class="num size">{{ formatBytes(store.collectionBytes(c.id)) }}</td>
+                            <td>
+                                <span v-if="c.isPublished" class="pub-badge" title="Shown in the public views">public</span>
+                                <span v-else class="priv-badge">private</span>
+                            </td>
+                            <td class="c-actions">
+                                <button class="row-btn" @click.stop="activeId = c.id" title="Edit this manuscript">Edit</button>
+                                <button class="row-btn danger" @click.stop="deleteCollection(c)" title="Delete manuscript">×</button>
+                            </td>
+                        </tr>
+                        <tr v-if="pagedCollections.length === 0">
+                            <td colspan="7" class="no-match">No manuscripts match “{{ listSearch }}”.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div v-if="pageCount > 1" class="pager">
+                <button class="row-btn" :disabled="page === 1" @click="goToPage(1)">« First</button>
+                <button class="row-btn" :disabled="page === 1" @click="goToPage(page - 1)">‹ Prev</button>
+                <span class="pager-info">Page {{ page }} of {{ pageCount }}</span>
+                <button class="row-btn" :disabled="page === pageCount" @click="goToPage(page + 1)">Next ›</button>
+                <button class="row-btn" :disabled="page === pageCount" @click="goToPage(pageCount)">Last »</button>
+            </div>
+        </template>
     </div>
 
     <template v-if="active">
@@ -367,11 +489,40 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .empty.pad { padding: 30px; text-align: center; }
 .err { color: var(--color-danger, #dc2626); font-size: 12px; margin-top: 6px; }
 
-.coll-list { display: flex; flex-wrap: wrap; gap: 10px; }
-.coll-chip { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 8px; background: white; cursor: pointer; font-size: 13px; }
-.coll-chip.active { border-color: var(--color-primary); background: var(--color-primary-light); }
-.coll-meta { color: var(--color-text-muted); font-size: 11px; }
+.list-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.list-search { flex: 1; max-width: 320px; padding: 7px 10px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 13px; }
+.list-count { font-size: 12px; color: var(--color-text-muted); }
+
+.table-wrap { border: 1px solid var(--color-border); border-radius: 8px; overflow-x: auto; }
+.coll-table { width: 100%; border-collapse: collapse; font-size: 13px; background: white; }
+.coll-table th { text-align: left; padding: 9px 12px; background: var(--color-bg); border-bottom: 1px solid var(--color-border); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--color-text-muted); white-space: nowrap; }
+.coll-table th.sortable { cursor: pointer; user-select: none; }
+.coll-table th.sortable:hover { color: var(--color-text); }
+.sort-ind { font-size: 9px; margin-left: 2px; }
+.coll-table td { padding: 9px 12px; border-bottom: 1px solid var(--color-surface-muted); }
+.coll-table tbody tr:last-child td { border-bottom: none; }
+.coll-table .num { text-align: right; white-space: nowrap; }
+.coll-table .size { color: var(--color-text-muted); font-size: 12px; }
+
+.coll-row { cursor: pointer; }
+.coll-row:hover { background: var(--color-bg); }
+.coll-row.active { background: var(--color-primary-light); }
+.coll-row.active .c-source strong { color: var(--color-primary-hover); }
+.c-name { color: var(--color-text-muted); }
+.c-actions { text-align: right; white-space: nowrap; }
+.editing-badge { font-size: 9px; text-transform: uppercase; font-weight: 800; background: var(--color-primary); color: #fff; padding: 2px 5px; border-radius: 3px; margin-left: 7px; }
+.no-match { text-align: center; color: var(--color-text-light); padding: 22px; font-style: italic; }
+
+.row-btn { padding: 4px 9px; font-size: 12px; border: 1px solid var(--color-border-hover); background: white; border-radius: 5px; cursor: pointer; font-weight: 600; margin-left: 4px; }
+.row-btn:hover:not(:disabled) { background: var(--color-bg); }
+.row-btn:disabled { opacity: .45; cursor: not-allowed; }
+.row-btn.danger:hover { background: var(--color-danger, #dc2626); color: #fff; border-color: var(--color-danger, #dc2626); }
+
+.pager { display: flex; align-items: center; gap: 6px; justify-content: center; margin-top: 12px; }
+.pager-info { font-size: 12px; color: var(--color-text-muted); margin: 0 10px; }
+
 .pub-badge { font-size: 9px; text-transform: uppercase; font-weight: 800; background: var(--color-primary); color: white; padding: 2px 5px; border-radius: 3px; }
+.priv-badge { font-size: 9px; text-transform: uppercase; font-weight: 700; color: var(--color-text-light); }
 .del, .pat-del, .del-snip { border: none; background: none; color: var(--color-text-muted); cursor: pointer; font-size: 16px; padding: 0 4px; line-height: 1; }
 .del:hover, .pat-del:hover, .del-snip:hover { color: var(--color-danger, #dc2626); }
 
