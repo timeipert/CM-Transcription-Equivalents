@@ -248,9 +248,17 @@ const grouped = computed(() => {
 
         <template v-else>
             <div class="list-toolbar">
-                <input v-model="listSearch" class="list-search" placeholder="Search manuscripts…" />
+                <div class="input-wrap">
+                    <span class="input-icon" aria-hidden="true">⌕</span>
+                    <input v-model="listSearch" type="search" class="list-search"
+                           placeholder="Search sigla, titles and notes…"
+                           aria-label="Search custom manuscripts"
+                           @keydown.esc="listSearch = ''" />
+                    <button v-if="listSearch" class="input-clear" aria-label="Clear search"
+                            @click="listSearch = ''">×</button>
+                </div>
                 <span class="list-count">
-                    {{ filteredCollections.length }} of {{ store.collections.length }}
+                    <strong>{{ filteredCollections.length }}</strong> of {{ store.collections.length }}
                 </span>
             </div>
 
@@ -301,7 +309,10 @@ const grouped = computed(() => {
                             </td>
                         </tr>
                         <tr v-if="pagedCollections.length === 0">
-                            <td colspan="7" class="no-match">No manuscripts match “{{ listSearch }}”.</td>
+                            <td colspan="7" class="no-match">
+                                No manuscripts match “{{ listSearch }}”.
+                                <button class="row-btn" @click="listSearch = ''">Clear search</button>
+                            </td>
                         </tr>
                     </tbody>
                 </table>
@@ -490,8 +501,24 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .err { color: var(--color-danger, #dc2626); font-size: 12px; margin-top: 6px; }
 
 .list-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-.list-search { flex: 1; max-width: 320px; padding: 7px 10px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 13px; }
-.list-count { font-size: 12px; color: var(--color-text-muted); }
+.input-wrap { position: relative; display: flex; align-items: center; flex: 1; max-width: 340px; }
+.input-icon { position: absolute; left: 10px; font-size: 16px; color: var(--color-text-light); pointer-events: none; line-height: 1; }
+.list-search {
+    width: 100%; padding: 8px 30px 8px 30px; box-sizing: border-box;
+    border: 1px solid var(--color-border); border-radius: 7px; font-size: 13px; font-family: inherit;
+    transition: border-color .15s, box-shadow .15s;
+}
+.list-search:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-light); }
+.list-search::-webkit-search-cancel-button { display: none; }
+.input-clear {
+    position: absolute; right: 7px; width: 20px; height: 20px;
+    border: none; border-radius: 50%; cursor: pointer; line-height: 1; font-size: 14px;
+    background: var(--color-surface-muted); color: var(--color-text-muted);
+    display: flex; align-items: center; justify-content: center;
+}
+.input-clear:hover { background: var(--color-border-hover); color: var(--color-text); }
+.list-count { font-size: 12px; color: var(--color-text-muted); white-space: nowrap; }
+.list-count strong { font-size: 15px; color: var(--color-text); font-variant-numeric: tabular-nums; }
 
 .table-wrap { border: 1px solid var(--color-border); border-radius: 8px; overflow-x: auto; }
 .coll-table { width: 100%; border-collapse: collapse; font-size: 13px; background: white; }

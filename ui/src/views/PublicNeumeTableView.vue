@@ -253,6 +253,21 @@ function toggleManuscriptFilter(source) {
 function selectAllManuscripts() {
     selectedManuscriptFilter.value = [];
 }
+
+// The pill list is unusable once a project has dozens of manuscripts, so it is
+// searchable and scrolls rather than pushing the table off screen.
+const msFilterSearch = ref('');
+
+const allFilterableSources = computed(() => [
+    ...publishedTables.value.map(t => ({ id: t.id, source: t.source, isDirect: false })),
+    ...directStore.publishedCollections.map(c => ({ id: c.id, source: c.source, isDirect: true }))
+]);
+
+const visibleFilterSources = computed(() => {
+    const q = msFilterSearch.value.trim().toLowerCase();
+    if (!q) return allFilterableSources.value;
+    return allFilterableSources.value.filter(x => x.source.toLowerCase().includes(q));
+});
 </script>
 
 <template>
@@ -274,13 +289,21 @@ function selectAllManuscripts() {
             <!-- Controls Panel -->
             <div class="controls-card">
                 <div class="control-group">
-                    <label class="control-label">Search Patterns / Names:</label>
-                    <input 
-                        type="text" 
-                        v-model="patternSearchQuery" 
-                        placeholder="Search e.g. *u, Pes, Torculus..."
-                        class="search-input"
-                    />
+                    <label class="control-label" for="pat-search">Search Patterns / Names</label>
+                    <div class="input-wrap">
+                        <span class="input-icon" aria-hidden="true">⌕</span>
+                        <input
+                            id="pat-search"
+                            type="search"
+                            v-model="patternSearchQuery"
+                            placeholder="e.g. *u, Pes, Torculus…"
+                            class="search-input has-icon"
+                            @keydown.esc="patternSearchQuery = ''"
+                        />
+                        <button v-if="patternSearchQuery" class="input-clear" aria-label="Clear pattern search"
+                                @click="patternSearchQuery = ''">×</button>
+                    </div>
+                    <span class="control-hint">{{ allPatterns.length }} pattern{{ allPatterns.length === 1 ? '' : 's' }} shown</span>
                 </div>
 
                 <div class="control-group">
@@ -313,33 +336,38 @@ function selectAllManuscripts() {
                 </div>
 
                 <div class="control-group ms-filter-group">
-                    <span class="control-label">Filter Manuscripts:</span>
+                    <div class="ms-filter-head">
+                        <span class="control-label">Filter Manuscripts</span>
+                        <span v-if="selectedManuscriptFilter.length" class="ms-selected-count">
+                            {{ selectedManuscriptFilter.length }} selected
+                            <button class="ms-clear" @click="selectAllManuscripts">clear</button>
+                        </span>
+                    </div>
+                    <input v-if="allFilterableSources.length > 8"
+                           v-model="msFilterSearch" type="search" class="ms-filter-search"
+                           placeholder="Find a manuscript…" aria-label="Find a manuscript to filter by" />
                     <div class="filter-pills">
-                        <button 
-                            class="pill-btn" 
+                        <button
+                            class="pill-btn pill-all"
                             :class="{ active: selectedManuscriptFilter.length === 0 }"
                             @click="selectAllManuscripts"
                         >
-                            All ({{ publishedTables.length + directStore.publishedCollections.length }})
+                            All ({{ allFilterableSources.length }})
                         </button>
                         <button
-                            v-for="t in publishedTables"
-                            :key="t.id"
+                            v-for="x in visibleFilterSources"
+                            :key="x.id"
                             class="pill-btn"
-                            :class="{ active: selectedManuscriptFilter.includes(t.source) }"
-                            @click="toggleManuscriptFilter(t.source)"
+                            :class="{ active: selectedManuscriptFilter.includes(x.source) }"
+                            :title="x.isDirect ? 'Documented from own images' : 'IIIF manuscript'"
+                            @click="toggleManuscriptFilter(x.source)"
                         >
-                            {{ t.source }}
+                            {{ x.source }}
+                            <span v-if="x.isDirect" class="pill-dot" aria-hidden="true">•</span>
                         </button>
-                        <button
-                            v-for="c in directStore.publishedCollections"
-                            :key="c.id"
-                            class="pill-btn"
-                            :class="{ active: selectedManuscriptFilter.includes(c.source) }"
-                            @click="toggleManuscriptFilter(c.source)"
-                        >
-                            {{ c.source }}
-                        </button>
+                        <span v-if="visibleFilterSources.length === 0" class="pill-empty">
+                            No manuscript matches “{{ msFilterSearch }}”.
+                        </span>
                     </div>
                 </div>
             </div>
@@ -666,6 +694,34 @@ function selectAllManuscripts() {
     flex-wrap: wrap;
     gap: 6px;
 }
+
+/* --- polished control styles --- */
+.input-wrap { position: relative; display: flex; align-items: center; }
+.input-icon { position: absolute; left: 10px; font-size: 16px; color: var(--color-text-light); pointer-events: none; line-height: 1; }
+.search-input.has-icon { padding-left: 30px; padding-right: 30px; }
+.search-input::-webkit-search-cancel-button { display: none; }
+.input-clear {
+    position: absolute; right: 7px; width: 20px; height: 20px;
+    border: none; border-radius: 50%; cursor: pointer; line-height: 1; font-size: 14px;
+    background: var(--color-surface-muted); color: var(--color-text-muted);
+    display: flex; align-items: center; justify-content: center;
+}
+.input-clear:hover { background: var(--color-border-hover); color: var(--color-text); }
+.control-hint { font-size: 10px; color: var(--color-text-muted); margin-top: 4px; }
+
+.ms-filter-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.ms-selected-count { font-size: 11px; font-weight: 700; color: var(--color-primary-hover); margin-left: auto; white-space: nowrap; }
+.ms-clear { background: none; border: none; color: var(--color-text-muted); font-size: 11px; font-weight: 600; cursor: pointer; text-decoration: underline; padding: 0 0 0 4px; }
+.ms-clear:hover { color: var(--color-text); }
+.ms-filter-search {
+    width: 100%; padding: 6px 10px; margin-bottom: 8px; box-sizing: border-box;
+    border: 1px solid var(--color-border); border-radius: 6px; font-size: 12px; font-family: inherit;
+}
+/* Cap the pill area so a large project cannot push the table off screen */
+.filter-pills { max-height: 148px; overflow-y: auto; }
+.pill-dot { color: var(--color-text-muted); font-size: 14px; line-height: 0; }
+.pill-btn.active .pill-dot { color: rgba(255,255,255,.75); }
+.pill-empty { font-size: 12px; color: var(--color-text-light); font-style: italic; padding: 6px 2px; }
 
 .pill-btn {
     background: var(--color-bg);
