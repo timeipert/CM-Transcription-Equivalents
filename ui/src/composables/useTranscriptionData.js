@@ -64,8 +64,19 @@ async function loadSource(sourceName) {
     const safeSrc = sourceName.replace(/\//g, "_");
     
     try {
-        const res = await fetch(`sources/${safeSrc}.json`);
-        if (!res.ok) throw new Error(`Failed to load source ${sourceName}`);
+        const res = await fetch(`sources/${encodeURIComponent(safeSrc)}.json`);
+        if (!res.ok) throw new Error(`Failed to load source ${sourceName} (HTTP ${res.status})`);
+        // A missing file is served the SPA index.html by the dev server (HTTP 200),
+        // so an HTML body here means the source does not exist — report that clearly
+        // instead of letting JSON.parse fail with an opaque syntax error.
+        const ct = res.headers.get('content-type') || '';
+        if (!ct.includes('json')) {
+            const head = (await res.text()).slice(0, 40).trim();
+            if (head.startsWith('<')) {
+                throw new Error(`No transcription data file for source "${sourceName}" (sources/${safeSrc}.json not found)`);
+            }
+            throw new Error(`Unexpected content-type "${ct}" for source ${sourceName}`);
+        }
         const sourceData = await res.json();
         
         const pPats = {};

@@ -81,7 +81,9 @@ const availablePages = ref([]);
 const pagesLoading = ref(false);
 const processingProgress = ref(0);
 
-watch([() => props.visible, () => iiifStore.parsedData, () => props.pattern], async ([vis, parsed, pattern]) => {
+// sourceData is a dependency: the modal can open before the source JSON has finished
+// loading, and without it here the gallery would stay empty once the data arrives.
+watch([() => props.visible, () => iiifStore.parsedData, () => props.pattern, () => props.sourceData], async ([vis, parsed, pattern]) => {
     if (!vis) { 
         availablePages.value = []; 
         allOccurrences.value = [];
@@ -97,17 +99,22 @@ watch([() => props.visible, () => iiifStore.parsedData, () => props.pattern], as
     // 1. Gather occurrences asynchronously (0-20% progress)
     const base = pattern.split(' ')[0];
     const gathered = [];
-    const entries = Object.entries(props.sourceData);
+    // sourceData can briefly be undefined while a source is still loading (or if
+    // its JSON failed to load), so guard rather than throwing out of the watcher.
+    const entries = Object.entries(props.sourceData || {});
     const entryBatch = 100;
     for (let i = 0; i < entries.length; i += entryBatch) {
         const chunk = entries.slice(i, i + entryBatch);
         for (const [fullPat, occs] of chunk) {
             if (fullPat === base || fullPat.startsWith(base + ' ')) {
                 for (const o of occs) {
-                    gathered.push({ 
-                        source: o[0], 
-                        folio: o[1], 
-                        line: o[2], 
+                    gathered.push({
+                        // o[0] is the occurrence's system id (e.g. "Pa 1235-75v-11"),
+                        // NOT a manuscript name — the source is the manuscript we are viewing.
+                        source: props.sourceName,
+                        sysId: o[0],
+                        folio: o[1],
+                        line: o[2],
                         pattern: fullPat,
                         syl: o[3] || '',
                         notes: o[4] || ''
