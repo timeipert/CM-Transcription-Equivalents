@@ -3,22 +3,83 @@ import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { usePersonalTablesStore } from '../stores/personalTables';
 import { useAnnotationsStore } from '../stores/annotations';
+import { useSettingsStore } from '../stores/settings';
+import { useDirectSnippetsStore } from '../stores/directSnippets';
 
 const tableStore = usePersonalTablesStore();
 const annotStore = useAnnotationsStore();
+const settings = useSettingsStore();
+const directStore = useDirectSnippetsStore();
 const router = useRouter();
 
 const sortBy = ref('source');
 const sortOrder = ref(1); // 1 for asc, -1 for desc
 
-const sortedTables = computed(() => {
-    const list = [...tableStore.tables.filter(t => {
+// --- Metadata search & filtering ---
+const searchQuery = ref('');
+// { [fieldKey]: "selected value" } — empty string means "any".
+const metaFilters = ref({});
+
+const metaFields = computed(() => settings.sourceMetaFields || []);
+
+function setMetaFilter(key, value) {
+    metaFilters.value = { ...metaFilters.value, [key]: value };
+}
+
+function clearFilters() {
+    metaFilters.value = {};
+    searchQuery.value = '';
+}
+
+const hasActiveFilters = computed(() =>
+    !!searchQuery.value.trim() || Object.values(metaFilters.value).some(v => v)
+);
+
+/** Values actually present among the published sources, so filters never dead-end. */
+function valuesForField(key) {
+    const set = new Set();
+    for (const t of publishedList.value) {
+        const v = settings.getSourceMetaValue(t.source, key);
+        if (v) set.add(v);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
+/** Published IIIF-backed tables plus published direct-snippet collections. */
+const publishedList = computed(() => {
+    const out = tableStore.tables.filter(t => {
         if (!t.isPublished) return false;
-        // Only show if there are ANY real annotations for this source
         const prefix = t.source + '_';
-        return Object.keys(annotStore.regions).some(k => 
+        return Object.keys(annotStore.regions).some(k =>
             k.startsWith(prefix) && annotStore.regions[k].length > 0
         );
+    }).map(t => ({ ...t, isDirect: false }));
+
+    for (const c of directStore.publishedCollections) {
+        out.push({
+            id: c.id,
+            source: c.source,
+            name: c.name,
+            rows: c.patterns || [],
+            isDirect: true
+        });
+    }
+    return out;
+});
+
+const sortedTables = computed(() => {
+    const q = searchQuery.value.trim().toLowerCase();
+    const list = [...publishedList.value.filter(t => {
+        // Attribute filters: every chosen value must match.
+        for (const [key, want] of Object.entries(metaFilters.value)) {
+            if (!want) continue;
+            if (settings.getSourceMetaValue(t.source, key) !== want) return false;
+        }
+        if (!q) return true;
+        // Free-text search covers the siglum, title, and all metadata values.
+        const meta = settings.getSourceMeta(t.source);
+        const hay = [t.source, t.name, ...Object.values(meta)].join(' ').toLowerCase();
+        return hay.includes(q);
     })];
     list.sort((a, b) => {
         let valA, valB;
@@ -98,8 +159,15 @@ function goToOverview(source) {
                         <td class="font-bold">
                             {{ table.source }}
                             <span v-if="table.notes" class="note-icon" title="Has Notes">📝</span>
+                            <span v-if="table.isDirect" class="direct-badge" title="Documented from directly added snippets (no IIIF)">own snippets</span>
                         </td>
                         <td class="text-secondary">{{ table.name }}</td>
+                        <td v-for="f in metaFields" :key="f.key" class="meta-col">
+                            <span v-if="settings.getSourceMetaValue(table.source, f.key)" class="meta-chip">
+                                {{ settings.getSourceMetaValue(table.source, f.key) }}
+                            </span>
+                            <span v-else class="meta-empty">—</span>
+                        </td>
                         <td class="text-right">
                             <span class="badge">{{ table.rows.length }}</span>
                         </td>
@@ -115,6 +183,20 @@ function goToOverview(source) {
 </template>
 
 <style scoped>
+.filter-bar { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; margin-bottom: 18px; padding: 14px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; }
+.ms-search { flex: 1; min-width: 220px; padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 14px; }
+.filter-group { display: flex; flex-direction: column; gap: 4px; }
+.filter-group label { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; font-weight: 700; color: var(--color-text-muted); }
+.filter-group select { padding: 7px 10px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 13px; background: white; }
+.btn-clear { padding: 7px 12px; border: 1px solid var(--color-border-hover); background: white; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+.btn-clear:hover { background: var(--color-bg); }
+.result-count { font-size: 12px; color: var(--color-text-muted); margin-left: auto; align-self: center; }
+
+.meta-col { white-space: nowrap; }
+.meta-chip { display: inline-block; font-size: 12px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 12px; padding: 2px 10px; }
+.meta-empty { color: var(--color-text-light); font-size: 12px; }
+.direct-badge { font-size: 9px; text-transform: uppercase; font-weight: 800; letter-spacing: .03em; background: var(--color-surface-muted); color: var(--color-text-muted); padding: 2px 6px; border-radius: 3px; margin-left: 6px; }
+
 .public-container {
     max-width: 1000px;
     margin: 0 auto;

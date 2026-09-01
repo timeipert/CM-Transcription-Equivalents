@@ -4,6 +4,7 @@ import { useSettingsStore } from '../stores/settings';
 import { useAnnotationsStore } from '../stores/annotations';
 import { usePersonalTablesStore } from '../stores/personalTables';
 import { useIiifStore } from '../stores/iiif';
+import { useDirectSnippetsStore } from '../stores/directSnippets';
 
 const SCHEMA_VERSION = 1;
 const HANDLE_KEY = 'workspaceDirHandle';
@@ -35,6 +36,7 @@ export function useWorkspaceStorage() {
     const annotStore = useAnnotationsStore();
     const tablesStore = usePersonalTablesStore();
     const iiifStore = useIiifStore();
+    const directStore = useDirectSnippetsStore();
 
 
     // Retrieve full app state as an object compatible with data management schema
@@ -57,9 +59,17 @@ export function useWorkspaceStorage() {
                     snippetPadding: settings.snippetPadding,
                     backupLabel: settings.backupLabel,
                     sourceAlignments: settings.sourceAlignments,
-                    neumeNames: settings.neumeNames
+                    neumeNames: settings.neumeNames,
+                    customSigns: settings.customSigns,
+                    codeVariants: settings.codeVariants,
+                    discriminateSigns: settings.discriminateSigns,
+                    sourceMetaFields: settings.sourceMetaFields,
+                    sourceMeta: settings.sourceMeta
                 },
-                iiifLinks: iiifStore.links
+                iiifLinks: iiifStore.links,
+                // Only written once the collections have actually loaded, so an
+                // autosave firing during startup cannot blank them in the folder copy.
+                ...(directStore.loaded ? { directSnippets: directStore.collections } : {})
             }
         };
     }
@@ -94,7 +104,14 @@ export function useWorkspaceStorage() {
             if (d.settings.backupLabel) settings.backupLabel = d.settings.backupLabel;
             if (d.settings.sourceAlignments) settings.sourceAlignments = d.settings.sourceAlignments;
             if (d.settings.neumeNames) settings.neumeNames = d.settings.neumeNames;
+            if (Array.isArray(d.settings.customSigns)) settings.customSigns = d.settings.customSigns;
+            if (d.settings.codeVariants) settings.codeVariants = d.settings.codeVariants;
+            if (d.settings.discriminateSigns !== undefined) settings.discriminateSigns = d.settings.discriminateSigns;
+            if (Array.isArray(d.settings.sourceMetaFields)) settings.sourceMetaFields = d.settings.sourceMetaFields;
+            if (d.settings.sourceMeta) settings.sourceMeta = d.settings.sourceMeta;
         }
+
+        if (Array.isArray(d.directSnippets)) directStore.replaceAll(d.directSnippets);
 
         if (payload.savedAt) {
             lastSavedAt.value = new Date(payload.savedAt).toLocaleTimeString();
@@ -214,7 +231,8 @@ export function useWorkspaceStorage() {
                 () => settings.$state,
                 () => annotStore.$state,
                 () => tablesStore.$state,
-                () => iiifStore.$state
+                () => iiifStore.$state,
+                () => directStore.collections
             ],
             () => {
                 triggerAutosave();

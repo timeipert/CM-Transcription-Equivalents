@@ -6,6 +6,7 @@ import { useAnnotationsStore } from '../stores/annotations';
 import { useIiifStore } from '../stores/iiif';
 import { useSettingsStore } from '../stores/settings';
 import { useTranscriptionData } from '../composables/useTranscriptionData';
+import { useDirectSnippetsStore } from '../stores/directSnippets';
 import { useImageManifest } from '../composables/useImageManifest';
 import { comparePatternIds } from '../utils/sorting';
 import { getNeumeName } from '../config/neumeNames';
@@ -19,6 +20,7 @@ const tableStore = usePersonalTablesStore();
 const annotStore = useAnnotationsStore();
 const iiifStore = useIiifStore();
 const settings = useSettingsStore();
+const directStore = useDirectSnippetsStore();
 const { glyphs, rawData, loadSource, loading: dataLoading, error: dataError } = useTranscriptionData();
 const { hasImage } = useImageManifest();
 
@@ -78,6 +80,7 @@ const filteredTables = computed(() => {
 
 // Load manifests and raw transcription data for all published sources
 onMounted(async () => {
+    directStore.load();
     for (const t of publishedTables.value) {
         iiifStore.ensureLoaded(t.source);
         loadSource(t.source);
@@ -161,6 +164,18 @@ const allPatterns = computed(() => {
         }
     }
 
+    // Include patterns declared in / used by published direct collections, so a
+    // collection documented entirely without IIIF still gets its own columns.
+    for (const c of directStore.publishedCollections) {
+        for (const p of c.patterns || []) {
+            if (!patternCountMap.has(p.code)) patternCountMap.set(p.code, 0);
+        }
+        for (const s of c.snippets || []) {
+            if (!s.pattern) continue;
+            patternCountMap.set(s.pattern, (patternCountMap.get(s.pattern) || 0) + 1);
+        }
+    }
+
     let patterns = Array.from(patternCountMap.keys());
 
     // Filter only annotated if toggled
@@ -180,6 +195,41 @@ const allPatterns = computed(() => {
     // Sort patterns using chosen sort mode
     patterns.sort((a, b) => compareChantPatterns(a, b, patternSortMode.value, patternCountMap));
     return patterns;
+});
+
+// --- Direct snippet collections (no IIIF, images pasted straight in) ---
+// These appear as ordinary rows: their snippets are stored images rather than
+// IIIF crops, so the cell renders an <img> instead of an AnnotationCutout.
+const directRows = computed(() => {
+    const rows = directStore.publishedCollections.map(c => ({
+        id: c.id,
+        source: c.source,
+        name: c.name,
+        isDirect: true,
+        collection: c
+    }));
+    if (selectedManuscriptFilter.value.length === 0) return rows;
+    const set = new Set(selectedManuscriptFilter.value);
+    return rows.filter(r => set.has(r.source));
+});
+
+/** { [collectionId]: { [pattern]: [snippet] } } */
+const directMatrix = computed(() => {
+    const matrix = {};
+    for (const c of directStore.publishedCollections) {
+        matrix[c.id] = {};
+        for (const s of c.snippets) {
+            if (!s.pattern) continue;
+            if (!matrix[c.id][s.pattern]) matrix[c.id][s.pattern] = [];
+            matrix[c.id][s.pattern].push({
+                ...s,
+                source: c.source,
+                displayId: s.refId || '-',
+                isDirect: true
+            });
+        }
+    }
+    return matrix;
 });
 
 // Navigation helpers
@@ -266,16 +316,25 @@ function selectAllManuscripts() {
                             :class="{ active: selectedManuscriptFilter.length === 0 }"
                             @click="selectAllManuscripts"
                         >
-                            All ({{ publishedTables.length }})
+                            All ({{ publishedTables.length + directStore.publishedCollections.length }})
                         </button>
-                        <button 
-                            v-for="t in publishedTables" 
+                        <button
+                            v-for="t in publishedTables"
                             :key="t.id"
                             class="pill-btn"
                             :class="{ active: selectedManuscriptFilter.includes(t.source) }"
                             @click="toggleManuscriptFilter(t.source)"
                         >
                             {{ t.source }}
+                        </button>
+                        <button
+                            v-for="c in directStore.publishedCollections"
+                            :key="c.id"
+                            class="pill-btn"
+                            :class="{ active: selectedManuscriptFilter.includes(c.source) }"
+                            @click="toggleManuscriptFilter(c.source)"
+                        >
+                            {{ c.source }}
                         </button>
                     </div>
                 </div>
@@ -285,7 +344,7 @@ function selectAllManuscripts() {
 
     <!-- Main Table Section -->
     <main class="table-wrapper">
-        <div v-if="filteredTables.length === 0" class="empty-state">
+        <div v-if="filteredTables.length === 0 && directRows.length === 0" class="empty-state">
             <h3>No Published Manuscripts</h3>
             <p>Publish manuscripts with annotations in the editor to see them in this comparative table.</p>
         </div>
@@ -365,6 +424,39 @@ function selectAllManuscripts() {
                             </div>
                         </td>
                     </tr>
+
+                    <!-- Direct snippet collections: stored images, no IIIF -->
+                    <tr v-for="row in directRows" :key="row.id">
+                        <td class="ms-cell sticky-col">
+                            <div class="ms-info-box">
+                                <strong>{{ row.source }}</strong>
+                                <span class="ms-title" v-if="row.name">{{ row.name }}</span>
+                                <span class="direct-badge" title="Documented from directly added snippets (no IIIF)">own snippets</span>
+                            </div>
+                        </td>
+                        <td v-for="pat in allPatterns" :key="pat" class="snippet-cell">
+                            <div v-if="directMatrix[row.id] && directMatrix[row.id][pat] && directMatrix[row.id][pat].length > 0"
+                                 class="snippets-grid">
+                                <div v-for="snip in directMatrix[row.id][pat]" :key="snip.id"
+                                     class="snippet-card"
+                                     @click="handleZoom(snip)"
+                                     title="Click to zoom snippet">
+                                    <div class="cutout-wrapper">
+                                        <img class="direct-img" :src="snip.image"
+                                             :alt="snip.caption || pat"
+                                             :style="{ width: displaySize + 'px', height: Math.round(displaySize * 0.75) + 'px' }" />
+                                    </div>
+                                    <div class="snip-meta">
+                                        <span class="snip-id">{{ snip.displayId }}</span>
+                                        <span class="snip-loc">{{ snip.caption }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-else class="empty-cell">
+                                <span class="dash">—</span>
+                            </div>
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -392,12 +484,15 @@ function selectAllManuscripts() {
                 </div>
 
                 <div class="zoom-body">
-                    <AnnotationCutout 
-                        :source="zoomedItem.source" 
-                        :folio="zoomedItem.folio" 
+                    <img v-if="zoomedItem.isDirect" class="zoom-direct-img"
+                         :src="zoomedItem.image" :alt="zoomedItem.caption || zoomedItem.pattern" />
+                    <AnnotationCutout
+                        v-else
+                        :source="zoomedItem.source"
+                        :folio="zoomedItem.folio"
                         :points="zoomedItem.points"
-                        :width="550" 
-                        :height="320" 
+                        :width="550"
+                        :height="320"
                         fit="contain"
                         :hideLabel="true"
                         :overlays="[zoomedItem]"
@@ -406,10 +501,17 @@ function selectAllManuscripts() {
                 </div>
 
                 <div class="zoom-footer-info">
-                    <strong>{{ zoomedItem.source }}</strong> &bull; Folio {{ zoomedItem.folio }} &bull; {{ zoomedItem.lineName }}
-                    <button class="btn-jump-source" @click="goToSingleManuscript(zoomedItem.source)">
-                        Open Manuscript View &rarr;
-                    </button>
+                    <template v-if="zoomedItem.isDirect">
+                        <strong>{{ zoomedItem.source }}</strong>
+                        <span v-if="zoomedItem.caption"> &bull; {{ zoomedItem.caption }}</span>
+                        <span class="direct-badge">own snippet</span>
+                    </template>
+                    <template v-else>
+                        <strong>{{ zoomedItem.source }}</strong> &bull; Folio {{ zoomedItem.folio }} &bull; {{ zoomedItem.lineName }}
+                        <button class="btn-jump-source" @click="goToSingleManuscript(zoomedItem.source)">
+                            Open Manuscript View &rarr;
+                        </button>
+                    </template>
                 </div>
             </div>
         </div>
@@ -418,6 +520,11 @@ function selectAllManuscripts() {
 </template>
 
 <style scoped>
+/* Direct (non-IIIF) snippets: stored images rather than live IIIF crops. */
+.direct-img { object-fit: contain; background: var(--color-bg); border-radius: 3px; display: block; }
+.zoom-direct-img { max-width: 550px; max-height: 320px; width: auto; height: auto; object-fit: contain; background: var(--color-bg); border-radius: 6px; }
+.direct-badge { font-size: 9px; text-transform: uppercase; font-weight: 800; letter-spacing: .03em; background: var(--color-surface-muted); color: var(--color-text-muted); padding: 2px 6px; border-radius: 3px; margin-left: 6px; }
+
 .neume-table-view {
     background: var(--color-bg);
     min-height: 100vh;

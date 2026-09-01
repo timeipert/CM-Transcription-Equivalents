@@ -3,6 +3,7 @@ import { useAnnotationsStore } from '../stores/annotations';
 import { usePersonalTablesStore } from '../stores/personalTables';
 import { useIiifStore } from '../stores/iiif';
 import { useOmmrStore } from '../stores/ommr';
+import { useDirectSnippetsStore } from '../stores/directSnippets';
 import { extractManuscripts, mergeManuscript, getManuscriptStats } from '../utils/workspaceSharing';
 
 const SCHEMA_VERSION = 1;
@@ -13,6 +14,7 @@ export function useDataManagement() {
     const tablesStore = usePersonalTablesStore();
     const iiifStore = useIiifStore();
     const ommrStore = useOmmrStore();
+    const directStore = useDirectSnippetsStore();
 
     function getLocalFullState() {
         return {
@@ -37,6 +39,9 @@ export function useDataManagement() {
             type: 'cm-workspace-backup',
             exportedAt: new Date().toISOString(),
             label: settings.backupLabel || 'Workspace',
+            // Direct snippet collections carry their images inline as base64, so a
+            // backup of them is self-contained (no IIIF server needed to restore).
+            directSnippets: directStore.collections,
             data: {
                 ...filteredData,
                 settings: includeSettings ? {
@@ -293,6 +298,12 @@ export function useDataManagement() {
 
         if (importSettings && parsedJson.data?.settings) {
             importConfiguration(parsedJson.data.settings);
+        }
+
+        // Direct snippet collections are keyed by their own ids, independent of the
+        // manuscript merge strategies above, so merge them by id.
+        if (Array.isArray(parsedJson.directSnippets)) {
+            directStore.mergeCollections(parsedJson.directSnippets);
         }
     }
 

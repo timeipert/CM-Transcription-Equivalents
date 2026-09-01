@@ -23,8 +23,10 @@ const isMenuOpen = ref(false);
         <RouterLink to="/equivalents" active-class="active">Equivalents</RouterLink>
         <RouterLink to="/polygons" active-class="active">Manuscripts</RouterLink>
         <RouterLink to="/ommr" active-class="active">Import</RouterLink>
+        <RouterLink to="/custom-manuscripts" active-class="active">Custom MSS</RouterLink>
         <RouterLink to="/settings" active-class="active">Settings</RouterLink>
         <span class="nav-sep" aria-hidden="true"></span>
+        <SaveReminder />
         <a href="manual/index.html" target="_blank" class="nav-util manual-link">Manual</a>
         <a href="#/public" target="_blank" rel="noopener" class="nav-util public-ext-link">Public&nbsp;↗</a>
       </div>
