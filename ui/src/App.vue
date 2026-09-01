@@ -6,6 +6,12 @@ import SaveReminder from './components/SaveReminder.vue';
 const route = useRoute();
 const isPublic = computed(() => route.path.startsWith('/public'));
 const isSetup = computed(() => route.path === '/setup');
+
+// The IIIF workflow spans several routes (pattern tables, the polygon manager,
+// the region editor), so the group link stays highlighted across all of them.
+const isIiifPath = computed(() =>
+    ['/equivalents', '/polygons', '/annotations'].some(p => route.path.startsWith(p))
+);
 const isMenuOpen = ref(false);
 </script>
 
@@ -21,10 +27,18 @@ const isMenuOpen = ref(false);
       </button>
       <div id="nav-links" class="nav-links" :class="{ 'menu-open': isMenuOpen }" @click="isMenuOpen = false">
         <RouterLink to="/" active-class="active">Overview</RouterLink>
-        <RouterLink to="/equivalents" active-class="active">Equivalents</RouterLink>
-        <RouterLink to="/polygons" active-class="active">Manuscripts</RouterLink>
-        <RouterLink to="/ommr" active-class="active">Import</RouterLink>
-        <RouterLink to="/custom-manuscripts" active-class="active">Custom MSS</RouterLink>
+
+        <!-- The three ways a manuscript gets documented. Grouping them makes the
+             choice of workflow explicit instead of hiding it among flat links. -->
+        <span class="nav-sep" aria-hidden="true"></span>
+        <RouterLink to="/equivalents" active-class="active" :class="{ active: isIiifPath }"
+                    title="Annotate manuscripts served over IIIF">IIIF</RouterLink>
+        <RouterLink to="/custom-manuscripts" active-class="active"
+                    title="Document a manuscript from your own images — no IIIF">Local</RouterLink>
+        <RouterLink to="/ommr" active-class="active"
+                    title="Import an OMMR4all dataset">OMMR&nbsp;Import</RouterLink>
+        <span class="nav-sep" aria-hidden="true"></span>
+
         <RouterLink to="/settings" active-class="active">Settings</RouterLink>
         <span class="nav-sep" aria-hidden="true"></span>
         <SaveReminder />
