@@ -10,6 +10,7 @@ import CustomManuscriptsView from '../views/CustomManuscriptsView.vue'
 import PublicManuscriptsView from '../views/PublicManuscriptsView.vue'
 import PublicNotationView from '../views/PublicNotationView.vue'
 import PublicNeumeTableView from '../views/PublicNeumeTableView.vue'
+import PublicCustomManuscriptView from '../views/PublicCustomManuscriptView.vue'
 import SetupView from '../views/SetupView.vue'
 
 // Import storage for guard
@@ -84,6 +85,12 @@ const router = createRouter({
       name: 'public_neume_table',
       component: PublicNeumeTableView,
       meta: { title: 'Neumentabelle' }
+    },
+    {
+      path: '/public/custom/:source',
+      name: 'public_custom_manuscript',
+      component: PublicCustomManuscriptView,
+      meta: { title: 'Custom Manuscript' }
     },
     {
       path: '/public/:source',

@@ -111,8 +111,12 @@ function toggleSort(field) {
     }
 }
 
-function goToOverview(source) {
-    router.push(`/public/${encodeURIComponent(source)}`);
+function goToOverview(source, isDirect = false) {
+    // Custom manuscripts have no IIIF folios or line regions, so they get their
+    // own public page rather than the IIIF notation view.
+    router.push(isDirect
+        ? `/public/custom/${encodeURIComponent(source)}`
+        : `/public/${encodeURIComponent(source)}`);
 }
 </script>
 
@@ -180,7 +184,7 @@ function goToOverview(source) {
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="table in sortedTables" :key="table.id" @click="goToOverview(table.source)">
+                    <tr v-for="table in sortedTables" :key="table.id" @click="goToOverview(table.source, table.isDirect)">
                         <td class="font-bold">
                             {{ table.source }}
                             <span v-if="table.notes" class="note-icon" title="Has Notes">📝</span>

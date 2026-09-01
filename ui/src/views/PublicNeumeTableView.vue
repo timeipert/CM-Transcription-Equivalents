@@ -233,8 +233,12 @@ const directMatrix = computed(() => {
 });
 
 // Navigation helpers
-function goToSingleManuscript(source) {
-    router.push(`/public/${encodeURIComponent(source)}`);
+function goToSingleManuscript(source, isDirect = false) {
+    // Custom manuscripts have their own public page — the IIIF notation view
+    // would find no folios or line regions for them.
+    router.push(isDirect
+        ? `/public/custom/${encodeURIComponent(source)}`
+        : `/public/${encodeURIComponent(source)}`);
 }
 
 function toggleManuscriptFilter(source) {
@@ -429,7 +433,10 @@ function selectAllManuscripts() {
                     <tr v-for="row in directRows" :key="row.id">
                         <td class="ms-cell sticky-col">
                             <div class="ms-info-box">
-                                <strong>{{ row.source }}</strong>
+                                <button class="ms-link" @click="goToSingleManuscript(row.source, true)">
+                                    <strong>{{ row.source }}</strong>
+                                    <span class="link-arrow">&rarr;</span>
+                                </button>
                                 <span class="ms-title" v-if="row.name">{{ row.name }}</span>
                                 <span class="direct-badge" title="Documented from directly added snippets (no IIIF)">own snippets</span>
                             </div>
@@ -508,7 +515,7 @@ function selectAllManuscripts() {
                     </template>
                     <template v-else>
                         <strong>{{ zoomedItem.source }}</strong> &bull; Folio {{ zoomedItem.folio }} &bull; {{ zoomedItem.lineName }}
-                        <button class="btn-jump-source" @click="goToSingleManuscript(zoomedItem.source)">
+                        <button class="btn-jump-source" @click="goToSingleManuscript(zoomedItem.source, zoomedItem.isDirect)">
                             Open Manuscript View &rarr;
                         </button>
                     </template>
