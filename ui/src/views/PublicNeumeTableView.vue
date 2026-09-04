@@ -6,9 +6,9 @@ import { useAnnotationsStore } from '../stores/annotations';
 import { useIiifStore } from '../stores/iiif';
 import { useSettingsStore } from '../stores/settings';
 import { useTranscriptionData } from '../composables/useTranscriptionData';
+import { useDirectSnippetsStore } from '../stores/directSnippets';
 import { useImageManifest } from '../composables/useImageManifest';
 import { comparePatternIds } from '../utils/sorting';
-import { getNeumeName } from '../config/neumeNames';
 import PatternDisplay from '../components/PatternDisplay.vue';
 import PatternCode from '../components/PatternCode.vue';
 import AnnotationCutout from '../components/AnnotationCutout.vue';
@@ -19,6 +19,7 @@ const tableStore = usePersonalTablesStore();
 const annotStore = useAnnotationsStore();
 const iiifStore = useIiifStore();
 const settings = useSettingsStore();
+const directStore = useDirectSnippetsStore();
 const { glyphs, rawData, loadSource, loading: dataLoading, error: dataError } = useTranscriptionData();
 const { hasImage } = useImageManifest();
 
@@ -78,6 +79,7 @@ const filteredTables = computed(() => {
 
 // Load manifests and raw transcription data for all published sources
 onMounted(async () => {
+    directStore.load();
     for (const t of publishedTables.value) {
         iiifStore.ensureLoaded(t.source);
         loadSource(t.source);
@@ -161,6 +163,18 @@ const allPatterns = computed(() => {
         }
     }
 
+    // Include patterns declared in / used by published direct collections, so a
+    // collection documented entirely without IIIF still gets its own columns.
+    for (const c of directStore.publishedCollections) {
+        for (const p of c.patterns || []) {
+            if (!patternCountMap.has(p.code)) patternCountMap.set(p.code, 0);
+        }
+        for (const s of c.snippets || []) {
+            if (!s.pattern) continue;
+            patternCountMap.set(s.pattern, (patternCountMap.get(s.pattern) || 0) + 1);
+        }
+    }
+
     let patterns = Array.from(patternCountMap.keys());
 
     // Filter only annotated if toggled
@@ -171,10 +185,7 @@ const allPatterns = computed(() => {
     // Filter by search query
     if (patternSearchQuery.value.trim()) {
         const q = patternSearchQuery.value.toLowerCase().trim();
-        patterns = patterns.filter(p => {
-            const name = getNeumeName(p, settings.neumeNames).toLowerCase();
-            return p.toLowerCase().includes(q) || name.includes(q);
-        });
+        patterns = patterns.filter(p => p.toLowerCase().includes(q));
     }
 
     // Sort patterns using chosen sort mode
@@ -182,9 +193,48 @@ const allPatterns = computed(() => {
     return patterns;
 });
 
+// --- Direct snippet collections (no IIIF, images pasted straight in) ---
+// These appear as ordinary rows: their snippets are stored images rather than
+// IIIF crops, so the cell renders an <img> instead of an AnnotationCutout.
+const directRows = computed(() => {
+    const rows = directStore.publishedCollections.map(c => ({
+        id: c.id,
+        source: c.source,
+        name: c.name,
+        isDirect: true,
+        collection: c
+    }));
+    if (selectedManuscriptFilter.value.length === 0) return rows;
+    const set = new Set(selectedManuscriptFilter.value);
+    return rows.filter(r => set.has(r.source));
+});
+
+/** { [collectionId]: { [pattern]: [snippet] } } */
+const directMatrix = computed(() => {
+    const matrix = {};
+    for (const c of directStore.publishedCollections) {
+        matrix[c.id] = {};
+        for (const s of c.snippets) {
+            if (!s.pattern) continue;
+            if (!matrix[c.id][s.pattern]) matrix[c.id][s.pattern] = [];
+            matrix[c.id][s.pattern].push({
+                ...s,
+                source: c.source,
+                displayId: s.refId || '-',
+                isDirect: true
+            });
+        }
+    }
+    return matrix;
+});
+
 // Navigation helpers
-function goToSingleManuscript(source) {
-    router.push(`/public/${encodeURIComponent(source)}`);
+function goToSingleManuscript(source, isDirect = false) {
+    // Custom manuscripts have their own public page — the IIIF notation view
+    // would find no folios or line regions for them.
+    router.push(isDirect
+        ? `/public/custom/${encodeURIComponent(source)}`
+        : `/public/${encodeURIComponent(source)}`);
 }
 
 function toggleManuscriptFilter(source) {
@@ -199,6 +249,21 @@ function toggleManuscriptFilter(source) {
 function selectAllManuscripts() {
     selectedManuscriptFilter.value = [];
 }
+
+// The pill list is unusable once a project has dozens of manuscripts, so it is
+// searchable and scrolls rather than pushing the table off screen.
+const msFilterSearch = ref('');
+
+const allFilterableSources = computed(() => [
+    ...publishedTables.value.map(t => ({ id: t.id, source: t.source, isDirect: false })),
+    ...directStore.publishedCollections.map(c => ({ id: c.id, source: c.source, isDirect: true }))
+]);
+
+const visibleFilterSources = computed(() => {
+    const q = msFilterSearch.value.trim().toLowerCase();
+    if (!q) return allFilterableSources.value;
+    return allFilterableSources.value.filter(x => x.source.toLowerCase().includes(q));
+});
 </script>
 
 <template>
@@ -220,13 +285,21 @@ function selectAllManuscripts() {
             <!-- Controls Panel -->
             <div class="controls-card">
                 <div class="control-group">
-                    <label class="control-label">Search Patterns / Names:</label>
-                    <input 
-                        type="text" 
-                        v-model="patternSearchQuery" 
-                        placeholder="Search e.g. *u, Pes, Torculus..."
-                        class="search-input"
-                    />
+                    <label class="control-label" for="pat-search">Search Pattern Codes</label>
+                    <div class="input-wrap">
+                        <span class="input-icon" aria-hidden="true">⌕</span>
+                        <input
+                            id="pat-search"
+                            type="search"
+                            v-model="patternSearchQuery"
+                            placeholder="e.g. *u, *uudd, [*ud]…"
+                            class="search-input has-icon"
+                            @keydown.esc="patternSearchQuery = ''"
+                        />
+                        <button v-if="patternSearchQuery" class="input-clear" aria-label="Clear pattern search"
+                                @click="patternSearchQuery = ''">×</button>
+                    </div>
+                    <span class="control-hint">{{ allPatterns.length }} pattern{{ allPatterns.length === 1 ? '' : 's' }} shown</span>
                 </div>
 
                 <div class="control-group">
@@ -259,24 +332,38 @@ function selectAllManuscripts() {
                 </div>
 
                 <div class="control-group ms-filter-group">
-                    <span class="control-label">Filter Manuscripts:</span>
+                    <div class="ms-filter-head">
+                        <span class="control-label">Filter Manuscripts</span>
+                        <span v-if="selectedManuscriptFilter.length" class="ms-selected-count">
+                            {{ selectedManuscriptFilter.length }} selected
+                            <button class="ms-clear" @click="selectAllManuscripts">clear</button>
+                        </span>
+                    </div>
+                    <input v-if="allFilterableSources.length > 8"
+                           v-model="msFilterSearch" type="search" class="ms-filter-search"
+                           placeholder="Find a manuscript…" aria-label="Find a manuscript to filter by" />
                     <div class="filter-pills">
-                        <button 
-                            class="pill-btn" 
+                        <button
+                            class="pill-btn pill-all"
                             :class="{ active: selectedManuscriptFilter.length === 0 }"
                             @click="selectAllManuscripts"
                         >
-                            All ({{ publishedTables.length }})
+                            All ({{ allFilterableSources.length }})
                         </button>
-                        <button 
-                            v-for="t in publishedTables" 
-                            :key="t.id"
+                        <button
+                            v-for="x in visibleFilterSources"
+                            :key="x.id"
                             class="pill-btn"
-                            :class="{ active: selectedManuscriptFilter.includes(t.source) }"
-                            @click="toggleManuscriptFilter(t.source)"
+                            :class="{ active: selectedManuscriptFilter.includes(x.source) }"
+                            :title="x.isDirect ? 'Documented from own images' : 'IIIF manuscript'"
+                            @click="toggleManuscriptFilter(x.source)"
                         >
-                            {{ t.source }}
+                            {{ x.source }}
+                            <span v-if="x.isDirect" class="pill-dot" aria-hidden="true">•</span>
                         </button>
+                        <span v-if="visibleFilterSources.length === 0" class="pill-empty">
+                            No manuscript matches “{{ msFilterSearch }}”.
+                        </span>
                     </div>
                 </div>
             </div>
@@ -285,7 +372,7 @@ function selectAllManuscripts() {
 
     <!-- Main Table Section -->
     <main class="table-wrapper">
-        <div v-if="filteredTables.length === 0" class="empty-state">
+        <div v-if="filteredTables.length === 0 && directRows.length === 0" class="empty-state">
             <h3>No Published Manuscripts</h3>
             <p>Publish manuscripts with annotations in the editor to see them in this comparative table.</p>
         </div>
@@ -308,9 +395,6 @@ function selectAllManuscripts() {
                                     <PatternDisplay :pattern="pat" :glyphs="glyphs" />
                                 </div>
                                 <div class="pat-code"><PatternCode :pattern="pat" /></div>
-                                <div class="pat-name" v-if="getNeumeName(pat, settings.neumeNames)">
-                                    {{ getNeumeName(pat, settings.neumeNames) }}
-                                </div>
                             </div>
                         </th>
                     </tr>
@@ -365,6 +449,42 @@ function selectAllManuscripts() {
                             </div>
                         </td>
                     </tr>
+
+                    <!-- Direct snippet collections: stored images, no IIIF -->
+                    <tr v-for="row in directRows" :key="row.id">
+                        <td class="ms-cell sticky-col">
+                            <div class="ms-info-box">
+                                <button class="ms-link" @click="goToSingleManuscript(row.source, true)">
+                                    <strong>{{ row.source }}</strong>
+                                    <span class="link-arrow">&rarr;</span>
+                                </button>
+                                <span class="ms-title" v-if="row.name">{{ row.name }}</span>
+                                <span class="direct-badge" title="Documented from directly added snippets (no IIIF)">own snippets</span>
+                            </div>
+                        </td>
+                        <td v-for="pat in allPatterns" :key="pat" class="snippet-cell">
+                            <div v-if="directMatrix[row.id] && directMatrix[row.id][pat] && directMatrix[row.id][pat].length > 0"
+                                 class="snippets-grid">
+                                <div v-for="snip in directMatrix[row.id][pat]" :key="snip.id"
+                                     class="snippet-card"
+                                     @click="handleZoom(snip)"
+                                     title="Click to zoom snippet">
+                                    <div class="cutout-wrapper">
+                                        <img class="direct-img" :src="snip.image"
+                                             :alt="snip.caption || pat"
+                                             :style="{ width: displaySize + 'px', height: Math.round(displaySize * 0.75) + 'px' }" />
+                                    </div>
+                                    <div class="snip-meta">
+                                        <span class="snip-id">{{ snip.displayId }}</span>
+                                        <span class="snip-loc">{{ snip.caption }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-else class="empty-cell">
+                                <span class="dash">—</span>
+                            </div>
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -385,19 +505,19 @@ function selectAllManuscripts() {
                     </div>
                     <div class="zoom-meta">
                         <PatternDisplay :pattern="zoomedItem.pattern" :glyphs="glyphs" />
-                        <span class="zoom-neume-name" v-if="getNeumeName(zoomedItem.pattern, settings.neumeNames)">
-                            ({{ getNeumeName(zoomedItem.pattern, settings.neumeNames) }})
-                        </span>
                     </div>
                 </div>
 
                 <div class="zoom-body">
-                    <AnnotationCutout 
-                        :source="zoomedItem.source" 
-                        :folio="zoomedItem.folio" 
+                    <img v-if="zoomedItem.isDirect" class="zoom-direct-img"
+                         :src="zoomedItem.image" :alt="zoomedItem.caption || zoomedItem.pattern" />
+                    <AnnotationCutout
+                        v-else
+                        :source="zoomedItem.source"
+                        :folio="zoomedItem.folio"
                         :points="zoomedItem.points"
-                        :width="550" 
-                        :height="320" 
+                        :width="550"
+                        :height="320"
                         fit="contain"
                         :hideLabel="true"
                         :overlays="[zoomedItem]"
@@ -406,10 +526,17 @@ function selectAllManuscripts() {
                 </div>
 
                 <div class="zoom-footer-info">
-                    <strong>{{ zoomedItem.source }}</strong> &bull; Folio {{ zoomedItem.folio }} &bull; {{ zoomedItem.lineName }}
-                    <button class="btn-jump-source" @click="goToSingleManuscript(zoomedItem.source)">
-                        Open Manuscript View &rarr;
-                    </button>
+                    <template v-if="zoomedItem.isDirect">
+                        <strong>{{ zoomedItem.source }}</strong>
+                        <span v-if="zoomedItem.caption"> &bull; {{ zoomedItem.caption }}</span>
+                        <span class="direct-badge">own snippet</span>
+                    </template>
+                    <template v-else>
+                        <strong>{{ zoomedItem.source }}</strong> &bull; Folio {{ zoomedItem.folio }} &bull; {{ zoomedItem.lineName }}
+                        <button class="btn-jump-source" @click="goToSingleManuscript(zoomedItem.source, zoomedItem.isDirect)">
+                            Open Manuscript View &rarr;
+                        </button>
+                    </template>
                 </div>
             </div>
         </div>
@@ -418,6 +545,11 @@ function selectAllManuscripts() {
 </template>
 
 <style scoped>
+/* Direct (non-IIIF) snippets: stored images rather than live IIIF crops. */
+.direct-img { object-fit: contain; background: var(--color-bg); border-radius: 3px; display: block; }
+.zoom-direct-img { max-width: 550px; max-height: 320px; width: auto; height: auto; object-fit: contain; background: var(--color-bg); border-radius: 6px; }
+.direct-badge { font-size: 9px; text-transform: uppercase; font-weight: 800; letter-spacing: .03em; background: var(--color-surface-muted); color: var(--color-text-muted); padding: 2px 6px; border-radius: 3px; margin-left: 6px; }
+
 .neume-table-view {
     background: var(--color-bg);
     min-height: 100vh;
@@ -553,6 +685,34 @@ function selectAllManuscripts() {
     gap: 6px;
 }
 
+/* --- polished control styles --- */
+.input-wrap { position: relative; display: flex; align-items: center; }
+.input-icon { position: absolute; left: 10px; font-size: 16px; color: var(--color-text-light); pointer-events: none; line-height: 1; }
+.search-input.has-icon { padding-left: 30px; padding-right: 30px; }
+.search-input::-webkit-search-cancel-button { display: none; }
+.input-clear {
+    position: absolute; right: 7px; width: 20px; height: 20px;
+    border: none; border-radius: 50%; cursor: pointer; line-height: 1; font-size: 14px;
+    background: var(--color-surface-muted); color: var(--color-text-muted);
+    display: flex; align-items: center; justify-content: center;
+}
+.input-clear:hover { background: var(--color-border-hover); color: var(--color-text); }
+.control-hint { font-size: 10px; color: var(--color-text-muted); margin-top: 4px; }
+
+.ms-filter-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.ms-selected-count { font-size: 11px; font-weight: 700; color: var(--color-primary-hover); margin-left: auto; white-space: nowrap; }
+.ms-clear { background: none; border: none; color: var(--color-text-muted); font-size: 11px; font-weight: 600; cursor: pointer; text-decoration: underline; padding: 0 0 0 4px; }
+.ms-clear:hover { color: var(--color-text); }
+.ms-filter-search {
+    width: 100%; padding: 6px 10px; margin-bottom: 8px; box-sizing: border-box;
+    border: 1px solid var(--color-border); border-radius: 6px; font-size: 12px; font-family: inherit;
+}
+/* Cap the pill area so a large project cannot push the table off screen */
+.filter-pills { max-height: 148px; overflow-y: auto; }
+.pill-dot { color: var(--color-text-muted); font-size: 14px; line-height: 0; }
+.pill-btn.active .pill-dot { color: rgba(255,255,255,.75); }
+.pill-empty { font-size: 12px; color: var(--color-text-light); font-style: italic; padding: 6px 2px; }
+
 .pill-btn {
     background: var(--color-bg);
     border: 1px solid var(--color-border);
@@ -663,15 +823,6 @@ function selectAllManuscripts() {
     color: var(--color-text);
 }
 
-.pat-name {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--color-primary-hover);
-    background: var(--color-primary-light);
-    padding: 1px 6px;
-    border-radius: 4px;
-    white-space: nowrap;
-}
 
 /* Rows and Cells */
 .ms-cell {
@@ -825,11 +976,6 @@ function selectAllManuscripts() {
     gap: 8px;
 }
 
-.zoom-neume-name {
-    font-weight: 600;
-    color: var(--color-primary-hover);
-    font-size: 0.95rem;
-}
 
 .zoom-body {
     border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden;

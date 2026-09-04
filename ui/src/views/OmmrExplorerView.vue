@@ -8,7 +8,6 @@ import { useTranscriptionData } from '../composables/useTranscriptionData';
 import { useImageManifest } from '../composables/useImageManifest';
 import { compareChantPatterns } from '../utils/sorting';
 import { undeskewPoint } from '../utils/ommrGeometry';
-import { getNeumeName } from '../config/neumeNames';
 import PatternDisplay from '../components/PatternDisplay.vue';
 import OmmrSnippet from '../components/OmmrSnippet.vue';
 import OmmrLineStrip from '../components/OmmrLineStrip.vue';
@@ -357,7 +356,6 @@ const allPatterns = computed(() => {
     const q = searchFilter.value.trim().toLowerCase();
     return pats.filter(p => {
         if (!q) return true;
-        const name = (getNeumeName(p) || '').toLowerCase();
         return p.toLowerCase().includes(q) || name.includes(q);
     }).sort((a, b) => compareChantPatterns(a, b, sortOrder.value, ommrStore.patternFrequencies));
 });
@@ -1189,7 +1187,6 @@ onMounted(() => {
                     />
                     <div class="pattern-title">
                         <PatternDisplay :pattern="pat" :glyphs="glyphs" />
-                        <span v-if="getNeumeName(pat)" class="neume-name">{{ getNeumeName(pat) }}</span>
                     </div>
                     <span class="pattern-badges">
                         <span v-if="coveredPatterns.has(pat)" class="cover-dot" title="Has a selected example">✓</span>
@@ -1206,7 +1203,6 @@ onMounted(() => {
                 <div class="gallery-title">
                     <h3>
                         <PatternDisplay :pattern="selectedPattern" :glyphs="glyphs" />
-                        <span v-if="getNeumeName(selectedPattern)" class="subname">({{ getNeumeName(selectedPattern) }})</span>
                     </h3>
                     <span class="gallery-count">
                         {{ filteredSnippets.length }} candidate{{ filteredSnippets.length === 1 ? '' : 's' }}
@@ -1316,7 +1312,6 @@ onMounted(() => {
         :effectiveFolio="effFolio(peekSnippet.folio)"
         :deskew="deskewFor(peekSnippet.folio)"
         :folioOffset="folioOffset"
-        :patternName="getNeumeName(peekSnippet.pattern)"
         :serviceUrl="indexMode ? (getIiifCanvasByIndex(peekSnippet.source, canvasIndexFor(peekSnippet.folio))?.serviceUrl || '') : ''"
         :canvasLabel="indexMode ? (getIiifCanvasByIndex(peekSnippet.source, canvasIndexFor(peekSnippet.folio))?.label || '') : ''"
         @close="peekSnippet = null"
@@ -1384,7 +1379,7 @@ onMounted(() => {
                 <div v-for="grp in selectedByPattern" :key="grp.pattern" class="preview-row">
                     <div class="preview-rowhead">
                         <PatternDisplay :pattern="grp.pattern" :glyphs="glyphs" />
-                        <span class="preview-name">{{ getNeumeName(grp.pattern) || grp.pattern }}</span>
+                        <span class="preview-name">{{ grp.pattern }}</span>
                     </div>
                     <div class="preview-strips">
                         <div v-for="snip in grp.snippets" :key="snip.id" class="preview-strip">
@@ -2088,7 +2083,6 @@ onMounted(() => {
 }
 .pattern-item-left { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
 .pat-info { display: flex; flex-direction: column; min-width: 0; }
-.pat-name { font-size: 0.72rem; color: var(--color-text-muted); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pattern-item-right { display: flex; align-items: center; gap: 8px; }
 .pat-freq {
     font-size: 0.75rem; font-weight: 700; color: var(--color-text-muted);
@@ -2107,7 +2101,6 @@ onMounted(() => {
     background: var(--color-surface); flex-wrap: wrap; gap: 8px;
 }
 .detail-title { display: flex; align-items: center; gap: 12px; }
-.neume-name { font-size: 0.88rem; color: var(--color-text-muted); font-style: italic; }
 .detail-meta { font-size: 0.8rem; color: var(--color-text-muted); margin-left: 8px; }
 .detail-actions { display: flex; align-items: center; gap: 8px; }
 .folio-filter-input {

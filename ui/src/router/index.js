@@ -6,9 +6,11 @@ import SettingsView from '../views/SettingsView.vue'
 import PolygonManagerView from '../views/PolygonManagerView.vue'
 import RegionEditorView from '../views/RegionEditorView.vue'
 import OmmrExplorerView from '../views/OmmrExplorerView.vue'
+import CustomManuscriptsView from '../views/CustomManuscriptsView.vue'
 import PublicManuscriptsView from '../views/PublicManuscriptsView.vue'
 import PublicNotationView from '../views/PublicNotationView.vue'
 import PublicNeumeTableView from '../views/PublicNeumeTableView.vue'
+import PublicCustomManuscriptView from '../views/PublicCustomManuscriptView.vue'
 import SetupView from '../views/SetupView.vue'
 
 // Import storage for guard
@@ -49,6 +51,12 @@ const router = createRouter({
       meta: { title: 'Import', requiresWorkspace: true }
     },
     {
+      path: '/custom-manuscripts',
+      name: 'custom_manuscripts',
+      component: CustomManuscriptsView,
+      meta: { title: 'Custom Manuscripts', requiresWorkspace: true }
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: SettingsView,
@@ -77,6 +85,12 @@ const router = createRouter({
       name: 'public_neume_table',
       component: PublicNeumeTableView,
       meta: { title: 'Neumentabelle' }
+    },
+    {
+      path: '/public/custom/:source',
+      name: 'public_custom_manuscript',
+      component: PublicCustomManuscriptView,
+      meta: { title: 'Custom Manuscript' }
     },
     {
       path: '/public/:source',

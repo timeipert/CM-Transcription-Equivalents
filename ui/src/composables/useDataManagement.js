@@ -3,6 +3,8 @@ import { useAnnotationsStore } from '../stores/annotations';
 import { usePersonalTablesStore } from '../stores/personalTables';
 import { useIiifStore } from '../stores/iiif';
 import { useOmmrStore } from '../stores/ommr';
+import { useDirectSnippetsStore } from '../stores/directSnippets';
+import { useSaveReminderStore } from '../stores/saveReminder';
 import { extractManuscripts, mergeManuscript, getManuscriptStats } from '../utils/workspaceSharing';
 
 const SCHEMA_VERSION = 1;
@@ -13,6 +15,7 @@ export function useDataManagement() {
     const tablesStore = usePersonalTablesStore();
     const iiifStore = useIiifStore();
     const ommrStore = useOmmrStore();
+    const directStore = useDirectSnippetsStore();
 
     function getLocalFullState() {
         return {
@@ -37,19 +40,23 @@ export function useDataManagement() {
             type: 'cm-workspace-backup',
             exportedAt: new Date().toISOString(),
             label: settings.backupLabel || 'Workspace',
+            // Direct snippet collections carry their images inline as base64, so a
+            // backup of them is self-contained (no IIIF server needed to restore).
+            directSnippets: directStore.collections,
             data: {
                 ...filteredData,
                 settings: includeSettings ? {
                     globalDisplayIds: settings.globalDisplayIds,
                     autoFillIds: settings.autoFillIds,
                     displayMode: settings.displayMode,
-                    neumeNames: settings.neumeNames,
                     sourceAlignments: settings.sourceAlignments,
                     snippetSize: settings.snippetSize,
                     snippetPadding: settings.snippetPadding,
                     customSigns: settings.customSigns,
                     codeVariants: settings.codeVariants,
-                    discriminateSigns: settings.discriminateSigns
+                    discriminateSigns: settings.discriminateSigns,
+                    sourceMetaFields: settings.sourceMetaFields,
+                    sourceMeta: settings.sourceMeta
                 } : undefined
             }
         };
@@ -66,6 +73,7 @@ export function useDataManagement() {
         a.click();
 
         URL.revokeObjectURL(url);
+
     }
 
     // Export specific manuscripts (only those with data)
@@ -111,13 +119,14 @@ export function useDataManagement() {
                 globalDisplayIds: settings.globalDisplayIds,
                 autoFillIds: settings.autoFillIds,
                 displayMode: settings.displayMode,
-                neumeNames: settings.neumeNames,
                 sourceAlignments: settings.sourceAlignments,
                 snippetSize: settings.snippetSize,
                 snippetPadding: settings.snippetPadding,
                 customSigns: settings.customSigns,
                 codeVariants: settings.codeVariants,
-                discriminateSigns: settings.discriminateSigns
+                discriminateSigns: settings.discriminateSigns,
+                sourceMetaFields: settings.sourceMetaFields,
+                sourceMeta: settings.sourceMeta
             }
         };
 
@@ -141,13 +150,14 @@ export function useDataManagement() {
         if (s.globalDisplayIds) settings.globalDisplayIds = s.globalDisplayIds;
         if (s.autoFillIds !== undefined) settings.autoFillIds = s.autoFillIds;
         if (s.displayMode) settings.displayMode = s.displayMode;
-        if (s.neumeNames) settings.neumeNames = s.neumeNames;
         if (s.sourceAlignments) settings.sourceAlignments = s.sourceAlignments;
         if (s.snippetSize) settings.snippetSize = s.snippetSize;
         if (s.snippetPadding) settings.snippetPadding = s.snippetPadding;
         if (Array.isArray(s.customSigns)) settings.customSigns = s.customSigns;
         if (s.codeVariants) settings.codeVariants = s.codeVariants;
         if (s.discriminateSigns !== undefined) settings.discriminateSigns = s.discriminateSigns;
+        if (Array.isArray(s.sourceMetaFields)) settings.sourceMetaFields = s.sourceMetaFields;
+        if (s.sourceMeta) settings.sourceMeta = s.sourceMeta;
     }
 
     function readFileAsJson(file) {
@@ -293,6 +303,12 @@ export function useDataManagement() {
 
         if (importSettings && parsedJson.data?.settings) {
             importConfiguration(parsedJson.data.settings);
+        }
+
+        // Direct snippet collections are keyed by their own ids, independent of the
+        // manuscript merge strategies above, so merge them by id.
+        if (Array.isArray(parsedJson.directSnippets)) {
+            directStore.mergeCollections(parsedJson.directSnippets);
         }
     }
 
