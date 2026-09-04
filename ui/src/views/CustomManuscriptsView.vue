@@ -3,7 +3,6 @@ import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useDirectSnippetsStore } from '../stores/directSnippets';
 import { useSettingsStore } from '../stores/settings';
 import { useTranscriptionData } from '../composables/useTranscriptionData';
-import { getNeumeName } from '../config/neumeNames';
 import { fileToSnippet, imageFromPaste, imagesFromDrop, formatBytes } from '../utils/snippetImages';
 import PatternDisplay from '../components/PatternDisplay.vue';
 import PatternCode from '../components/PatternCode.vue';
@@ -404,7 +403,7 @@ const grouped = computed(() => {
                         @click="selectedPattern = p.code">
                     <PatternDisplay :pattern="p.code" :glyphs="glyphs" />
                     <PatternCode :pattern="p.code" />
-                    <span class="pat-label">{{ p.label || getNeumeName(p.code) }}</span>
+                    <span class="pat-label">{{ p.label }}</span>
                     <span class="pat-count">{{ active.snippets.filter(s => s.pattern === p.code).length }}</span>
                     <span class="pat-del" @click.stop="store.removePattern(active.id, p.code)" title="Remove pattern">×</span>
                 </button>
@@ -450,7 +449,7 @@ const grouped = computed(() => {
                 <div class="group-head" v-if="g.snippets.length">
                     <PatternDisplay v-if="g.pattern.code" :pattern="g.pattern.code" :glyphs="glyphs" />
                     <PatternCode v-if="g.pattern.code" :pattern="g.pattern.code" />
-                    <span class="group-label">{{ g.pattern.label || getNeumeName(g.pattern.code) }}</span>
+                    <span class="group-label">{{ g.pattern.label }}</span>
                     <span class="group-count">{{ g.snippets.length }}</span>
                 </div>
                 <div class="snip-grid" v-if="g.snippets.length">

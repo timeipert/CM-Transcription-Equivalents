@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router';
 import { useDirectSnippetsStore } from '../stores/directSnippets';
 import { useSettingsStore } from '../stores/settings';
 import { useTranscriptionData } from '../composables/useTranscriptionData';
-import { getNeumeName } from '../config/neumeNames';
 import PatternDisplay from '../components/PatternDisplay.vue';
 import PatternCode from '../components/PatternCode.vue';
 
@@ -112,7 +111,7 @@ function closeZoom() { zoomed.value = null; }
                         <PatternCode v-if="row.pattern.code" :pattern="row.pattern.code" />
                     </div>
                     <div class="pattern-meta">
-                        <h2>{{ row.pattern.label || getNeumeName(row.pattern.code, settings.neumeNames) || row.pattern.code || 'Unassigned' }}</h2>
+                        <h2>{{ row.pattern.label || row.pattern.code || 'Unassigned' }}</h2>
                         <span class="count">{{ row.snippets.length }} snippet{{ row.snippets.length === 1 ? '' : 's' }}</span>
                     </div>
                 </div>

@@ -10,7 +10,6 @@ export const useSettingsStore = defineStore('settings', () => {
     const snippetPadding = ref(0.3)
     const backupLabel = ref("My Backup")
     const sourceAlignments = ref({}) // { [source]: { iiifType: 'paginated'|'foliated', dataType: 'paginated'|'foliated', offset: 0 } }
-    const neumeNames = ref({}) // { pattern: "Custom Name" }
     // Code-changing variants (project-wide):
     // customSigns: the reusable sign vocabulary. Each: { key, label, abbrev, description, glyph, glyphSvg }
     const customSigns = ref([])
@@ -41,7 +40,6 @@ export const useSettingsStore = defineStore('settings', () => {
             if (parsed.snippetPadding) snippetPadding.value = parsed.snippetPadding
             if (parsed.backupLabel) backupLabel.value = parsed.backupLabel
             if (parsed.sourceAlignments) sourceAlignments.value = parsed.sourceAlignments
-            if (parsed.neumeNames) neumeNames.value = parsed.neumeNames
             if (Array.isArray(parsed.customSigns)) customSigns.value = parsed.customSigns
             if (parsed.codeVariants) codeVariants.value = parsed.codeVariants
             if (parsed.discriminateSigns !== undefined) discriminateSigns.value = parsed.discriminateSigns
@@ -53,7 +51,7 @@ export const useSettingsStore = defineStore('settings', () => {
     }
 
     // Persist to LocalStorage
-    watch([displayMode, autoFillIds, globalDisplayIds, snippetSize, snippetPadding, backupLabel, sourceAlignments, neumeNames, customSigns, codeVariants, discriminateSigns, sourceMetaFields, sourceMeta], () => {
+    watch([displayMode, autoFillIds, globalDisplayIds, snippetSize, snippetPadding, backupLabel, sourceAlignments, customSigns, codeVariants, discriminateSigns, sourceMetaFields, sourceMeta], () => {
         localStorage.setItem('globalSettings', JSON.stringify({
             displayMode: displayMode.value,
             autoFillIds: autoFillIds.value,
@@ -62,7 +60,6 @@ export const useSettingsStore = defineStore('settings', () => {
             snippetPadding: snippetPadding.value,
             backupLabel: backupLabel.value,
             sourceAlignments: sourceAlignments.value,
-            neumeNames: neumeNames.value,
             customSigns: customSigns.value,
             codeVariants: codeVariants.value,
             discriminateSigns: discriminateSigns.value,
@@ -87,19 +84,8 @@ export const useSettingsStore = defineStore('settings', () => {
         return globalDisplayIds.value[pattern] || ''
     }
 
-    function setNeumeName(pattern, name) {
-        neumeNames.value = { ...neumeNames.value, [pattern]: name }
-    }
 
-    function removeNeumeName(pattern) {
-        const next = { ...neumeNames.value }
-        delete next[pattern]
-        neumeNames.value = next
-    }
 
-    function getNeumeNameValue(pattern) {
-        return neumeNames.value[pattern] || ''
-    }
 
     // --- Custom signs (code-variant vocabulary) ---
     function addCustomSign(sign) {
@@ -211,7 +197,6 @@ export const useSettingsStore = defineStore('settings', () => {
         snippetPadding,
         backupLabel,
         sourceAlignments,
-        neumeNames,
         customSigns,
         codeVariants,
         discriminateSigns,
@@ -234,9 +219,6 @@ export const useSettingsStore = defineStore('settings', () => {
         setGlobalId,
         removeGlobalId,
         getGlobalId,
-        setNeumeName,
-        removeNeumeName,
-        getNeumeNameValue,
         setSourceAlignment,
         removeSourceAlignment
     }

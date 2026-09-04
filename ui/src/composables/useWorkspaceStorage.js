@@ -59,7 +59,6 @@ export function useWorkspaceStorage() {
                     snippetPadding: settings.snippetPadding,
                     backupLabel: settings.backupLabel,
                     sourceAlignments: settings.sourceAlignments,
-                    neumeNames: settings.neumeNames,
                     customSigns: settings.customSigns,
                     codeVariants: settings.codeVariants,
                     discriminateSigns: settings.discriminateSigns,
@@ -103,7 +102,6 @@ export function useWorkspaceStorage() {
             if (d.settings.snippetPadding) settings.snippetPadding = d.settings.snippetPadding;
             if (d.settings.backupLabel) settings.backupLabel = d.settings.backupLabel;
             if (d.settings.sourceAlignments) settings.sourceAlignments = d.settings.sourceAlignments;
-            if (d.settings.neumeNames) settings.neumeNames = d.settings.neumeNames;
             if (Array.isArray(d.settings.customSigns)) settings.customSigns = d.settings.customSigns;
             if (d.settings.codeVariants) settings.codeVariants = d.settings.codeVariants;
             if (d.settings.discriminateSigns !== undefined) settings.discriminateSigns = d.settings.discriminateSigns;

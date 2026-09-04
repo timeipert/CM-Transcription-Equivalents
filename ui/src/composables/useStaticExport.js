@@ -24,7 +24,6 @@ import { comparePatternIds, compareChantPatterns } from '../utils/sorting';
 import { renderSvg } from '../utils/svgRenderer';
 import { resolveSignGlyphs, splitCodeBySigns } from '../utils/signs';
 
-import { getNeumeName } from '../config/neumeNames';
 
 // ---- small utilities -------------------------------------------------------
 
@@ -241,7 +240,6 @@ h1{margin:4px 0 0;font-size:2.6rem;font-weight:800;letter-spacing:-.02em;}
 .matrix-pat-box{display:flex;flex-direction:column;align-items:center;gap:4px;}
 .matrix-pat-svg{height:36px;display:flex;align-items:center;justify-content:center;}
 .matrix-pat-code{font-family:"JetBrains Mono",monospace;font-size:.85rem;font-weight:700;}
-.matrix-pat-name{font-size:.72rem;font-weight:600;color:var(--color-primary-hover);background:var(--color-primary-light);padding:1px 6px;border-radius:4px;white-space:nowrap;}
 .matrix-ms-td{position:sticky;left:0;z-index:2;background:#fff;padding:16px 20px;border-bottom:1px solid var(--color-border);border-right:2px solid var(--color-border);vertical-align:top;min-width:200px;}
 .matrix-ms-td strong{display:block;font-size:1.05rem;color:var(--color-text);}
 .matrix-ms-td .ms-sub{font-size:.8rem;color:var(--color-text-muted);display:block;}
@@ -435,17 +433,14 @@ function directoryMarkdown(entries) {
 
 // ---- Neumentabelle (Matrix Comparison) -------------------------------------
 
-function neumentabelleHtml({ publishedSources, allPatterns, matrixSnippets, glyphs, displayMode, customNeumeNames, signGlyphs = {}, signKeys = [] }) {
+function neumentabelleHtml({ publishedSources, allPatterns, matrixSnippets, glyphs, displayMode, signGlyphs = {}, signKeys = [] }) {
     // Header row with patterns
     const ths = allPatterns.map(pat => {
         const patCell = patternMarkup(pat, glyphs, displayMode, signGlyphs);
-        const name = getNeumeName(pat, customNeumeNames);
-        const nameBadge = name ? `<div class="matrix-pat-name">${esc(name)}</div>` : '';
         return `<th class="matrix-pat-th">
 <div class="matrix-pat-box">
 <div class="matrix-pat-svg">${patCell}</div>
 <div class="matrix-pat-code">${patternCodeMarkup(pat, signKeys)}</div>
-${nameBadge}
 </div>
 </th>`;
     }).join('');
@@ -510,15 +505,12 @@ ${trs}
     return htmlDoc('Neumentabelle — Comparative Notation Analysis', body);
 }
 
-function neumentabelleMarkdown({ publishedSources, allPatterns, matrixSnippets, customNeumeNames }) {
+function neumentabelleMarkdown({ publishedSources, allPatterns, matrixSnippets }) {
     let md = `# Neumentabelle — Comparative Notation Analysis\n\nStatic export — ${todayStr()}\n\n`;
     md += `[Back to Manuscript Directory](README.md)\n\n`;
 
     // Markdown Table
-    const headers = ['Manuscript', ...allPatterns.map(p => {
-        const name = getNeumeName(p, customNeumeNames);
-        return name ? `\`${p}\` (${name})` : `\`${p}\``;
-    })];
+    const headers = ['Manuscript', ...allPatterns.map(p => `\`${p}\``)];
 
     md += `| ${headers.join(' | ')} |\n`;
     md += `| ${headers.map(() => '---').join(' | ')} |\n`;
@@ -696,7 +688,6 @@ export async function exportStaticSite(onProgress = () => {}) {
         matrixSnippets,
         glyphs,
         displayMode,
-        customNeumeNames: settings.neumeNames,
         signGlyphs: ntSignGlyphs,
         signKeys: settings.customSigns.map(s => s.key)
     });
@@ -705,7 +696,6 @@ export async function exportStaticSite(onProgress = () => {}) {
         publishedSources: publishedSourcesForMatrix,
         allPatterns: allMatrixPatterns,
         matrixSnippets,
-        customNeumeNames: settings.neumeNames
     });
 
     zip.file('neumentabelle.html', ntHtml);

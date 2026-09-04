@@ -9,7 +9,6 @@ import { useTranscriptionData } from '../composables/useTranscriptionData';
 import { useDirectSnippetsStore } from '../stores/directSnippets';
 import { useImageManifest } from '../composables/useImageManifest';
 import { comparePatternIds } from '../utils/sorting';
-import { getNeumeName } from '../config/neumeNames';
 import PatternDisplay from '../components/PatternDisplay.vue';
 import PatternCode from '../components/PatternCode.vue';
 import AnnotationCutout from '../components/AnnotationCutout.vue';
@@ -186,10 +185,7 @@ const allPatterns = computed(() => {
     // Filter by search query
     if (patternSearchQuery.value.trim()) {
         const q = patternSearchQuery.value.toLowerCase().trim();
-        patterns = patterns.filter(p => {
-            const name = getNeumeName(p, settings.neumeNames).toLowerCase();
-            return p.toLowerCase().includes(q) || name.includes(q);
-        });
+        patterns = patterns.filter(p => p.toLowerCase().includes(q));
     }
 
     // Sort patterns using chosen sort mode
@@ -289,14 +285,14 @@ const visibleFilterSources = computed(() => {
             <!-- Controls Panel -->
             <div class="controls-card">
                 <div class="control-group">
-                    <label class="control-label" for="pat-search">Search Patterns / Names</label>
+                    <label class="control-label" for="pat-search">Search Pattern Codes</label>
                     <div class="input-wrap">
                         <span class="input-icon" aria-hidden="true">⌕</span>
                         <input
                             id="pat-search"
                             type="search"
                             v-model="patternSearchQuery"
-                            placeholder="e.g. *u, Pes, Torculus…"
+                            placeholder="e.g. *u, *uudd, [*ud]…"
                             class="search-input has-icon"
                             @keydown.esc="patternSearchQuery = ''"
                         />
@@ -399,9 +395,6 @@ const visibleFilterSources = computed(() => {
                                     <PatternDisplay :pattern="pat" :glyphs="glyphs" />
                                 </div>
                                 <div class="pat-code"><PatternCode :pattern="pat" /></div>
-                                <div class="pat-name" v-if="getNeumeName(pat, settings.neumeNames)">
-                                    {{ getNeumeName(pat, settings.neumeNames) }}
-                                </div>
                             </div>
                         </th>
                     </tr>
@@ -512,9 +505,6 @@ const visibleFilterSources = computed(() => {
                     </div>
                     <div class="zoom-meta">
                         <PatternDisplay :pattern="zoomedItem.pattern" :glyphs="glyphs" />
-                        <span class="zoom-neume-name" v-if="getNeumeName(zoomedItem.pattern, settings.neumeNames)">
-                            ({{ getNeumeName(zoomedItem.pattern, settings.neumeNames) }})
-                        </span>
                     </div>
                 </div>
 
@@ -833,15 +823,6 @@ const visibleFilterSources = computed(() => {
     color: var(--color-text);
 }
 
-.pat-name {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--color-primary-hover);
-    background: var(--color-primary-light);
-    padding: 1px 6px;
-    border-radius: 4px;
-    white-space: nowrap;
-}
 
 /* Rows and Cells */
 .ms-cell {
@@ -995,11 +976,6 @@ const visibleFilterSources = computed(() => {
     gap: 8px;
 }
 
-.zoom-neume-name {
-    font-weight: 600;
-    color: var(--color-primary-hover);
-    font-size: 0.95rem;
-}
 
 .zoom-body {
     border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden;

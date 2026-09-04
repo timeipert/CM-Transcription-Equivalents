@@ -49,7 +49,6 @@ export function useDataManagement() {
                     globalDisplayIds: settings.globalDisplayIds,
                     autoFillIds: settings.autoFillIds,
                     displayMode: settings.displayMode,
-                    neumeNames: settings.neumeNames,
                     sourceAlignments: settings.sourceAlignments,
                     snippetSize: settings.snippetSize,
                     snippetPadding: settings.snippetPadding,
@@ -120,7 +119,6 @@ export function useDataManagement() {
                 globalDisplayIds: settings.globalDisplayIds,
                 autoFillIds: settings.autoFillIds,
                 displayMode: settings.displayMode,
-                neumeNames: settings.neumeNames,
                 sourceAlignments: settings.sourceAlignments,
                 snippetSize: settings.snippetSize,
                 snippetPadding: settings.snippetPadding,
@@ -152,7 +150,6 @@ export function useDataManagement() {
         if (s.globalDisplayIds) settings.globalDisplayIds = s.globalDisplayIds;
         if (s.autoFillIds !== undefined) settings.autoFillIds = s.autoFillIds;
         if (s.displayMode) settings.displayMode = s.displayMode;
-        if (s.neumeNames) settings.neumeNames = s.neumeNames;
         if (s.sourceAlignments) settings.sourceAlignments = s.sourceAlignments;
         if (s.snippetSize) settings.snippetSize = s.snippetSize;
         if (s.snippetPadding) settings.snippetPadding = s.snippetPadding;

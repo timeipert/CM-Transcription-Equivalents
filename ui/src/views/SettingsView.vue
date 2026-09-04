@@ -252,31 +252,6 @@ function addMapping() {
     }
 }
 
-// UI State for Neume Names
-import { DEFAULT_NEUME_NAMES, getNeumeName } from '../config/neumeNames';
-const newNeumePattern = ref("");
-const newNeumeName = ref("");
-
-const allDisplayNeumeNames = computed(() => {
-    // Combine defaults and user overrides
-    const combined = { ...DEFAULT_NEUME_NAMES, ...store.neumeNames };
-    return combined;
-});
-
-function addNeumeNameMapping() {
-    if (newNeumePattern.value && newNeumeName.value) {
-        store.setNeumeName(newNeumePattern.value, newNeumeName.value);
-        newNeumePattern.value = "";
-        newNeumeName.value = "";
-    }
-}
-
-function resetDefaultNeumeNames() {
-    if (confirm("Reset all custom neume names to standard defaults?")) {
-        store.neumeNames = {};
-    }
-}
-
 // --- Custom Signs (code variants) ---
 import { validateSignKey } from '../utils/signs';
 const { glyphs } = useTranscriptionData();
@@ -665,48 +640,6 @@ const alignPreview = computed(() => {
                 </tbody>
             </table>
             <div v-else class="empty">No global ID preferences set</div>
-        </div>
-    </div>
-
-    <div class="card section">
-        <div class="flex-between-mb10">
-            <h2>Neume Names (Neumentabelle)</h2>
-            <button @click="resetDefaultNeumeNames" class="btn-sm btn-secondary" title="Reset custom names to defaults">Reset to Defaults</button>
-        </div>
-        <p class="desc">Define or customize human-readable chant names for patterns (e.g., "*u" &rarr; "Pes", "*d" &rarr; "Clivis"). These will appear in the Neumentabelle column headers.</p>
-
-        <div class="add-row">
-            <input v-model="newNeumePattern" placeholder="Pattern (e.g. *u)" />
-            <input v-model="newNeumeName" placeholder="Neume Name (e.g. Pes)" />
-            <button @click="addNeumeNameMapping" :disabled="!newNeumePattern || !newNeumeName">Save Name</button>
-        </div>
-
-        <div class="ids-list">
-            <table v-if="Object.keys(allDisplayNeumeNames).length > 0">
-                <thead>
-                    <tr>
-                        <th>Pattern</th>
-                        <th>Neume Name</th>
-                        <th>Type</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="(name, pat) in allDisplayNeumeNames" :key="pat">
-                        <td class="code-font">{{ pat }}</td>
-                        <td>{{ name }}</td>
-                        <td>
-                            <span v-if="store.neumeNames && store.neumeNames[pat]" class="badge">Custom</span>
-                            <span v-else class="text-sm-light">Default</span>
-                        </td>
-                        <td>
-                            <button v-if="store.neumeNames && store.neumeNames[pat]" @click="store.removeNeumeName(pat)" class="btn-sm btn-danger">Remove</button>
-                            <span v-else class="text-sm-light">—</span>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-            <div v-else class="empty">No neume names defined</div>
         </div>
     </div>
 

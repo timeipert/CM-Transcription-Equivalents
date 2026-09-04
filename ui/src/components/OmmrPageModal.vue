@@ -14,7 +14,6 @@ const props = defineProps({
     effectiveFolio: { type: String, required: true },
     deskew: { type: Object, default: () => ({ angle: 0, w: 0, h: 0 }) },
     folioOffset: { type: Number, default: 0 },
-    patternName: { type: String, default: '' },
     // Index-mode: explicit canvas service URL + label resolved by page index.
     serviceUrl: { type: String, default: '' },
     canvasLabel: { type: String, default: '' }
@@ -57,7 +56,7 @@ function nudge(delta) { emit('set-offset', props.folioOffset + delta); }
     <div class="peek-panel">
         <header class="peek-head">
             <div class="peek-title">
-                <b>{{ patternName || snippet.pattern }}</b>
+                <b>{{ snippet.pattern }}</b>
                 <span class="peek-sub">
                     OMMR folio <b>{{ snippet.folio }}</b>
                     <template v-if="effectiveFolio !== snippet.folio"> → <b>{{ effectiveFolio }}</b> (offset {{ folioOffset > 0 ? '+' : '' }}{{ folioOffset }})</template>
