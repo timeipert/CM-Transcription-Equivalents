@@ -123,6 +123,13 @@ onBeforeUnmount(() => {
     <main class="main-content">
       <RouterView />
     </main>
+
+    <!-- Always visible, including on /public and /setup which have no top-nav:
+         this app is one piece of the wider Corpus Monodicum infrastructure. -->
+    <footer class="cm-footer">
+      Part of the Corpus Monodicum infrastructure —
+      <a href="https://monodi.app" target="_blank" rel="noopener">monodi.app</a>
+    </footer>
   </div>
 </template>
 
@@ -283,6 +290,26 @@ onBeforeUnmount(() => {
   overflow: auto; /* Allow scrolling */
   background: var(--color-bg);
   width: 100%;
+  min-height: 0; /* let the footer keep its own space in the flex column */
+}
+
+.cm-footer {
+  flex: 0 0 auto;
+  padding: 6px var(--space-5);
+  font-size: 0.72rem;
+  color: var(--color-text-light);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  text-align: center;
+}
+.cm-footer a {
+  color: var(--color-text-muted);
+  font-weight: 600;
+  text-decoration: none;
+}
+.cm-footer a:hover {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
 }
 
 /* Scrollbar styling for Webkit */
