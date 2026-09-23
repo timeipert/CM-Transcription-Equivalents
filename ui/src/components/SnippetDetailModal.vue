@@ -21,6 +21,9 @@ const { glyphs } = useTranscriptionData();
 const annotStore = useAnnotationsStore();
 const tableStore = usePersonalTablesStore();
 const settings = useSettingsStore();
+
+/** Variant buttons from the project configuration (Story: no freehand letters). */
+const snippetVariants = computed(() => settings.getSnippetVariants(liveAnnotation.value?.variant || ''));
 const { getStandardSource } = useImageManifest();
 
 // Reactive check against store to ensure latest link status
@@ -151,10 +154,20 @@ function goToEditor() {
 
                 <div class="info-group">
                     <label>Classification</label>
-                    <select :value="liveAnnotation?.variant || ''" @change="e => updateVariant(e.target.value)" class="variant-select">
-                        <option value="">(None)</option>
-                        <option v-for="l in 'abcdefghijklmnopqrstuvwxyz'.split('')" :key="l" :value="l">{{ l }}</option>
-                    </select>
+                    <div class="variant-buttons">
+                        <button
+                            v-for="v in snippetVariants"
+                            :key="v.key || '_base'"
+                            type="button"
+                            class="variant-btn"
+                            :class="{ active: (liveAnnotation?.variant || '') === v.key, legacy: v.legacy }"
+                            :title="v.legacy ? 'Nicht mehr konfiguriert — stammt aus einer älteren Einteilung' : ''"
+                            @click="updateVariant(v.key)"
+                        >{{ v.label }}<span v-if="v.legacy" class="legacy-mark">*</span></button>
+                    </div>
+                    <router-link v-if="!settings.hasSnippetVariantConfig()" class="variant-config-link" to="/patterns">
+                        Varianten konfigurieren →
+                    </router-link>
                 </div>
                 
                 <hr class="divider"/>
@@ -269,9 +282,18 @@ function goToEditor() {
 .secondary { background: white; border-color: var(--color-border-hover); color: var(--color-text); }
 .secondary:hover { border-color: var(--color-text-light); color: var(--color-text); }
 
-.variant-select {
-    width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--color-border);
-    font-size: 1rem; background: var(--color-surface);
+.variant-buttons { display: flex; flex-wrap: wrap; gap: 5px; }
+.variant-btn {
+    padding: 5px 11px; border-radius: 6px; border: 1px solid var(--color-border);
+    background: var(--color-surface); font-size: 0.85rem; cursor: pointer;
 }
+.variant-btn.active { background: var(--color-primary); color: white; border-color: var(--color-primary-hover); }
+.variant-btn.legacy { border-style: dashed; }
+.legacy-mark { opacity: 0.7; margin-left: 2px; }
+.variant-config-link {
+    display: inline-block; margin-top: 6px; font-size: 0.72rem;
+    color: var(--color-primary); text-decoration: none;
+}
+.variant-config-link:hover { text-decoration: underline; }
 
 </style>

@@ -8,11 +8,11 @@ import { useSettingsStore } from '../stores/settings';
 import { useTranscriptionData } from '../composables/useTranscriptionData';
 import PatternDisplay from '../components/PatternDisplay.vue';
 import PatternCode from '../components/PatternCode.vue';
+import PatternHierarchyTree from '../components/patterns/PatternHierarchyTree.vue';
 import AnnotationCutout from '../components/AnnotationCutout.vue';
 import StateWrapper from '../components/StateWrapper.vue';
 import { useImageManifest } from '../composables/useImageManifest';
-import { comparePatternIds } from '../utils/sorting';
-import { buildPatternRefMap, buildManuscriptLines } from '../composables/usePublicNotation';
+import { buildPatternRefMap, buildManuscriptLines, getBasePattern } from '../composables/usePublicNotation';
 
 
 const route = useRoute();
@@ -110,14 +110,17 @@ const table = computed(() => tableStore.tables.find(t => t.source === source));
 // Build a map of Ref IDs for each pattern (shared with the static exporter)
 const patternRefMap = computed(() => buildPatternRefMap(table.value, settings.getGlobalId));
 
-// Split table rows into two halves for the 2-column layout
-const tableHalves = computed(() => {
-    if (!table.value) return [[], []];
-    // Create a copy and sort by ID
-    const rows = [...table.value.rows].sort((a, b) => comparePatternIds(a.customId, b.customId));
-    const mid = Math.ceil(rows.length / 2);
-    return [rows.slice(0, mid), rows.slice(mid)];
+/** Every pattern code listed: the table's rows, in hierarchy order. */
+const listedCodes = computed(() => {
+    const set = new Set();
+    for (const row of table.value?.rows || []) {
+        const code = getBasePattern(row.pattern);
+        if (code) set.add(code);
+    }
+    return Array.from(set);
 });
+
+const treeRef = ref(null);
 
 // Extract all lines from both transcription data AND annotations (shared with the static exporter)
 const manuscriptLines = computed(() => buildManuscriptLines({
@@ -220,55 +223,52 @@ watch([() => route.query.zoomId, manuscriptLines], ([zId, groups]) => {
         <!-- Section 1: Patterns Overview -->
         <section class="section table-section">
             <div class="section-header">
-                <h2>Patterns & Equivalents</h2>
-                <span class="badge">{{ table?.rows.length || 0 }} Patterns</span>
+                <h2>Patterns &amp; Equivalents</h2>
+                <span class="badge">{{ listedCodes.length }} Patterns</span>
+                <span class="spacer"></span>
+                <button class="tree-btn" @click="treeRef?.expandAll()">Expand all</button>
+                <button class="tree-btn" @click="treeRef?.collapseAll()">Collapse</button>
             </div>
-            
-            <div class="table-columns">
-                <div v-for="(half, hIdx) in tableHalves" :key="hIdx" class="table-column">
-                    <table class="pattern-table">
-                        <thead>
-                            <tr>
-                                <th class="w-70">Ref ID</th>
-                                <th class="w-140">Pattern</th>
-                                <th>Occurrences</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="row in half" :key="row.pattern" 
-                                :id="`pattern-${row.pattern}`"
-                                :class="{ 'row-highlight': highlightedPattern === row.pattern }">
-                                <td class="ref-id">
-                                    <button class="btn-scroll-link" @click="scrollToPattern(row.pattern)">
-                                        <strong>{{ patternRefMap[row.pattern] }}</strong>
-                                    </button>
-                                </td>
-                                <td class="pattern-cell">
-                                    <PatternDisplay :pattern="row.pattern" :glyphs="glyphs" />
-                                    <PatternCode :pattern="row.pattern" />
-                                </td>
-                                <td class="occurrences-cell">
-                                    <div v-if="patternOccurrences?.[row.pattern]" class="variant-groups">
-                                        <div v-for="(locs, variant) in patternOccurrences[row.pattern]" :key="variant" class="variant-group">
-                                            <div class="variant-header" v-if="variant !== '_base'">
-                                                Variant {{ variant }}
-                                            </div>
-                                            <div class="loc-list">
-                                                <span v-for="loc in Array.from(locs)" :key="loc.annId" 
-                                                      class="loc-tag clickable"
-                                                      @click="scrollToLine(loc.regionId, loc.annId)">
-                                                    {{ loc.label }}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <span v-else class="no-data">None</span>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+
+            <PatternHierarchyTree
+                ref="treeRef"
+                :codes="listedCodes"
+                emptyText="No patterns."
+                v-slot="{ code }"
+            >
+                <div class="pattern-entry"
+                     :id="`pattern-${code}`"
+                     :class="{ 'row-highlight': highlightedPattern === code }">
+                    <div class="entry-head">
+                        <span class="entry-glyph">
+                            <PatternDisplay :pattern="code" :glyphs="glyphs" />
+                        </span>
+                        <button class="entry-code btn-scroll-link" @click="scrollToPattern(code)">
+                            <PatternCode :pattern="code" />
+                        </button>
+                        <span class="entry-ref" v-if="patternRefMap[code] && patternRefMap[code] !== '-'"
+                              title="Ref ID (printed volume)">Ref {{ patternRefMap[code] }}</span>
+                    </div>
+
+                    <div class="entry-occurrences">
+                        <div v-if="patternOccurrences?.[code]" class="variant-groups">
+                            <div v-for="(locs, variant) in patternOccurrences[code]" :key="variant" class="variant-group">
+                                <div class="variant-header" v-if="variant !== '_base'">
+                                    Variant {{ variant }}
+                                </div>
+                                <div class="loc-list">
+                                    <span v-for="loc in Array.from(locs)" :key="loc.annId"
+                                          class="loc-tag clickable"
+                                          @click="scrollToLine(loc.regionId, loc.annId)">
+                                        {{ loc.label }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <span v-else class="no-data">None</span>
+                    </div>
                 </div>
-            </div>
+            </PatternHierarchyTree>
         </section>
 
         <!-- Section 2: Manuscript Line Gallery -->
@@ -502,31 +502,40 @@ watch([() => route.query.zoomId, manuscriptLines], ([zId, groups]) => {
     font-weight: 700;
 }
 
-.table-columns {
-    display: flex;
-    gap: 30px;
-    align-items: flex-start;
-}
-
-.table-column {
-    flex: 1;
-}
-
-.pattern-table {
-    width: 100%;
-    border-collapse: collapse;
-    background: white;
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    font-size: 0.85rem;
+.spacer { flex: 1; }
+.tree-btn {
+    font-size: 0.78rem;
+    padding: 4px 10px;
     border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
 }
 
-.pattern-table th { background: var(--color-bg); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted); padding: 10px; }
-.pattern-table td { padding: 8px 12px; border-bottom: 1px solid var(--color-surface-muted); }
-
-.ref-id { color: var(--color-primary-hover); font-family: 'JetBrains Mono', monospace; font-size: 1rem; font-weight: 700; }
+/* One pattern entry inside the hierarchy */
+.pattern-entry {
+    background: white;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+.entry-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.entry-glyph { min-width: 42px; display: flex; justify-content: center; }
+.entry-code { background: none; border: none; padding: 0; cursor: pointer; }
+.entry-code :deep(.pattern-code) { font-size: 0.95rem; font-weight: 800; color: var(--color-text); }
+.entry-code:hover :deep(.pattern-code) { color: var(--color-primary-hover); }
+.entry-ref {
+    margin-left: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 1px 8px;
+}
+.entry-occurrences { margin-top: 6px; padding-left: 52px; }
 
 /* Glyphs plus the code beneath: with code variants the distinction can be a
    single letter, so the code is shown as a caption under the notation. */
@@ -711,9 +720,8 @@ watch([() => route.query.zoomId, manuscriptLines], ([zId, groups]) => {
 @media (max-width: 768px) {
     .header-content { align-items: flex-start; }
     .title-stack h1 { font-size: 2rem; }
-    .table-columns { flex-direction: column; }
+    .entry-occurrences { padding-left: 0; }
     .table-column { width: 100%; overflow-x: auto; }
-    .pattern-table { min-width: 500px; }
     .zoom-content { padding: 20px; width: 95vw; }
     .zoom-header { flex-direction: column; align-items: flex-start; gap: 10px; }
     .ref-pill { align-self: flex-start; }

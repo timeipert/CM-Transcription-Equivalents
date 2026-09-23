@@ -26,6 +26,10 @@ export const useSettingsStore = defineStore('settings', () => {
     const sourceMetaFields = ref([])
     // sourceMeta: { [source]: { [fieldKey]: "value" } }
     const sourceMeta = ref({})
+    // Snippet variants: the classifier letters offered when annotating a snippet
+    // (same code, different graphical realisation). Empty = the built-in a–g.
+    // Each: { key, label }
+    const snippetVariants = ref([])
 
     // Load from LocalStorage
     const stored = localStorage.getItem('globalSettings')
@@ -45,13 +49,14 @@ export const useSettingsStore = defineStore('settings', () => {
             if (parsed.discriminateSigns !== undefined) discriminateSigns.value = parsed.discriminateSigns
             if (Array.isArray(parsed.sourceMetaFields)) sourceMetaFields.value = parsed.sourceMetaFields
             if (parsed.sourceMeta) sourceMeta.value = parsed.sourceMeta
+            if (Array.isArray(parsed.snippetVariants)) snippetVariants.value = parsed.snippetVariants
         } catch (e) {
             console.error("Error loading settings", e)
         }
     }
 
     // Persist to LocalStorage
-    watch([displayMode, autoFillIds, globalDisplayIds, snippetSize, snippetPadding, backupLabel, sourceAlignments, customSigns, codeVariants, discriminateSigns, sourceMetaFields, sourceMeta], () => {
+    watch([displayMode, autoFillIds, globalDisplayIds, snippetSize, snippetPadding, backupLabel, sourceAlignments, customSigns, codeVariants, discriminateSigns, sourceMetaFields, sourceMeta, snippetVariants], () => {
         localStorage.setItem('globalSettings', JSON.stringify({
             displayMode: displayMode.value,
             autoFillIds: autoFillIds.value,
@@ -64,7 +69,8 @@ export const useSettingsStore = defineStore('settings', () => {
             codeVariants: codeVariants.value,
             discriminateSigns: discriminateSigns.value,
             sourceMetaFields: sourceMetaFields.value,
-            sourceMeta: sourceMeta.value
+            sourceMeta: sourceMeta.value,
+            snippetVariants: snippetVariants.value
         }))
     }, { deep: true })
 
@@ -179,6 +185,43 @@ export const useSettingsStore = defineStore('settings', () => {
         return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
     }
 
+    // --- Snippet variants (classifier letters) ---
+    const DEFAULT_SNIPPET_VARIANTS = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
+
+    /**
+     * The variant buttons to offer when annotating, always led by the base entry.
+     * Falls back to the built-in letters so existing workspaces keep the choices
+     * their annotations already use.
+     *
+     * `currentKey` is the value already stored on the annotation being edited. A
+     * key that is no longer configured is appended and flagged `legacy`, so an
+     * older classification stays visible and cannot be lost by accident.
+     */
+    function getSnippetVariants(currentKey = '') {
+        const base = { key: '', label: 'Basis' }
+        const configured = snippetVariants.value.filter(v => v && v.key)
+
+        const list = configured.length === 0
+            ? DEFAULT_SNIPPET_VARIANTS.map(k => ({ key: k, label: k }))
+            : configured.map(v => ({ key: String(v.key), label: v.label || String(v.key) }))
+
+        const key = currentKey ? String(currentKey) : ''
+        if (key && !list.some(v => v.key === key)) {
+            list.push({ key, label: key, legacy: true })
+        }
+        return [base, ...list]
+    }
+
+    function hasSnippetVariantConfig() {
+        return snippetVariants.value.some(v => v && v.key)
+    }
+
+    function setSnippetVariants(list) {
+        snippetVariants.value = (list || [])
+            .filter(v => v && v.key)
+            .map(v => ({ key: String(v.key).trim(), label: (v.label || '').trim() || String(v.key).trim() }))
+    }
+
     function setSourceAlignment(source, config) {
         sourceAlignments.value = { ...sourceAlignments.value, [source]: config }
     }
@@ -202,6 +245,10 @@ export const useSettingsStore = defineStore('settings', () => {
         discriminateSigns,
         sourceMetaFields,
         sourceMeta,
+        snippetVariants,
+        getSnippetVariants,
+        hasSnippetVariantConfig,
+        setSnippetVariants,
         addSourceMetaField,
         updateSourceMetaField,
         removeSourceMetaField,

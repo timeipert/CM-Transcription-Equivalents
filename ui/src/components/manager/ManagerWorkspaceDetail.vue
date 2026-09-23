@@ -26,6 +26,9 @@ function variantsFor(pat) {
 
 const hasSigns = computed(() => settings.customSigns.length > 0);
 
+/** Snippet-variant buttons, from the project configuration (default a–g). */
+const snippetVariants = computed(() => settings.getSnippetVariants(props.activeVariant || ''));
+
 /** True when the selected pattern carries a custom sign (i.e. it is a code variant). */
 const isVariantCode = computed(() => {
     if (!props.activePattern || !hasSigns.value) return false;
@@ -69,12 +72,13 @@ const isVariantCode = computed(() => {
                      Snippet variant <span class="kind-hint">— same code, different look</span>
                  </div>
                  <div class="letters">
-                     <button class="btn-xs" :class="{active: !activeVariant}" @click="$emit('setVariant', '')">Base</button>
-                     <button v-for="l in ['a','b','c','d','e','f','g']" :key="l"
+                     <button v-for="v in snippetVariants" :key="v.key || '_base'"
                              class="btn-xs"
-                             :class="{active: activeVariant === l}"
-                             @click="$emit('setVariant', l)">
-                         {{ l }}
+                             :class="{active: (activeVariant || '') === v.key, legacy: v.legacy}"
+                             :title="v.legacy ? 'Nicht mehr konfiguriert — aus einer älteren Einteilung'
+                                 : (v.key ? `Variante ${v.key}` : 'Ohne Variante')"
+                             @click="$emit('setVariant', v.key)">
+                         {{ v.label }}
                      </button>
                  </div>
             </div>
@@ -169,6 +173,7 @@ const isVariantCode = computed(() => {
 .letters { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; }
 .letters .btn-xs { min-width: 24px; text-align: center; }
 .letters .btn-xs.active { background: var(--color-primary); color: white; border-color: var(--color-primary-hover); }
+.letters .btn-xs.legacy { border-style: dashed; }
 
 .pattern-list-header { margin-top: 10px; }
 .pattern-search { width: 100%; padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 13px; box-sizing: border-box; }

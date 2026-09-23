@@ -11,6 +11,8 @@ import { useImageManifest } from '../composables/useImageManifest';
 import { comparePatternIds } from '../utils/sorting';
 import PatternDisplay from '../components/PatternDisplay.vue';
 import PatternCode from '../components/PatternCode.vue';
+import { buildPatternHierarchy } from '../utils/patternCode';
+import { stripSignKeys, signMarker } from '../utils/signs';
 import AnnotationCutout from '../components/AnnotationCutout.vue';
 import StateWrapper from '../components/StateWrapper.vue';
 
@@ -116,12 +118,24 @@ const snippetMatrix = computed(() => {
                     const pat = item.pattern.trim();
                     const basePat = pat.split(' ')[0];
 
-                    // Determine display Ref ID
-                    const rowMatch = (table.rows || []).find(row => row.pattern === basePat || row.pattern === pat);
-                    const baseRefId = rowMatch?.customId || settings.getGlobalId(basePat) || '-';
+                    // Determine the display Ref ID. A code variant has no row of its
+                    // own, so fall back to the Ref ID of the code without its signs and
+                    // mark the variant — the same rule the line gallery uses, so the two
+                    // views cannot disagree about what a snippet is called.
+                    const keys = settings.customSigns.map(sg => sg.key);
+                    const codeNoSigns = stripSignKeys(basePat, keys);
+                    const rowMatch = (table.rows || []).find(row =>
+                        row.pattern === basePat || row.pattern === pat || row.pattern === codeNoSigns);
+                    const baseRefId = rowMatch?.customId
+                        || settings.getGlobalId(basePat)
+                        || settings.getGlobalId(codeNoSigns)
+                        || '-';
                     let variant = item.variant || '';
                     if (!variant && pat.includes(' ')) variant = pat.split(' ')[1];
-                    const displayId = variant ? `${baseRefId}${variant}` : baseRefId;
+                    const marker = settings.discriminateSigns ? signMarker(basePat, settings.customSigns) : '';
+                    let displayId = baseRefId;
+                    if (marker) displayId += `·${marker}`;
+                    if (variant) displayId += variant;
 
                     if (!matrix[source][pat]) matrix[source][pat] = [];
 
@@ -227,6 +241,52 @@ const directMatrix = computed(() => {
     }
     return matrix;
 });
+
+/**
+ * Column groups: the same direction -> ligature -> modifier hierarchy the pattern
+ * library uses, flattened into a header row above the matrix. Collapsing a group
+ * folds its columns away, which is what makes a wide matrix readable.
+ */
+const columnGroups = computed(() => {
+    const tree = buildPatternHierarchy(allPatterns.value, {
+        signKeys: settings.customSigns.map(s => s.key),
+        customSigns: settings.customSigns
+    });
+    const groups = [];
+    for (const dir of tree) {
+        for (const lig of dir.groups) {
+            for (const mod of lig.groups) {
+                groups.push({
+                    key: `${dir.key}/${lig.key}/${mod.key}`,
+                    label: dir.label + ' · ' + lig.label + (mod.key === '_base' ? '' : ' · ' + mod.label),
+                    codes: mod.codes
+                });
+            }
+        }
+    }
+    return groups;
+});
+
+const collapsedGroups = ref(new Set());
+
+function toggleGroup(key) {
+    const next = new Set(collapsedGroups.value);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    collapsedGroups.value = next;
+}
+
+function isGroupOpen(key) {
+    return !collapsedGroups.value.has(key);
+}
+
+function collapseAllGroups() {
+    collapsedGroups.value = new Set(columnGroups.value.map(g => g.key));
+}
+
+function expandAllGroups() {
+    collapsedGroups.value = new Set();
+}
 
 // Navigation helpers
 function goToSingleManuscript(source, isDirect = false) {
@@ -385,18 +445,43 @@ const visibleFilterSources = computed(() => {
         <div v-else class="matrix-container">
             <table class="neume-matrix">
                 <thead>
+                    <!-- Hierarchy groups; click a group to fold its columns away -->
+                    <tr class="group-row">
+                        <th class="corner-cell sticky-col sticky-corner group-corner">
+                            <div class="group-controls">
+                                <button class="tree-btn" @click="expandAllGroups">Expand all</button>
+                                <button class="tree-btn" @click="collapseAllGroups">Collapse</button>
+                            </div>
+                        </th>
+                        <th
+                            v-for="g in columnGroups"
+                            :key="g.key"
+                            class="group-header-cell"
+                            :class="{ collapsed: !isGroupOpen(g.key) }"
+                            :colspan="isGroupOpen(g.key) ? g.codes.length : 1"
+                            :title="isGroupOpen(g.key) ? 'Collapse this group' : `Expand ${g.label}`"
+                            @click="toggleGroup(g.key)"
+                        >
+                            <span class="caret" :class="{ open: isGroupOpen(g.key) }">▸</span>
+                            <span class="group-name">{{ g.label }}</span>
+                            <span class="group-count">{{ g.codes.length }}</span>
+                        </th>
+                    </tr>
                     <tr>
                         <th class="corner-cell sticky-col sticky-corner">
                             <span class="corner-title">Manuscript \ Pattern</span>
                         </th>
-                        <th v-for="pat in allPatterns" :key="pat" class="pattern-header-cell">
-                            <div class="pat-header-box">
-                                <div class="pat-svg-box">
-                                    <PatternDisplay :pattern="pat" :glyphs="glyphs" />
+                        <template v-for="g in columnGroups" :key="g.key">
+                            <th v-if="!isGroupOpen(g.key)" class="collapsed-cell"></th>
+                            <th v-else v-for="pat in g.codes" :key="pat" class="pattern-header-cell">
+                                <div class="pat-header-box">
+                                    <div class="pat-svg-box">
+                                        <PatternDisplay :pattern="pat" :glyphs="glyphs" />
+                                    </div>
+                                    <div class="pat-code"><PatternCode :pattern="pat" /></div>
                                 </div>
-                                <div class="pat-code"><PatternCode :pattern="pat" /></div>
-                            </div>
-                        </th>
+                            </th>
+                        </template>
                     </tr>
                 </thead>
                 <tbody>
@@ -413,7 +498,9 @@ const visibleFilterSources = computed(() => {
                         </td>
 
                         <!-- Pattern Cells for this Manuscript -->
-                        <td v-for="pat in allPatterns" :key="pat" class="snippet-cell">
+                        <template v-for="g in columnGroups" :key="g.key">
+                        <td v-if="!isGroupOpen(g.key)" class="collapsed-cell"></td>
+                        <td v-else v-for="pat in g.codes" :key="pat" class="snippet-cell">
                             <div 
                                 v-if="snippetMatrix[table.source] && snippetMatrix[table.source][pat] && snippetMatrix[table.source][pat].length > 0" 
                                 class="snippets-grid"
@@ -448,6 +535,7 @@ const visibleFilterSources = computed(() => {
                                 <span class="dash">—</span>
                             </div>
                         </td>
+                        </template>
                     </tr>
 
                     <!-- Direct snippet collections: stored images, no IIIF -->
@@ -462,7 +550,9 @@ const visibleFilterSources = computed(() => {
                                 <span class="direct-badge" title="Documented from directly added snippets (no IIIF)">own snippets</span>
                             </div>
                         </td>
-                        <td v-for="pat in allPatterns" :key="pat" class="snippet-cell">
+                        <template v-for="g in columnGroups" :key="g.key">
+                        <td v-if="!isGroupOpen(g.key)" class="collapsed-cell"></td>
+                        <td v-else v-for="pat in g.codes" :key="pat" class="snippet-cell">
                             <div v-if="directMatrix[row.id] && directMatrix[row.id][pat] && directMatrix[row.id][pat].length > 0"
                                  class="snippets-grid">
                                 <div v-for="snip in directMatrix[row.id][pat]" :key="snip.id"
@@ -484,6 +574,7 @@ const visibleFilterSources = computed(() => {
                                 <span class="dash">—</span>
                             </div>
                         </td>
+                        </template>
                     </tr>
                 </tbody>
             </table>
@@ -769,7 +860,7 @@ const visibleFilterSources = computed(() => {
 
 .sticky-corner {
     position: sticky;
-    top: 0;
+    top: 34px;
     left: 0;
     z-index: 4;
     background: var(--color-bg) !important;
@@ -789,9 +880,62 @@ const visibleFilterSources = computed(() => {
     color: var(--color-text-muted);
 }
 
-.pattern-header-cell {
+/* Hierarchy group row above the pattern headers */
+.group-row th {
     position: sticky;
     top: 0;
+    z-index: 5;
+    height: 34px;
+    background: var(--color-surface-muted);
+    border-bottom: 1px solid var(--color-border);
+}
+.group-corner { z-index: 6; top: 0 !important; }
+.group-controls { display: flex; gap: 5px; }
+.tree-btn {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border: 1px solid var(--color-border);
+    border-radius: 5px;
+    background: var(--color-surface);
+    cursor: pointer;
+}
+
+.group-header-cell {
+    cursor: pointer;
+    padding: 6px 10px;
+    border-right: 1px solid var(--color-border);
+    white-space: nowrap;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-muted);
+    font-weight: 700;
+    text-align: left;
+}
+.group-header-cell:hover { background: var(--color-border); }
+.group-header-cell.collapsed .group-name { display: none; }
+.group-header-cell .caret { display: inline-block; transition: transform 0.15s ease; opacity: 0.6; margin-right: 4px; }
+.group-header-cell .caret.open { transform: rotate(90deg); }
+.group-count {
+    margin-left: 6px;
+    font-size: 0.65rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 9px;
+    padding: 0 6px;
+}
+
+.collapsed-cell {
+    min-width: 30px;
+    width: 30px;
+    background: var(--color-surface-muted);
+    border-right: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.pattern-header-cell {
+    position: sticky;
+    top: 34px;
     background: var(--color-bg);
     z-index: 3;
     border-bottom: 2px solid var(--color-border);

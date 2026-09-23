@@ -4,6 +4,7 @@ import { useSettingsStore } from '../stores/settings';
 import { useAnnotationsStore } from '../stores/annotations';
 import { usePersonalTablesStore } from '../stores/personalTables';
 import { useIiifStore } from '../stores/iiif';
+import { usePatternLibraryStore } from '../stores/patternLibrary';
 import { useDirectSnippetsStore } from '../stores/directSnippets';
 
 const SCHEMA_VERSION = 1;
@@ -37,6 +38,7 @@ export function useWorkspaceStorage() {
     const tablesStore = usePersonalTablesStore();
     const iiifStore = useIiifStore();
     const directStore = useDirectSnippetsStore();
+    const libraryStore = usePatternLibraryStore();
 
 
     // Retrieve full app state as an object compatible with data management schema
@@ -66,6 +68,7 @@ export function useWorkspaceStorage() {
                     sourceMeta: settings.sourceMeta
                 },
                 iiifLinks: iiifStore.links,
+                patternLibrary: libraryStore.serialize(),
                 // Only written once the collections have actually loaded, so an
                 // autosave firing during startup cannot blank them in the folder copy.
                 ...(directStore.loaded ? { directSnippets: directStore.collections } : {})
@@ -93,6 +96,7 @@ export function useWorkspaceStorage() {
         if (d.regionItems) annotStore.regionItems = d.regionItems;
         if (d.manualLines) annotStore.manualLines = d.manualLines;
         if (d.iiifLinks) iiifStore.links = d.iiifLinks;
+        if (d.patternLibrary) libraryStore.hydrate(d.patternLibrary);
         
         if (d.settings) {
             if (d.settings.globalDisplayIds) settings.globalDisplayIds = d.settings.globalDisplayIds;

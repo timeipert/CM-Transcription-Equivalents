@@ -2,6 +2,7 @@ import { useSettingsStore } from '../stores/settings';
 import { useAnnotationsStore } from '../stores/annotations';
 import { usePersonalTablesStore } from '../stores/personalTables';
 import { useIiifStore } from '../stores/iiif';
+import { usePatternLibraryStore } from '../stores/patternLibrary';
 import { useOmmrStore } from '../stores/ommr';
 import { useDirectSnippetsStore } from '../stores/directSnippets';
 import { useSaveReminderStore } from '../stores/saveReminder';
@@ -16,6 +17,7 @@ export function useDataManagement() {
     const iiifStore = useIiifStore();
     const ommrStore = useOmmrStore();
     const directStore = useDirectSnippetsStore();
+    const libraryStore = usePatternLibraryStore();
 
     function getLocalFullState() {
         return {
@@ -57,7 +59,8 @@ export function useDataManagement() {
                     discriminateSigns: settings.discriminateSigns,
                     sourceMetaFields: settings.sourceMetaFields,
                     sourceMeta: settings.sourceMeta
-                } : undefined
+                } : undefined,
+                patternLibrary: includeSettings ? libraryStore.serialize() : undefined
             }
         };
 
@@ -127,7 +130,8 @@ export function useDataManagement() {
                 discriminateSigns: settings.discriminateSigns,
                 sourceMetaFields: settings.sourceMetaFields,
                 sourceMeta: settings.sourceMeta
-            }
+            },
+            patternLibrary: libraryStore.serialize()
         };
 
         const json = JSON.stringify(payload, null, 2);
@@ -158,6 +162,11 @@ export function useDataManagement() {
         if (s.discriminateSigns !== undefined) settings.discriminateSigns = s.discriminateSigns;
         if (Array.isArray(s.sourceMetaFields)) settings.sourceMetaFields = s.sourceMetaFields;
         if (s.sourceMeta) settings.sourceMeta = s.sourceMeta;
+
+        // The pattern library travels with the configuration (labels, notes, MEI
+        // templates are workspace-wide, not per manuscript).
+        const lib = configPayload.patternLibrary || configPayload.data?.patternLibrary;
+        if (lib) libraryStore.hydrate(lib);
     }
 
     function readFileAsJson(file) {
@@ -303,6 +312,12 @@ export function useDataManagement() {
 
         if (importSettings && parsedJson.data?.settings) {
             importConfiguration(parsedJson.data.settings);
+        }
+
+        // The pattern library is workspace-wide configuration, not per manuscript,
+        // so it travels with the settings rather than through the merge strategies.
+        if (importSettings && parsedJson.data?.patternLibrary) {
+            libraryStore.hydrate(parsedJson.data.patternLibrary);
         }
 
         // Direct snippet collections are keyed by their own ids, independent of the

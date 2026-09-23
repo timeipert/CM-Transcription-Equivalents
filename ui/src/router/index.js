@@ -3,6 +3,7 @@ import GlobalAnalysisView from '../views/GlobalAnalysisView.vue'
 import TranscriptionEquivalentsView from '../views/TranscriptionEquivalentsView.vue'
 import ManuscriptAnnotationsView from '../views/ManuscriptAnnotationsView.vue'
 import SettingsView from '../views/SettingsView.vue'
+import PatternLibraryView from '../views/PatternLibraryView.vue'
 import PolygonManagerView from '../views/PolygonManagerView.vue'
 import RegionEditorView from '../views/RegionEditorView.vue'
 import OmmrExplorerView from '../views/OmmrExplorerView.vue'
@@ -31,6 +32,12 @@ const router = createRouter({
       name: 'home',
       component: GlobalAnalysisView,
       meta: { title: 'Global Analysis', requiresWorkspace: true }
+    },
+    {
+      path: '/patterns',
+      name: 'patterns',
+      component: PatternLibraryView,
+      meta: { title: 'Pattern-Bibliothek', requiresWorkspace: true }
     },
     {
       path: '/equivalents',

@@ -88,6 +88,7 @@ onBeforeUnmount(() => {
       </button>
       <div id="nav-links" class="nav-links" :class="{ 'menu-open': isMenuOpen }">
         <RouterLink to="/" active-class="active" @click="isMenuOpen = false">Overview</RouterLink>
+        <RouterLink to="/patterns" active-class="active" @click="isMenuOpen = false">Patterns</RouterLink>
 
         <span class="nav-sep" aria-hidden="true"></span>
 
