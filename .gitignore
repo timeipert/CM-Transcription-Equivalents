@@ -1,16 +1,25 @@
-# GitHub Pages
-!docs/
-!docs/.nojekyll
+# Site build output (`npm run build` in ui/ writes it; GitHub Actions publishes it)
+docs/
 
 # Node / Frontend
+node_modules/
 ui/node_modules/
 ui/dist/
 ui/.env*
+ui/*.tsbuildinfo
+
+# User manual (VitePress): its build output is copied to ui/public/manual by
+# `npm run build:manual`, which is what the app ships
+user-manual/node_modules/
+user-manual/.vitepress/dist/
+user-manual/.vitepress/cache/
 
 # Python / Scripts
 .venv/
 __pycache__/
 scripts/__pycache__/
+scripts/build/
+*.egg-info/
 *.py[cod]
 *$py.class
 
@@ -24,9 +33,6 @@ transcription_equivalents.html
 # Distribution Data (DO NOT IGNORE for GH Pages)
 # ui/public/data.json
 # ui/public/image_manifest.json
-
-# Image Binaries (Ignore large folders)
-ui/public/scans/
 
 # OMMR4all test export (large local data, ~200MB)
 ommr_import/

@@ -49,6 +49,14 @@ jobs:
         working-directory: ./ui
         run: npm ci
 
+      - name: Lint
+        working-directory: ./ui
+        run: npm run lint
+
+      - name: Type-check the core modules
+        working-directory: ./ui
+        run: npm run typecheck
+
       - name: Run tests
         working-directory: ./ui
         run: npm test --if-present

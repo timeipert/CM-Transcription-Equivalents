@@ -1,0 +1,102 @@
+name: Deploy to GitHub Pages
+
+# Publishes https://neume.monodi.app with TWO versions of the app side by side:
+#
+#   /        the previous version, exactly as it was live before the rewrite
+#            (its built site is taken from the commit pinned in LEGACY_SITE_REF)
+#   /next/   the current version, built from this commit
+#
+# The built site is not committed: docs/ is gitignored build output. Needs the
+# repository setting Pages -> Build and deployment -> Source = GitHub Actions.
+#
+# Both versions are served from one origin, so they share browser storage. The
+# current version is therefore built with its own storage prefix (VITE_STORAGE_NS):
+# it starts from a copy of what the previous version stored and goes its own way
+# from there. See ARCHITECTURE.md, "Two versions on one origin".
+#
+# To retire the previous version, delete the legacy steps and publish `docs`
+# at the root (and drop VITE_STORAGE_NS, so the current version reads the
+# unprefixed keys directly).
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; let a running one finish rather than cancel it half-way.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # The commit whose docs/ was live before the rewrite (origin/master of 2026-10-04).
+  LEGACY_SITE_REF: 3df9b8ce6208324d8cde317bd23ed2987320f063
+  NEXT_PATH: next
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout the previous version's built site
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.LEGACY_SITE_REF }}
+          path: legacy
+          sparse-checkout: docs
+          sparse-checkout-cone-mode: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: 'ui/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ./ui
+        run: npm ci
+
+      - name: Test
+        working-directory: ./ui
+        run: npm test
+
+      # Writes the site to ../docs and fails if anything shipped from ui/public/ is missing.
+      - name: Build
+        working-directory: ./ui
+        run: npm run build
+        env:
+          VITE_STORAGE_NS: 'next:'
+
+      - name: Assemble the site
+        run: |
+          test -f legacy/docs/index.html
+          mkdir -p _site/${NEXT_PATH}
+          cp -R legacy/docs/. _site/
+          cp -R docs/. _site/${NEXT_PATH}/
+          rm -f _site/${NEXT_PATH}/CNAME
+          test -f _site/CNAME
+          test -f _site/${NEXT_PATH}/index.html
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

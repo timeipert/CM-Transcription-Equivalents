@@ -5,3 +5,5 @@ user-manual/node_modules/
 .venv/
 .DS_Store
 export/
+docs/
+ui/dist/
