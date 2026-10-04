@@ -69,7 +69,7 @@ function closeZoom() { zoomed.value = null; }
     <header class="header">
         <div class="top-nav-bar">
             <button class="nav-tab" @click="router.push('/public')">&larr; Manuscript Directory</button>
-            <button class="nav-tab" @click="router.push('/public/table')">Neumentabelle (Comparison) &rarr;</button>
+            <button class="nav-tab" @click="router.push('/public/table')">Neume Table (Comparison) &rarr;</button>
         </div>
 
         <div v-if="collection" class="header-content">

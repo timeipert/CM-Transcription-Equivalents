@@ -1,5 +1,7 @@
 import { ref, shallowRef } from 'vue';
 import { useIiifStore } from '../stores/iiif';
+import { loadOverviewMetadata } from '../services/metadata/metadataProvider';
+import { untracked } from '../services/persistence/changeTracker';
 
 const rawData = shallowRef({});
 const patStats = shallowRef({});
@@ -8,6 +10,9 @@ const manifests = shallowRef({});
 const sourceFolios = shallowRef({}); // { source: Set<folio> }
 const pagePatternsIndex = shallowRef({}); // { source: { folio: [patterns] } }
 const folioLinesIndex = shallowRef({}); // { source: { folio: [lines] } }
+const documents = shallowRef([]); // bibliographic metadata from the shared source
+const sourceMeta = shallowRef({}); // { source: { field: value } } from the shared source
+const metadataSource = ref('static'); // 'static' | 'shared'
 const overallMax = ref(0);
 const loading = ref(true);
 const error = ref(null);
@@ -17,37 +22,38 @@ let initPromise = null;
 
 async function fetchAll() {
     try {
-        const res = await fetch(`index.json?t=${Date.now()}`);
-        if (!res.ok) throw new Error("Failed to load data index");
-        const json = await res.json();
+        const meta = await loadOverviewMetadata();
 
-        // Populate empty indices initially
         rawData.value = {};
         pagePatternsIndex.value = {};
         folioLinesIndex.value = {};
 
-        patStats.value = json.stats;
-        glyphs.value = json.glyphs;
-        manifests.value = json.manifests || {};
-        overallMax.value = json.overallMax;
+        patStats.value = meta.stats;
+        glyphs.value = meta.glyphs;
+        manifests.value = meta.manifests || {};
+        overallMax.value = meta.overallMax;
+        documents.value = meta.documents || [];
+        sourceMeta.value = meta.sourceMeta || {};
+        metadataSource.value = meta.metadataSource || 'static';
 
-        // Populate sourceFolios from index
         const sFolios = {};
-        if (json.sourceFolios) {
-            for (const [src, fList] of Object.entries(json.sourceFolios)) {
+        if (meta.sourceFolios) {
+            for (const [src, fList] of Object.entries(meta.sourceFolios)) {
                 sFolios[src] = new Set(fList);
             }
         }
         sourceFolios.value = sFolios;
         loading.value = false;
 
-        // Auto-import IIIF manifests from data.json into the IIIF store
         if (Object.keys(manifests.value).length > 0) {
             try {
                 const iiifStore = useIiifStore();
-                iiifStore.importFromDataManifests(manifests.value);
+                // These links are derived from the bundled index on every load, not
+                // something the user did: they must not count as an edit (which would
+                // rewrite the workspace file at every page load).
+                untracked(() => iiifStore.importFromDataManifests(manifests.value));
             } catch (e) {
-                console.warn("Could not auto-import IIIF manifests:", e);
+                console.warn('Could not auto-import IIIF manifests:', e);
             }
         }
     } catch (e) {
@@ -60,9 +66,9 @@ async function fetchAll() {
 async function loadSource(sourceName) {
     if (!sourceName) return;
     if (loadedSources.value.has(sourceName)) return;
-    
-    const safeSrc = sourceName.replace(/\//g, "_");
-    
+
+    const safeSrc = sourceName.replace(/\//g, '_');
+
     try {
         const res = await fetch(`sources/${encodeURIComponent(safeSrc)}.json`);
         if (!res.ok) throw new Error(`Failed to load source ${sourceName} (HTTP ${res.status})`);
@@ -78,34 +84,32 @@ async function loadSource(sourceName) {
             throw new Error(`Unexpected content-type "${ct}" for source ${sourceName}`);
         }
         const sourceData = await res.json();
-        
+
         const pPats = {};
         const fLines = {};
-        
+
         for (const [pat, occs] of Object.entries(sourceData)) {
             for (const occ of occs) {
                 const fol = occ[1];
                 const line = occ[2];
-                
+
                 if (!pPats[fol]) pPats[fol] = [];
                 pPats[fol].push(pat);
-                
+
                 if (!fLines[fol]) fLines[fol] = new Set();
                 fLines[fol].add(line);
             }
         }
-        
-        // Deduplicate
+
         for (const fol of Object.keys(pPats)) {
             pPats[fol] = Array.from(new Set(pPats[fol])).sort();
-            fLines[fol] = Array.from(fLines[fol]).sort((a,b) => a-b);
+            fLines[fol] = Array.from(fLines[fol]).sort((a, b) => a - b);
         }
-        
-        // Mutate shallowRefs
+
         rawData.value = { ...rawData.value, [sourceName]: sourceData };
         pagePatternsIndex.value = { ...pagePatternsIndex.value, [sourceName]: pPats };
         folioLinesIndex.value = { ...folioLinesIndex.value, [sourceName]: fLines };
-        
+
         loadedSources.value.add(sourceName);
     } catch (e) {
         console.error(e);
@@ -113,7 +117,6 @@ async function loadSource(sourceName) {
 }
 
 export function useTranscriptionData() {
-    // Singleton pattern for data loading
     if (!initPromise) {
         initPromise = fetchAll();
     }
@@ -126,6 +129,9 @@ export function useTranscriptionData() {
         patStats,
         glyphs,
         manifests,
+        documents,
+        sourceMeta,
+        metadataSource,
         overallMax,
         loading,
         error,

@@ -126,7 +126,7 @@ const modalSortDir = ref(1); // 1 = asc, -1 = desc
 
 // Helpers
 function getBasicType(pattern) {
-    let p = pattern.replace(/[\*\[\]]/g, "");
+    let p = pattern.replace(/[*[\]]/g, "");
     p = p.replace(/[LQOSAD]/g, "");
     // Strip project custom-sign keys so code variants collapse under their base.
     for (const s of settings.customSigns) {

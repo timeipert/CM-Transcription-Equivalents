@@ -7,6 +7,7 @@ import { useSettingsStore } from '../stores/settings';
 import { useDirectSnippetsStore } from '../stores/directSnippets';
 import { parseDateRange, rangesOverlap, yearLabel } from '../utils/sourceMeta';
 import DateRangeTimeline from '../components/DateRangeTimeline.vue';
+import { isPageKeyOf } from '../utils/keys';
 
 const tableStore = usePersonalTablesStore();
 const annotStore = useAnnotationsStore();
@@ -159,9 +160,8 @@ const activeChips = computed(() => {
 const publishedList = computed(() => {
     const out = tableStore.tables.filter(t => {
         if (!t.isPublished) return false;
-        const prefix = t.source + '_';
         return Object.keys(annotStore.regions).some(k =>
-            k.startsWith(prefix) && annotStore.regions[k].length > 0
+            isPageKeyOf(k, t.source) && annotStore.regions[k].length > 0
         );
     }).map(t => ({ ...t, isDirect: false }));
 
@@ -247,10 +247,10 @@ function goToOverview(source, isDirect = false) {
     <div class="header-section">
         <div class="top-nav-bar">
             <div class="nav-tab active">Manuscript Directory</div>
-            <button class="nav-tab" @click="router.push('/public/table')">Neumentabelle (Comparison) &rarr;</button>
+            <button class="nav-tab" @click="router.push('/public/table')">Neume Table (Comparison) &rarr;</button>
         </div>
 
-        <h1>Notationsdokumentation</h1>
+        <h1>Notation Documentation</h1>
         <p class="subtitle">Index of manuscripts with notation transcriptions and cross-referenced pattern IDs.</p>
     </div>
 

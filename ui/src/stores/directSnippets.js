@@ -147,6 +147,27 @@ export const useDirectSnippetsStore = defineStore('directSnippets', () => {
         collections.value = Array.isArray(next) ? next : []
     }
 
+    // --- Persistence (workspace file / backups; IndexedDB is handled above) ---
+
+    function serialize() {
+        return collections.value
+    }
+
+    /**
+     * Replace the collections from a workspace file or backup. Waits for the
+     * IndexedDB load first: otherwise that load, finishing later, would overwrite
+     * what was just restored from the file.
+     */
+    async function hydrate(list) {
+        if (!Array.isArray(list)) return
+        await load()
+        collections.value = list.filter(c => c && typeof c === 'object' && c.id)
+    }
+
+    function reset() {
+        collections.value = []
+    }
+
     /** Merge imported collections, replacing any with a matching id. */
     function mergeCollections(incoming) {
         if (!Array.isArray(incoming)) return
@@ -167,6 +188,7 @@ export const useDirectSnippetsStore = defineStore('directSnippets', () => {
         getCollection, createCollection, updateCollection, removeCollection,
         addPattern, updatePattern, removePattern,
         addSnippet, updateSnippet, removeSnippet,
-        collectionBytes, replaceAll, mergeCollections
+        collectionBytes, replaceAll, mergeCollections,
+        serialize, hydrate, reset
     }
 })

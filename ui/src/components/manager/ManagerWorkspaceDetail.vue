@@ -75,8 +75,8 @@ const isVariantCode = computed(() => {
                      <button v-for="v in snippetVariants" :key="v.key || '_base'"
                              class="btn-xs"
                              :class="{active: (activeVariant || '') === v.key, legacy: v.legacy}"
-                             :title="v.legacy ? 'Nicht mehr konfiguriert — aus einer älteren Einteilung'
-                                 : (v.key ? `Variante ${v.key}` : 'Ohne Variante')"
+                             :title="v.legacy ? 'No longer configured — from an older classification'
+                                 : (v.key ? `Variant ${v.key}` : 'No variant')"
                              @click="$emit('setVariant', v.key)">
                          {{ v.label }}
                      </button>

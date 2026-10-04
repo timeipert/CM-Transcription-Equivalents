@@ -8,6 +8,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useImageManifest } from '../composables/useImageManifest';
 import { undeskewPoint, parsePoints } from '../utils/ommrGeometry';
 import { getCachedItem, setCachedItem } from '../utils/idb';
+import { pctRegion, iiifRegionUrl } from '../services/iiif/imageUrl';
 
 const props = defineProps({
     source: { type: String, required: true },
@@ -88,9 +89,9 @@ const fontPx = computed(() => Math.max(boxPx.value.h * 0.16, dims.value.H * 0.00
 const regionUrl = computed(() => {
     if (props.localSrc) return null;
     const b = boxPct.value;
-    const region = `pct:${b.x.toFixed(3)},${b.y.toFixed(3)},${b.w.toFixed(3)},${b.h.toFixed(3)}`;
+    const region = pctRegion(b);
     const w = Math.min(2000, Math.round(props.width * 2));
-    if (props.serviceUrl) return `${props.serviceUrl}/${region}/${w},/0/default.jpg`;
+    if (props.serviceUrl) return iiifRegionUrl(props.serviceUrl, region, w);
     return getIiifRegionUrl(props.source, props.folio, region, w);
 });
 const imgHref = computed(() => (props.localSrc ? props.localSrc : blobUrl.value || ''));

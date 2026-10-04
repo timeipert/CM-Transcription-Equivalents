@@ -6,6 +6,7 @@ import { useImageManifest } from '../../composables/useImageManifest';
 import { useIiifStore } from '../../stores/iiif';
 import AnnotationCutout from '../AnnotationCutout.vue';
 import { compareFolios } from '../../utils/sorting';
+import { parsePageKey } from '../../utils/keys';
 
 const props = defineProps({
     pattern: { type: String, required: true },
@@ -131,74 +132,21 @@ watch([() => props.visible, () => iiifStore.parsedData, () => props.pattern, () 
     // 2. Gather existing snippets asynchronously (20-40% progress)
     const snippets = [];
     
-    // A. Legacy Annotations pass
-    const annotKeys = Object.keys(annotStore.annotations);
-    const annotBatch = 500;
-    for (let i = 0; i < annotKeys.length; i += annotBatch) {
-        const chunk = annotKeys.slice(i, i + annotBatch);
-        for (const key of chunk) {
-            // key is "Source_Folio_Pattern"
-            // We need to check if Pattern starts with base
-            const parts = key.split('_');
-            if (parts.length < 3) continue;
-            const src = parts[0];
-            if (src !== props.sourceName) continue; // Only current manuscript
-            
-            const fol = parts[1];
-            const pat = parts.slice(2).join('_'); // handle patterns with underscores
-            
-            if (pat === base || pat.startsWith(base + ' ')) {
-                const anns = annotStore.annotations[key] || [];
-                for (const a of anns) {
-                    snippets.push({
-                        ...a,
-                        source: src,
-                        folio: fol,
-                        pattern: pat,
-                        variant: a.variant || (pat.includes(' ') ? pat.split(' ')[1] : '')
-                    });
-                }
-            }
-        }
-        processingProgress.value = 20 + Math.round((i / annotKeys.length) * 10);
-        await new Promise(r => setTimeout(r, 0));
-    }
-
-    // B. Region-based items pass
+    // Snippets live in line regions; the store keeps an index from region to page,
+    // so each region is placed without scanning every page for it.
     const regionIds = Object.keys(annotStore.regionItems);
     for (let i = 0; i < regionIds.length; i += 200) {
         const chunk = regionIds.slice(i, i + 200);
         for (const rid of chunk) {
-            const items = annotStore.regionItems[rid] || [];
-            const matches = items.filter(i => i.pattern === base || i.pattern === props.pattern);
-            if (matches.length > 0) {
-                // We need to find which page this region belongs to
-                // We'll search in annotStore.regions
-                let foundPage = null;
-                for (const pageKey in annotStore.regions) {
-                    const rMatch = annotStore.regions[pageKey].find(r => r.id === rid);
-                    if (rMatch) {
-                        const [src, fol] = pageKey.split('_');
-                        if (src === props.sourceName) {
-                            foundPage = { src, fol };
-                            break;
-                        }
-                    }
-                }
-                
-                if (foundPage) {
-                    for (const m of matches) {
-                        snippets.push({
-                            ...m,
-                            source: foundPage.src,
-                            folio: foundPage.fol,
-                            regionId: rid
-                        });
-                    }
-                }
+            const matches = (annotStore.regionItems[rid] || []).filter(it => it.pattern === base || it.pattern === props.pattern);
+            if (!matches.length) continue;
+            const page = parsePageKey(annotStore.pageKeyByRegionId[rid] || '');
+            if (page?.source !== props.sourceName) continue;
+            for (const m of matches) {
+                snippets.push({ ...m, source: page.source, folio: page.folio, regionId: rid });
             }
         }
-        processingProgress.value = 30 + Math.round((i / regionIds.length) * 10);
+        processingProgress.value = 20 + Math.round((i / regionIds.length) * 20);
         await new Promise(r => setTimeout(r, 0));
     }
     currentGalleryItems.value = snippets;

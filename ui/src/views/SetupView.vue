@@ -5,6 +5,8 @@ import { useWorkspaceStorage } from '../composables/useWorkspaceStorage';
 const router = useRouter();
 const route = useRoute();
 const storage = useWorkspaceStorage();
+// Refs must be top-level bindings for the template to unwrap them.
+const { lastError } = storage;
 
 async function handleChooseFolder() {
     await storage.chooseFolder();
@@ -38,7 +40,7 @@ function continueToApp() {
                 <button @click="handleBypass" class="btn-text">Continue without a folder</button>
             </div>
             
-            <p v-if="storage.lastError" class="error-msg">⚠ {{ storage.lastError }}</p>
+            <p v-if="lastError" class="error-msg">⚠ {{ lastError }}</p>
         </div>
         
         <div v-else class="unsupported-section">

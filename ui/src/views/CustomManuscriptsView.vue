@@ -340,7 +340,7 @@ const grouped = computed(() => {
                     <span>Notes</span>
                     <input :value="active.notes" @input="store.updateCollection(active.id, { notes: $event.target.value })" />
                 </label>
-                <label class="pub-toggle" title="Show this manuscript in the public directory and Neumentabelle">
+                <label class="pub-toggle" title="Show this manuscript in the public directory and Neume Table">
                     <input type="checkbox" :checked="active.isPublished"
                            @change="store.updateCollection(active.id, { isPublished: $event.target.checked })" />
                     Publish

@@ -15,6 +15,8 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useImageManifest } from '../composables/useImageManifest';
 import { getCachedItem, setCachedItem } from '../utils/idb';
+import { pctRegion, iiifRegionUrl } from '../services/iiif/imageUrl';
+import { parsePoints } from '../utils/geometry';
 
 const props = defineProps({
     source: { type: String, required: true },
@@ -77,9 +79,7 @@ function undeskew(px, py) {
 
 // --- Geometry: bounding box of the neume polygon, in % ---
 const box = computed(() => {
-    let pts = (props.points || '').split(/\s+/)
-        .map(p => p.split(',').map(parseFloat))
-        .filter(([x, y]) => !isNaN(x) && !isNaN(y));
+    let pts = parsePoints(props.points);
     if (!pts.length) return { x: 0, y: 0, w: 100, h: 100 };
 
     // For the IIIF path, rotate the polygon back onto the original image.
@@ -128,9 +128,9 @@ const targetPx = computed(() => {
 const regionUrl = computed(() => {
     if (props.localSrc) return null; // exact local crop takes precedence
     const b = box.value;
-    const region = `pct:${b.x.toFixed(3)},${b.y.toFixed(3)},${b.w.toFixed(3)},${b.h.toFixed(3)}`;
+    const region = pctRegion(b);
     if (props.serviceUrl) {
-        return `${props.serviceUrl}/${region}/${targetPx.value},/0/default.jpg`;
+        return iiifRegionUrl(props.serviceUrl, region, targetPx.value);
     }
     return getIiifRegionUrl(props.source, props.folio, region, targetPx.value);
 });

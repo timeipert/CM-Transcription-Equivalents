@@ -5,6 +5,8 @@ import { usePersonalTablesStore } from '../stores/personalTables';
 import { useSettingsStore } from '../stores/settings';
 import { useImageManifest } from './useImageManifest';
 import { stripSignKeys, signMarker } from '../utils/signs';
+import { parsePageKey } from '../utils/keys';
+import { parsePoints, pointsToRect } from '../utils/geometry';
 
 function parseLineNumber(name) {
     if (!name) return null;
@@ -15,20 +17,6 @@ function parseLineNumber(name) {
 function getBasePattern(p) {
     if (!p) return "";
     return p.split(' ')[0];
-}
-
-function getRectFromPoints(pointsStr) {
-    if (!pointsStr) return null;
-    const parts = pointsStr.split(' ');
-    let minX = 100, minY = 100, maxX = 0, maxY = 0;
-    for (const p of parts) {
-        const [x, y] = p.split(',').map(Number);
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-    }
-    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }
 
 export function useManagerWorkspace(props) {
@@ -51,7 +39,7 @@ export function useManagerWorkspace(props) {
     });
 
     const patternCustomIdMap = computed(() => {
-        let table = null;
+        let table;
         if (props.returnId) {
             table = tableStore.getTable(props.returnId);
         } else {
@@ -107,18 +95,7 @@ export function useManagerWorkspace(props) {
 
     const regions = computed(() => {
         if (!stdSource.value || !stdFolio.value) return [];
-        const standardRegions = annotStore.getRegions(stdSource.value, stdFolio.value);
-        const prefix = `${stdSource.value}_${stdFolio.value}_`;
-        let hasLegacy = false;
-        for (const key in annotStore.annotations) {
-            if (key.startsWith(prefix) && annotStore.annotations[key].length > 0) {
-                hasLegacy = true; break;
-            }
-        }
-        if (hasLegacy) {
-            return [{ id: 'legacy', name: 'Legacy Annotations (Whole Page)', points: '0,0 100,0 100,100 0,100', isLegacy: true }, ...standardRegions];
-        }
-        return standardRegions;
+        return annotStore.getRegions(stdSource.value, stdFolio.value);
     });
 
     const existingRegionLines = computed(() => new Set(regions.value.map(r => parseLineNumber(r.name)).filter(n => n !== null)));
@@ -198,24 +175,11 @@ export function useManagerWorkspace(props) {
         const currentSrc = stdSource.value;
         const currentFol = stdFolio.value;
         
-        for (const key in annotStore.annotations) {
-            const parts = key.split('_');
-            if (parts.length >= 3) {
-                const src = parts[0], fol = parts[1];
-                if (src === currentSrc && fol === currentFol) continue;
-                const pat = parts.slice(2).join('_');
-                const basePat = getBasePattern(pat);
-                if (!res[basePat]) res[basePat] = [];
-                const count = annotStore.annotations[key].length;
-                if (count > 0) res[basePat].push({ folio: fol, line: '', count });
-            }
-        }
-        
         const regionToLoc = {};
         for (const key in annotStore.regions) {
-            const parts = key.split('_');
-            if (parts.length >= 2) {
-                const src = parts[0], fol = parts[1];
+            const k = parsePageKey(key);
+            if (k) {
+                const { source: src, folio: fol } = k;
                 if (src === currentSrc && fol === currentFol) continue;
                 for (const r of annotStore.regions[key]) {
                      regionToLoc[r.id] = { folio: fol, name: r.name };
@@ -266,27 +230,14 @@ export function useManagerWorkspace(props) {
 
     const activeRegion = ref(null);
 
-    const activeRegionRect = computed(() => activeRegion.value ? getRectFromPoints(activeRegion.value.points) : null);
+    // The region's bounding rectangle, or null when it has no usable shape.
+    const activeRegionRect = computed(() => {
+        const points = activeRegion.value?.points;
+        return points && parsePoints(points).length ? pointsToRect(points) : null;
+    });
 
     const activeRegionItems = computed(() => {
         if (!activeRegion.value) return [];
-        
-        if (activeRegion.value.isLegacy) {
-            const prefix = `${stdSource.value}_${stdFolio.value}_`;
-            const items = [];
-            for (const key in annotStore.annotations) {
-                if (key.startsWith(prefix)) {
-                    const pattern = key.substring(prefix.length);
-                     for (const a of annotStore.annotations[key]) {
-                         let classifier = a.variant || '';
-                         if (!classifier && pattern.includes(' ')) classifier = pattern.split(' ')[1];
-                         const { displayId, variant } = buildDisplay(pattern, classifier, a.linkData?.transcription || '');
-                         items.push({ ...a, pattern, displayId, variant });
-                    }
-                }
-            }
-            return items;
-        }
         
         const items = annotStore.getRegionItems(activeRegion.value.id);
         return items.map(item => {

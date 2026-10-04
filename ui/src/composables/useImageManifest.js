@@ -1,14 +1,22 @@
-import { ref, watch } from 'vue';
+import { ref, computed } from 'vue';
 import { useIiifStore } from '../stores/iiif';
 import { useTranscriptionData } from './useTranscriptionData';
 import { useSettingsStore } from '../stores/settings';
 import { folioToIndex, indexToFolio } from '../utils/folioMath';
+import { inferAlignment } from '../utils/folioAlignment';
+import { iiifPageUrl, iiifRegionUrl } from '../services/iiif/imageUrl';
 
 const normCache = new Map();
-const stdFolioCache = new Map();
-const stdSourceFoliosCache = new Map();
 
-let cacheWatcherSetup = false;
+// Per-source Vue `computed()` refs, created lazily and kept for the rest of
+// the session. A `computed()` tracks its own reactive dependencies and
+// invalidates itself automatically — unlike a plain Map cleared by a
+// `watch()`, it does not depend on which component happened to be mounted
+// when it was first created, so it can never go stale for the rest of a
+// session the way a watcher tied to a since-unmounted component's effect
+// scope silently would.
+const alignReportComputedCache = new Map();
+const stdFolioSetComputedCache = new Map();
 
 export function normalizeFolioName(name) {
     if (!name) return "";
@@ -44,7 +52,7 @@ export function compareFolios(a, b) {
         if (!m) return { n: 999999, w: 99, s: str };
         const n = parseInt(m[1], 10);
         const s = str.substring(m[0].length).trim();
-        let w = 5;
+        let w;
         if (s === '') w = 1;
         else if (s === 'r') w = 2;
         else if (s === 'v') w = 3;
@@ -90,14 +98,7 @@ async function loadManifest() {
 
 export function useImageManifest() {
     const iiifStore = useIiifStore();
-
-    if (!cacheWatcherSetup) {
-        watch(() => iiifStore.parsedData, () => {
-            stdFolioCache.clear();
-            stdSourceFoliosCache.clear();
-        }, { deep: true });
-        cacheWatcherSetup = true;
-    }
+    const settings = useSettingsStore();
 
     if (!loaded.value) {
         loadManifest();
@@ -170,17 +171,101 @@ export function useImageManifest() {
         return bestMatch;
     }
 
+    /** Data folios for a resolved IIIF key, in reading order. */
+    function dataFoliosForKey(iiifKey) {
+        const { sourceFolios } = useTranscriptionData();
+        const set = sourceFolios.value[iiifKey];
+        if (!set || set.size === 0) return [];
+        return Array.from(set).sort(compareFolios);
+    }
+
+    /**
+     * The canvas → folio mapping for a source. Every canvas keeps its original
+     * IIIF label alongside the folio it was matched to and how confident that
+     * match is, which is what the alignment review and the sidebar render.
+     *
+     * Kept as a lazily-created `computed()` per source (see
+     * `alignReportComputedCache` above) rather than a plain value cache: a
+     * pin or a data-type change must be reflected immediately, and a
+     * `computed()` does that automatically and correctly however many
+     * components mount and unmount around it.
+     */
+    function getAlignmentReport(source) {
+        const iiifKey = resolveIiifSource(source);
+        if (!iiifKey) return null;
+        if (!iiifStore.parsedData[iiifKey]) return null;
+
+        if (!alignReportComputedCache.has(iiifKey)) {
+            alignReportComputedCache.set(iiifKey, computed(() => buildAlignmentReport(iiifKey, source)));
+        }
+        return alignReportComputedCache.get(iiifKey).value;
+    }
+
+    function buildAlignmentReport(iiifKey, source) {
+        const canvases = iiifStore.parsedData[iiifKey];
+        if (!canvases || canvases.length === 0) return null;
+
+        const align = settings.sourceAlignments[iiifKey] || settings.sourceAlignments[source] || null;
+        const dataFolios = dataFoliosForKey(iiifKey);
+        const dataType = align?.dataType
+            || (dataFolios.some(f => /[rv]$/i.test(String(f))) ? 'foliated' : 'paginated');
+
+        const inferred = inferAlignment({
+            canvasLabels: canvases.map(c => c.originalFolio || c.folio),
+            dataType,
+            pins: align?.pins || {}
+        });
+
+        const entries = inferred.entries.map(e => ({ ...e, canvas: canvases[e.canvasIndex] }));
+
+        // A folio can in principle be claimed by more than one canvas (an
+        // unrelated section that happens to resolve positionally, alongside the
+        // real match) — keep whichever claim the engine trusts more.
+        const byFolio = new Map();
+        for (const e of entries) {
+            if (!e.resolvedFolio) continue;
+            const key = normalizeFolioName(e.resolvedFolio);
+            const existing = byFolio.get(key);
+            if (!existing || e.confidence > existing.confidence) byFolio.set(key, e);
+        }
+
+        // The count walks the whole folio space (see folioAlignment.js), so
+        // almost every canvas resolves to *some* folio — `withDataCount` is the
+        // more meaningful number: how many of those resolved folios actually
+        // carry transcription rows, versus just being a page with no data yet.
+        const dataFolioSet = new Set(dataFolios.map(f => normalizeFolioName(f)));
+        const withDataCount = entries.filter(e => e.resolvedFolio && dataFolioSet.has(normalizeFolioName(e.resolvedFolio))).length;
+
+        return {
+            key: iiifKey,
+            dataType,
+            matched: inferred.matched,
+            withDataCount,
+            dividerCount: inferred.dividerCount,
+            total: canvases.length,
+            dataFolios,
+            entries,
+            byFolio
+        };
+    }
+
     function fuzzyMatchIiifFolio(source, folioName) {
         const iiifKey = resolveIiifSource(source);
         if (!iiifKey || !iiifStore.parsedData[iiifKey]) return null;
 
         const data = iiifStore.parsedData[iiifKey];
-        
-        // 0. Check Alignment Settings
-        const settings = useSettingsStore();
+
+        // 0a. Resolved alignment report (overrides, label identity, positional).
+        const report = getAlignmentReport(source);
+        if (report) {
+            const hit = report.byFolio.get(normalizeFolioName(folioName));
+            if (hit && hit.canvas) return { ...hit.canvas, resolvedSource: iiifKey };
+        }
+
+        // 0b. Legacy offset/jump alignment, kept for existing configurations.
         const align = settings.sourceAlignments[source] || settings.sourceAlignments[iiifKey];
-        
-        if (align) {
+
+        if (align && (align.offset || (align.adjustments && align.adjustments.length))) {
             const dataIndex = folioToIndex(folioName, align.dataType);
             if (dataIndex !== null) {
                 let totalOffset = align.offset || 0;
@@ -268,7 +353,7 @@ export function useImageManifest() {
         if (!iiifMatch || !iiifMatch.serviceUrl) {
             return getImageUrl(source, folio); 
         }
-        return `${iiifMatch.serviceUrl}/full/${maxWidth},/0/default.jpg`;
+        return iiifPageUrl(iiifMatch.serviceUrl, maxWidth);
     }
 
     /**
@@ -278,11 +363,7 @@ export function useImageManifest() {
     function getIiifRegionUrl(source, folio, regionStr, width = "full") {
         const iiifMatch = fuzzyMatchIiifFolio(source, folio);
         if (!iiifMatch || !iiifMatch.serviceUrl) return null;
-        let sizeParam = width;
-        if (typeof width === 'number' || (typeof width === 'string' && /^\d+$/.test(width))) {
-            sizeParam = `${width},`;
-        }
-        return `${iiifMatch.serviceUrl}/${regionStr}/${sizeParam}/0/default.jpg`;
+        return iiifRegionUrl(iiifMatch.serviceUrl, regionStr, width);
     }
 
     /**
@@ -330,36 +411,32 @@ export function useImageManifest() {
     }
 
     /**
-     * Returns the physical folio name from the IIIF manifest.
+     * Returns the physical folio name from the IIIF manifest. Not cached here:
+     * `fuzzyMatchIiifFolio` already resolves through the memoized alignment
+     * report below, so this call is already cheap (an O(1) map lookup), and a
+     * second cache on top of it would only reintroduce the staleness risk a
+     * plain cache has no reliable way to invalidate.
      */
     function getStandardFolio(source, folio) {
-        const cacheKey = `${source}|||${folio}`;
-        if (stdFolioCache.has(cacheKey)) return stdFolioCache.get(cacheKey);
-
         const iiifMatch = fuzzyMatchIiifFolio(source, folio);
-        const res = iiifMatch ? iiifMatch.folio : (folio ? String(folio).replace(/^p\.?\s*/i, '').trim() : folio);
-        
-        stdFolioCache.set(cacheKey, res);
-        return res;
+        return iiifMatch ? iiifMatch.folio : (folio ? String(folio).replace(/^p\.?\s*/i, '').trim() : folio);
     }
 
     function hasTranscriptionData(source, folio) {
         const { sourceFolios } = useTranscriptionData();
-        const srcData = sourceFolios.value[source];
-        if (!srcData) return false;
-        
-        let cache = stdSourceFoliosCache.get(source);
-        if (!cache || cache.rawSize !== srcData.size) {
-            const stdSet = new Set();
-            for (const f of srcData) {
-                stdSet.add(getStandardFolio(source, f));
-            }
-            cache = { rawSize: srcData.size, stdSet };
-            stdSourceFoliosCache.set(source, cache);
+        if (!sourceFolios.value[source]) return false;
+
+        if (!stdFolioSetComputedCache.has(source)) {
+            stdFolioSetComputedCache.set(source, computed(() => {
+                const srcData = useTranscriptionData().sourceFolios.value[source];
+                const stdSet = new Set();
+                if (srcData) for (const f of srcData) stdSet.add(getStandardFolio(source, f));
+                return stdSet;
+            }));
         }
-        
+
         const stdFol = getStandardFolio(source, folio);
-        return cache.stdSet.has(stdFol);
+        return stdFolioSetComputedCache.get(source).value.has(stdFol);
     }
 
     /**
@@ -427,6 +504,8 @@ export function useImageManifest() {
         getStandardFolio,
         hasTranscriptionData,
         getManifestStructure,
+        getAlignmentReport,
+        resolveIiifSource,
         loaded
     };
 }

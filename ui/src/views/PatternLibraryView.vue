@@ -96,15 +96,15 @@ function addManual() {
     const code = getBaseCode(newCode.value.trim());
     addError.value = '';
     if (!code) {
-        addError.value = 'Bitte einen Pattern-Code angeben.';
+        addError.value = 'Please enter a pattern code.';
         return;
     }
     if (parsePatternCode(code, signKeys.value).isSpecial) {
-        addError.value = 'Der Code muss ein "*" enthalten, z.B. *u oder [*ud].';
+        addError.value = 'The code must contain a "*", e.g. *u or [*ud].';
         return;
     }
     if (index.value.has(code)) {
-        addError.value = `"${code}" ist bereits vorhanden.`;
+        addError.value = `"${code}" already exists.`;
         return;
     }
     library.addManualPattern(code, { label: newLabel.value.trim() });
@@ -114,7 +114,7 @@ function addManual() {
 }
 
 function removeManual(code) {
-    if (!confirm(`Manuell angelegtes Pattern "${code}" entfernen?`)) return;
+    if (!confirm(`Remove the manually added pattern "${code}"?`)) return;
     library.removeEntry(code);
     const next = new Set(expanded.value);
     next.delete(code);
@@ -160,7 +160,7 @@ function editVariant(code) {
 function deleteVariant(code) {
     const found = variantEntryFor(code);
     if (!found) return;
-    if (!confirm(`Code-Variante "${code}" entfernen?`)) return;
+    if (!confirm(`Remove code variant "${code}"?`)) return;
     settings.removeCodeVariant(found.base, found.variant.id);
 }
 
@@ -186,7 +186,7 @@ function adoptDefaultVariants() {
 
 /** Drop the configuration again, so the built-in a–g apply. */
 function resetSnippetVariants() {
-    if (!confirm('Konfiguration verwerfen und wieder a–g anbieten?')) return;
+    if (!confirm('Discard this configuration and offer a–g again?')) return;
     settings.setSnippetVariants([]);
 }
 const newVariantKey = ref('');
@@ -212,7 +212,7 @@ function addSnippetVariant() {
     const key = newVariantKey.value.trim();
     if (!key) return;
     if (snippetVariantRows.value.some(v => v.key === key)) {
-        alert(`Variante "${key}" ist bereits konfiguriert.`);
+        alert(`Variant "${key}" is already configured.`);
         return;
     }
     commitSnippetVariants([...snippetVariantRows.value.map(v => ({ ...v })),
@@ -230,21 +230,21 @@ const stats = computed(() => ({
 </script>
 
 <template>
-<StateWrapper :loading="loading" loadingText="Lade Pattern-Daten...">
+<StateWrapper :loading="loading" loadingText="Loading pattern data...">
 <div class="library-view">
     <header class="lib-header">
         <div class="header-main">
-            <h2>Pattern-Bibliothek</h2>
+            <h2>Pattern Library</h2>
             <p class="subtitle">
-                Alle Notationsformen dieses Arbeitsbereichs — gesammelt aus Transkriptionsdaten,
-                Annotationen und Code-Varianten, ergänzbar um Formen, die nur auf Scans existieren.
+                Every notation form in this workspace — gathered from the transcription data, the
+                annotations and the code variants, plus forms that exist only on scans.
             </p>
         </div>
         <div class="header-stats">
-            <div class="stat"><strong>{{ stats.total }}</strong><span>Pattern</span></div>
-            <div class="stat"><strong>{{ stats.variants }}</strong><span>Varianten</span></div>
-            <div class="stat"><strong>{{ stats.manual }}</strong><span>manuell</span></div>
-            <div class="stat"><strong>{{ stats.withMei }}</strong><span>mit MEI</span></div>
+            <div class="stat"><strong>{{ stats.total }}</strong><span>Patterns</span></div>
+            <div class="stat"><strong>{{ stats.variants }}</strong><span>Variants</span></div>
+            <div class="stat"><strong>{{ stats.manual }}</strong><span>manual</span></div>
+            <div class="stat"><strong>{{ stats.withMei }}</strong><span>with MEI</span></div>
         </div>
     </header>
 
@@ -252,24 +252,24 @@ const stats = computed(() => ({
     <section class="card signs-card">
         <div class="signs-row">
             <div class="signs-text">
-                <strong>Zeichen-Vokabular</strong>
+                <strong>Sign vocabulary</strong>
                 <span class="signs-desc">
-                    Code-Varianten entstehen aus projektweiten Zeichen, die einzelne Noten markieren
-                    (z.B. <span class="code-font">*uudd</span> → <span class="code-font">*uuVdd</span>).
+                    Code variants come from project-wide signs that mark individual notes
+                    (e.g. <span class="code-font">*uudd</span> → <span class="code-font">*uuVdd</span>).
                 </span>
             </div>
             <div class="signs-list">
                 <span v-for="s in settings.customSigns" :key="s.key" class="sign-chip" :title="s.description">
                     <strong>{{ s.key }}</strong> {{ s.label }}
                 </span>
-                <span v-if="!hasSigns" class="no-signs">Noch keine Zeichen definiert</span>
+                <span v-if="!hasSigns" class="no-signs">No signs defined yet</span>
             </div>
-            <router-link class="btn-link" to="/settings">In den Einstellungen pflegen →</router-link>
+            <router-link class="btn-link" to="/settings">Manage in Settings →</router-link>
         </div>
         <label class="discriminate">
             <input type="checkbox" v-model="settings.discriminateSigns" />
-            Code-Varianten in Übersichten und IDs unterscheiden
-            <span class="hint">(aus = jede Variante zählt zu ihrem Basis-Pattern)</span>
+            Tell code variants apart in overviews and IDs
+            <span class="hint">(off = each variant counts toward its base pattern)</span>
         </label>
     </section>
 
@@ -278,11 +278,11 @@ const stats = computed(() => ({
         <button type="button" class="card-toggle" @click="showSnippetVariants = !showSnippetVariants">
             <span class="caret" :class="{ open: showSnippetVariants }">▸</span>
             <span>
-                <strong>Snippet-Varianten</strong>
+                <strong>Snippet variants</strong>
                 <span class="card-desc">
-                    Die Knöpfe beim Annotieren für Formen mit <em>gleichem</em> Code, aber anderer
-                    graphischer Ausführung.
-                    <template v-if="!settings.hasSnippetVariantConfig()">Derzeit die Vorgabe a–g.</template>
+                    The buttons offered while annotating, for forms with the <em>same</em> code but a
+                    different graphical realisation.
+                    <template v-if="!settings.hasSnippetVariantConfig()">Currently the default a–g.</template>
                 </span>
             </span>
         </button>
@@ -290,19 +290,19 @@ const stats = computed(() => ({
         <div v-if="showSnippetVariants" class="card-body">
             <table class="sv-table">
                 <thead>
-                    <tr><th class="sv-key">Schlüssel</th><th>Beschriftung</th><th class="sv-actions"></th></tr>
+                    <tr><th class="sv-key">Key</th><th>Label</th><th class="sv-actions"></th></tr>
                 </thead>
                 <tbody>
                     <tr class="base-row">
                         <td class="sv-key"><code>—</code></td>
-                        <td>Basis</td>
+                        <td>Base</td>
                         <td class="sv-actions"></td>
                     </tr>
                     <tr v-if="usesDefaultVariants" class="default-row">
                         <td class="sv-key"><code>a–g</code></td>
-                        <td>Vorgabe (nicht konfiguriert)</td>
+                        <td>Default (not configured)</td>
                         <td class="sv-actions">
-                            <button type="button" class="btn-sm" @click="adoptDefaultVariants">Übernehmen</button>
+                            <button type="button" class="btn-sm" @click="adoptDefaultVariants">Adopt</button>
                         </td>
                     </tr>
                     <tr v-for="(v, i) in snippetVariantRows" :key="v.key">
@@ -312,7 +312,7 @@ const stats = computed(() => ({
                                    @input="updateSnippetVariant(i, 'label', $event.target.value)" />
                         </td>
                         <td class="sv-actions">
-                            <button type="button" class="btn-sm danger" @click="removeSnippetVariant(i)">Entfernen</button>
+                            <button type="button" class="btn-sm danger" @click="removeSnippetVariant(i)">Remove</button>
                         </td>
                     </tr>
                     <tr class="new-row">
@@ -320,19 +320,19 @@ const stats = computed(() => ({
                             <input class="field-input mono" v-model="newVariantKey" placeholder="b" @keyup.enter="addSnippetVariant" />
                         </td>
                         <td>
-                            <input class="field-input" v-model="newVariantLabel" placeholder="Beschriftung" @keyup.enter="addSnippetVariant" />
+                            <input class="field-input" v-model="newVariantLabel" placeholder="Label" @keyup.enter="addSnippetVariant" />
                         </td>
                         <td class="sv-actions">
-                            <button type="button" class="btn-sm" @click="addSnippetVariant">Hinzufügen</button>
+                            <button type="button" class="btn-sm" @click="addSnippetVariant">Add</button>
                         </td>
                     </tr>
                 </tbody>
             </table>
             <p class="sv-hint">
-                Die Schlüssel werden auf den Annotationen gespeichert. Bestehende Annotationen
-                behalten ihren Buchstaben, auch wenn er hier nicht (mehr) aufgeführt ist.
+                The keys are stored on the annotations. Existing annotations keep their letter
+                even if it is no longer listed here.
                 <button v-if="!usesDefaultVariants" type="button" class="btn-link-inline" @click="resetSnippetVariants">
-                    Wieder a–g anbieten
+                    Offer a–g again
                 </button>
             </p>
         </div>
@@ -342,16 +342,16 @@ const stats = computed(() => ({
     <section class="card">
         <div class="add-row">
             <div class="add-fields">
-                <input v-model="newCode" class="add-input mono" placeholder="Pattern-Code, z.B. [*ud]" @keyup.enter="addManual" />
-                <input v-model="newLabel" class="add-input" placeholder="Beschriftung (optional)" @keyup.enter="addManual" />
-                <button type="button" class="btn-primary" @click="addManual">Pattern hinzufügen</button>
+                <input v-model="newCode" class="add-input mono" placeholder="Pattern code, e.g. [*ud]" @keyup.enter="addManual" />
+                <input v-model="newLabel" class="add-input" placeholder="Label (optional)" @keyup.enter="addManual" />
+                <button type="button" class="btn-primary" @click="addManual">Add pattern</button>
             </div>
             <div class="add-preview" v-if="newCodePreview">
                 <PatternDisplay :pattern="newCodePreview.code" :glyphs="glyphs" />
                 <span class="preview-text">
-                    {{ newCodePreview.noteCount }} Note{{ newCodePreview.noteCount === 1 ? '' : 'n' }},
-                    {{ newCodePreview.ligature === 'connected' ? 'verbunden'
-                        : newCodePreview.ligature === 'partial' ? 'teilweise verbunden' : 'offen' }}
+                    {{ newCodePreview.noteCount }} note{{ newCodePreview.noteCount === 1 ? '' : 's' }},
+                    {{ newCodePreview.ligature === 'connected' ? 'connected'
+                        : newCodePreview.ligature === 'partial' ? 'partly connected' : 'open' }}
                 </span>
             </div>
         </div>
@@ -361,22 +361,22 @@ const stats = computed(() => ({
     <!-- The hierarchy -->
     <section class="card list-card">
         <div class="list-controls">
-            <input v-model="search" class="search-input" placeholder="Suche nach Code, Beschriftung oder Ref-ID..." />
+            <input v-model="search" class="search-input" placeholder="Search by code, label or Ref ID..." />
             <label class="check">
                 <input type="checkbox" v-model="onlyAnnotated" />
-                Nur mit Annotationen
+                Only with annotations
             </label>
             <span class="spacer"></span>
-            <span class="shown-count">{{ filteredCodes.length }} von {{ stats.total }}</span>
-            <button type="button" class="btn-sm" @click="treeRef?.expandAll()">Alle aufklappen</button>
-            <button type="button" class="btn-sm" @click="treeRef?.collapseAll()">Einklappen</button>
+            <span class="shown-count">{{ filteredCodes.length }} of {{ stats.total }}</span>
+            <button type="button" class="btn-sm" @click="treeRef?.expandAll()">Expand all</button>
+            <button type="button" class="btn-sm" @click="treeRef?.collapseAll()">Collapse</button>
         </div>
 
         <PatternHierarchyTree
             ref="treeRef"
             :codes="filteredCodes"
             :forceOpen="!!search.trim()"
-            emptyText="Keine Pattern gefunden."
+            emptyText="No patterns found."
             v-slot="{ code }"
         >
             <div class="pattern-row" :class="{ open: isExpanded(code) }">
@@ -395,15 +395,15 @@ const stats = computed(() => ({
 
                     <span class="row-meta">
                         <span v-if="getInfo(code)?.isCodeVariant" class="variant-chip"
-                              :title="`Code-Variante von ${getInfo(code).baseCode}`">Variante</span>
+                              :title="`Code variant of ${getInfo(code).baseCode}`">Variant</span>
                         <span v-if="getInfo(code)?.manual" class="manual-chip"
-                              title="Nur in der Bibliothek, nicht in den Transkriptionsdaten">Scan</span>
-                        <span v-if="library.hasMeiTemplate(code)" class="mei-chip" title="MEI-Template konfiguriert">MEI</span>
-                        <span v-if="refIdFor(code)" class="ref-chip" title="Ref-ID (für den Druckband)">
+                              title="Only in the library, not in the transcription data">Scan</span>
+                        <span v-if="library.hasMeiTemplate(code)" class="mei-chip" title="MEI template configured">MEI</span>
+                        <span v-if="refIdFor(code)" class="ref-chip" title="Ref ID (for the printed volume)">
                             Ref {{ refIdFor(code) }}
                         </span>
                         <span class="count-chip"
-                              :title="`${getInfo(code)?.dataCount || 0} Belege in den Transkriptionsdaten, ${getInfo(code)?.annotationCount || 0} Annotationen`">
+                              :title="`${getInfo(code)?.dataCount || 0} occurrences in the transcription data, ${getInfo(code)?.annotationCount || 0} annotations`">
                             {{ getInfo(code)?.dataCount || 0 }} / {{ getInfo(code)?.annotationCount || 0 }}
                         </span>
                     </span>
@@ -412,42 +412,42 @@ const stats = computed(() => ({
                 <div v-if="isExpanded(code)" class="row-detail">
                     <div class="detail-fields">
                         <label class="field">
-                            <span class="field-label">Beschriftung</span>
+                            <span class="field-label">Label</span>
                             <input
                                 class="field-input"
                                 :value="entryOf(code).label"
-                                placeholder="eigene Bezeichnung dieser Form"
+                                placeholder="your own name for this form"
                                 @input="onLabel(code, $event.target.value)"
                             />
                         </label>
                         <label class="field field-wide">
-                            <span class="field-label">Notizen</span>
+                            <span class="field-label">Notes</span>
                             <input
                                 class="field-input"
                                 :value="entryOf(code).notes"
-                                placeholder="Beobachtungen zu dieser Form..."
+                                placeholder="Observations about this form..."
                                 @input="onNotes(code, $event.target.value)"
                             />
                         </label>
                         <div class="detail-actions">
                             <button v-if="hasSigns && !getInfo(code)?.isCodeVariant"
-                                    type="button" class="btn-sm" @click="createVariantFor(code)">+ Variante</button>
+                                    type="button" class="btn-sm" @click="createVariantFor(code)">+ Variant</button>
                             <template v-if="getInfo(code)?.isCodeVariant">
-                                <button type="button" class="btn-sm" @click="editVariant(code)">Variante bearbeiten</button>
-                                <button type="button" class="btn-sm danger" @click="deleteVariant(code)">Variante löschen</button>
+                                <button type="button" class="btn-sm" @click="editVariant(code)">Edit variant</button>
+                                <button type="button" class="btn-sm danger" @click="deleteVariant(code)">Delete variant</button>
                             </template>
                             <button v-if="getInfo(code)?.manual"
-                                    type="button" class="btn-sm danger" @click="removeManual(code)">Entfernen</button>
+                                    type="button" class="btn-sm danger" @click="removeManual(code)">Remove</button>
                         </div>
                     </div>
 
                     <div class="detail-sources" v-if="getInfo(code)?.sources?.size">
-                        <span class="field-label">Handschriften:</span>
+                        <span class="field-label">Manuscripts:</span>
                         <span v-for="s in Array.from(getInfo(code).sources)" :key="s" class="src-chip">{{ s }}</span>
                     </div>
 
                     <div class="detail-examples" v-if="(getInfo(code)?.examples || []).length">
-                        <span class="field-label">Bildbeispiele:</span>
+                        <span class="field-label">Image examples:</span>
                         <PatternExamples :examples="getInfo(code).examples" :limit="8" :size="76" />
                     </div>
 

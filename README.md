@@ -15,7 +15,7 @@ A research tool for mapping notation patterns in chant transcriptions to their p
 * **Transcription Linking**: Link graphical signs on the scan to specific occurrences in the transcription data.
 * **Variant Support**: Handle and display variants (e.g., "10a", "10b") by extracting suffixes from linked transcriptions or manual classification.
 
-### 3. Public Documentation (Notationsdokumentation)
+### 3. Public Documentation ("Notation Documentation")
 * **Manuscript Directory**: A sortable index of all annotated manuscripts.
 * **Patterns & Equivalents Index**: A summary table listing all assigned Ref IDs and their physical occurrences (Folio/Line) in the manuscript.
 * **Manuscript Line Gallery**: A visual gallery of manuscript lines with interactive HTML labels overlaid on the scans.
@@ -26,10 +26,18 @@ A research tool for mapping notation patterns in chant transcriptions to their p
 
 ## Technical Implementation
 * **Frontend**: Built with Vue 3 (Composition API) and Vite.
-* **State Management**: Uses Pinia for managing annotation data, IIIF manifests, and user settings.
+* **State Management**: Uses Pinia stores for annotation data, IIIF manifests, and user settings. All stores that hold the user's work share one persistence contract (`serialize` / `hydrate` / `reset`); see [ARCHITECTURE.md](ARCHITECTURE.md).
 * **Rendering**: Custom SVG/HTML hybrid renderer for high-quality labels and interactive polygons on manuscript images.
-* **Data Handling**: Currently utilizes browser `localStorage` for personal data persistence.
+* **Data Handling**: Work is kept in the browser (localStorage; IndexedDB for image snippets) and, optionally, in a bound **workspace folder** that is autosaved. The app never overwrites a workspace file it cannot read, and keeps a copy of any file it is about to replace that was changed elsewhere (see below).
 * **Scripts**: Includes Python utilities (`scripts/`) for pre-processing transcription data and calculating pattern statistics.
+
+### Where your work is kept, and how it is protected
+* **Browser storage** is the working copy. Browsers may clear it, so bind a workspace folder (Settings → Project Folder) or export a backup regularly; the status pill in the toolbar shows where your work stands.
+* **Workspace folder** — `workspace.json` (settings, annotations, tables, pattern library) and `direct-snippets.json` (image snippets). Besides those, the app may leave:
+  * `workspace.backup-external.json` — the version of `workspace.json` that was replaced after it had been changed outside the app (another tab, another computer),
+  * `workspace.pre-v1.json` — your file as it was before the app upgraded it to a newer format,
+  * `workspace.replaced-<time>.json` — what was in the app when you chose a folder that already held a workspace.
+* **Backups and exports** (Settings → Share / Backup) are versioned JSON; files from older versions of the app import fine, and a file from a *newer* version is refused rather than guessed at.
 
 ## Installation & Setup
 
@@ -50,11 +58,17 @@ A research tool for mapping notation patterns in chant transcriptions to their p
    ```bash
    npm run dev
    ```
-4. Build for production:
+4. Run the checks (all of them run in CI):
+   ```bash
+   npm test            # unit tests
+   npm run lint        # eslint
+   npm run typecheck   # type-check the core modules
+   ```
+5. Build for production:
    ```bash
    npm run build
    ```
-   *Note: The production build is output to the `docs/` directory at the project root for easy hosting on GitHub Pages.*
+   *Note: The production build is written to `docs/` at the project root. It is gitignored: GitHub Actions builds and publishes it.*
 
 ### Analysis Scripts
 To run the transcription analysis scripts, ensure you have the required Python libraries installed:
@@ -75,11 +89,31 @@ logic, the export always matches the live `/public` route. Snippets are fetched 
 servers, so keep the tab connected while it runs.
 
 ## Project Structure
-* `/ui`: The Vue 3 application.
-* `/docs`: Production build for hosting (GitHub Pages).
+* `/ui`: The Vue 3 application (`src/stores`, `src/services`, `src/composables`, `src/views`, `src/components`, `src/utils`).
+* `/docs`: Production build output (gitignored; published by `.github/workflows/pages.yml`).
 * `/scripts`: Python utilities for transcription processing.
+* `/user-manual`: The VitePress user manual (`npm run build:manual` copies it into `ui/public/manual`).
 * `/glyphs`: Pattern rendering assets.
 * `/export`: (Excluded) Raw data exports from CM.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit and how to change the data model safely.
+
+## Publishing
+https://neume.monodi.app serves two versions of the app side by side, built and deployed by `.github/workflows/pages.yml` on every push to `master`:
+
+| URL | version | built from |
+|---|---|---|
+| `neume.monodi.app/` | the previous version, unchanged | the built site of the commit pinned in `LEGACY_SITE_REF` |
+| `neume.monodi.app/next/` | the current version | this commit (tests run first) |
+
+The build output in `docs/` is not committed.
+
+* Everything the site ships must live in `ui/public/` (scans, the manual, `index.json`, the `sources/` data, `CNAME`) or in the bundle. `npm run build` fails if something in `ui/public/` did not reach the output.
+* The repository setting *Pages → Build and deployment → Source* must be **GitHub Actions**.
+* Both versions share one origin and therefore one browser storage. The current version is built with `VITE_STORAGE_NS=next:`, which gives it its own keys; see "Two versions on one origin" in [ARCHITECTURE.md](ARCHITECTURE.md). A workspace folder bound in one version is not bound in the other, and the two should not share a folder: they write different file formats.
+* To retire the previous version: remove the legacy steps from the workflow, publish `docs` at the root and drop `VITE_STORAGE_NS`.
+* To publish a change to the manual, run `npm run build:manual` at the repository root and commit `ui/public/manual` (it is checked in because the CI build does not run VitePress).
+* The `Dockerfile` builds the current version from source (multi-stage) and serves it with nginx at the root, without a storage prefix.
 
 ## Current Project Status
 This tool is designed for personal research and small-scale collaborative documentation. Data is stored locally in the browser. 

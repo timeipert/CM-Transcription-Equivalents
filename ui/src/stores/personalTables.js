@@ -1,30 +1,57 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
+import { newId } from '../utils/id'
+import { isPlainObject } from '../utils/shape'
 
+/**
+ * One equivalents table per source: the Ref-ID given to each pattern, plus the
+ * table's publication flag and notes.
+ *
+ *   tables   [ { id, name, source, notes, isPublished?, patterns: [code], rows: [{ pattern, customId, notes? }] } ]
+ *
+ * `starredItems` is a personal UI marker ("source|folio|pattern|id"); it lives
+ * in browser storage only and is not part of the workspace file or backups.
+ */
 export const usePersonalTablesStore = defineStore('personalTables', () => {
     const tables = ref([])
-    const starredItems = ref(new Set()) // "source|folio|pattern|id"
+    const starredItems = ref(new Set())
 
-    // Load from local storage
-    const stored = localStorage.getItem('personalTables')
-    if (stored) {
-        try {
-            const data = JSON.parse(stored)
-            tables.value = data.tables || data // handle legacy
-            if (data.starredItems) starredItems.value = new Set(data.starredItems)
-        } catch (e) {
-            console.error("Failed to parse local storage", e)
+    /** Make a table safe to use: every container the views iterate exists. */
+    function normalizeTable(t) {
+        if (!isPlainObject(t)) return null
+        return {
+            ...t,
+            id: t.id !== undefined && t.id !== null && t.id !== '' ? t.id : newId('t'),
+            rows: Array.isArray(t.rows) ? t.rows : [],
+            patterns: Array.isArray(t.patterns) ? t.patterns : []
         }
     }
 
-    // Sync to local storage
-    watch([tables, starredItems], () => {
-        const data = {
-            tables: tables.value,
-            starredItems: Array.from(starredItems.value)
+    // --- Persistence ---------------------------------------------------------
+
+    /** What browser storage keeps (the workspace file takes just `tables`). */
+    function serialize() {
+        return { tables: tables.value, starredItems: Array.from(starredItems.value) }
+    }
+
+    /**
+     * Accepts `{ tables, starredItems }`, or — from the oldest builds — the bare
+     * array of tables. Malformed entries are dropped.
+     */
+    function hydrate(payload) {
+        const list = Array.isArray(payload) ? payload : payload?.tables
+        if (Array.isArray(list)) {
+            tables.value = list.map(normalizeTable).filter(Boolean)
         }
-        localStorage.setItem('personalTables', JSON.stringify(data))
-    }, { deep: true })
+        if (isPlainObject(payload) && Array.isArray(payload.starredItems)) {
+            starredItems.value = new Set(payload.starredItems)
+        }
+    }
+
+    function reset() {
+        tables.value = []
+        starredItems.value = new Set()
+    }
 
     function toggleStarred(id) {
         if (starredItems.value.has(id)) {
@@ -36,7 +63,7 @@ export const usePersonalTablesStore = defineStore('personalTables', () => {
     }
 
     function createTable(name) {
-        const id = Date.now().toString()
+        const id = newId('t')
         tables.value.push({
             id,
             name,
@@ -120,6 +147,9 @@ export const usePersonalTablesStore = defineStore('personalTables', () => {
     return { 
         tables, 
         starredItems, 
+        serialize,
+        hydrate,
+        reset,
         toggleStarred, 
         createTable, 
         getTable, 

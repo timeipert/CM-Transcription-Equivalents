@@ -39,7 +39,6 @@ const manuscripts = computed(() => {
     
     const currentState = {
         personalTables: store.tables,
-        annotations: annotStore.annotations,
         regions: annotStore.regions,
         regionItems: annotStore.regionItems,
         manualLines: annotStore.manualLines,

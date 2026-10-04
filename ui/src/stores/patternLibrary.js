@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
+import { isPlainObject } from '../utils/shape'
 import { getBaseCode } from '../utils/patternCode'
 import { normalizeNcTemplate } from '../utils/meiTemplate'
 
@@ -19,22 +20,6 @@ import { normalizeNcTemplate } from '../utils/meiTemplate'
  */
 export const usePatternLibraryStore = defineStore('patternLibrary', () => {
     const patterns = ref({})
-
-    const STORAGE_KEY = 'patternLibrary_v1'
-
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
-        try {
-            const data = JSON.parse(stored)
-            if (data.patterns) patterns.value = data.patterns
-        } catch (e) {
-            console.error('Error loading pattern library', e)
-        }
-    }
-
-    watch(patterns, () => {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ patterns: patterns.value }))
-    }, { deep: true })
 
     function getEntry(code) {
         return patterns.value[getBaseCode(code)] || null
@@ -97,7 +82,11 @@ export const usePatternLibraryStore = defineStore('patternLibrary', () => {
     }
 
     function hydrate(payload) {
-        if (payload?.patterns) patterns.value = payload.patterns
+        if (isPlainObject(payload?.patterns)) patterns.value = payload.patterns
+    }
+
+    function reset() {
+        patterns.value = {}
     }
 
     return {
@@ -113,6 +102,7 @@ export const usePatternLibraryStore = defineStore('patternLibrary', () => {
         setMeiTemplate,
         hasMeiTemplate,
         serialize,
-        hydrate
+        hydrate,
+        reset
     }
 })

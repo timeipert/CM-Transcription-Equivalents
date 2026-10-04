@@ -8,6 +8,7 @@
 import { ref, computed, watch } from 'vue';
 import { useImageManifest } from '../composables/useImageManifest';
 import { correctedPolygon, correctedBox, undeskewPoint } from '../utils/ommrGeometry';
+import { iiifPageUrl } from '../services/iiif/imageUrl';
 
 const props = defineProps({
     snippet: { type: Object, required: true },
@@ -24,7 +25,7 @@ const { getIiifThumbnailUrl, getStandardFolio } = useImageManifest();
 
 const imgStatus = ref('loading');
 const pageUrl = computed(() => {
-    if (props.serviceUrl) return `${props.serviceUrl}/full/1600,/0/default.jpg`;
+    if (props.serviceUrl) return iiifPageUrl(props.serviceUrl, 1600);
     return getIiifThumbnailUrl(props.snippet.source, props.effectiveFolio, 1600);
 });
 watch(pageUrl, () => { imgStatus.value = 'loading'; });

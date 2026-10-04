@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useImageManifest } from '../composables/useImageManifest';
 import { getCachedItem, setCachedItem } from '../utils/idb';
+import { parsePoints, pointsToRect } from '../utils/geometry';
 
 const props = defineProps({
     source: String,
@@ -36,26 +37,9 @@ const polyPoints = computed(() => {
 const viewBox = computed(() => {
     if (!props.points) return "0 0 100 100";
     
-    // Parse points
-    const pts = props.points.split(' ')
-        .filter(s => s.trim().length > 0)
-        .map(p => {
-            const [x, y] = p.split(',').map(parseFloat);
-            return { x, y };
-        })
-        .filter(p => !isNaN(p.x) && !isNaN(p.y));
+    if (parsePoints(props.points).length === 0) return "0 0 100 100";
 
-    if (pts.length === 0) return "0 0 100 100";
-    
-    const xs = pts.map(p => p.x);
-    const ys = pts.map(p => p.y);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-    
-    let w = maxX - minX;
-    let h = maxY - minY;
+    const { x: minX, y: minY, w, h } = pointsToRect(props.points);
     
     // Dynamic padding
     const padX = Math.max(w * props.padding, 1);
@@ -148,9 +132,10 @@ const layerStyle = computed(() => ({
 function getLabelStyle(ov) {
     if (!ov.points) return {};
     const [vbX, vbY, vbW, vbH] = viewBox.value.split(' ').map(parseFloat);
-    const pts = ov.points.split(' ')[0].split(',');
-    const xPercent = (parseFloat(pts[0]) - vbX) / vbW;
-    const yPercent = (parseFloat(pts[1]) - vbY) / vbH;
+    const [firstPoint] = parsePoints(ov.points);
+    if (!firstPoint) return {};
+    const xPercent = (firstPoint[0] - vbX) / vbW;
+    const yPercent = (firstPoint[1] - vbY) / vbH;
 
     return {
         position: 'absolute',

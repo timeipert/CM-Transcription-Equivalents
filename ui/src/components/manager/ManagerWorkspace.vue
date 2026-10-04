@@ -90,7 +90,7 @@ function navigateToCreateRegion() {
 }
 
 function navigateToEditRegion(regionObj) {
-    if (!regionObj || regionObj.isLegacy) return;
+    if (!regionObj || regionObj.unassigned) return;
     router.push({
         name: 'region_editor',
         query: {
@@ -170,11 +170,7 @@ function selectLink(occ) {
 function finalizeItem(linkData = {}) {
     if (!activeRegion.value || !pendingItemPoints.value) return;
     
-    if (activeRegion.value.isLegacy) {
-        annotStore.addAnnotation(stdSource.value, stdFolio.value, activePattern.value, pendingItemPoints.value, { linkData, variant: activeVariant.value });
-    } else {
-        annotStore.addItemToRegion(activeRegion.value.id, activePattern.value, pendingItemPoints.value, { linkData, variant: activeVariant.value });
-    }
+    annotStore.addItemToRegion(activeRegion.value.id, activePattern.value, pendingItemPoints.value, { linkData, variant: activeVariant.value });
     
     pendingItemPoints.value = null;
     showLinker.value = false;
@@ -182,11 +178,7 @@ function finalizeItem(linkData = {}) {
 
 function deleteItem(item) {
     if (confirm("Delete this item?")) {
-        if (activeRegion.value.isLegacy) {
-            annotStore.removeAnnotation(stdSource.value, stdFolio.value, item.pattern, item.id);
-        } else {
-            annotStore.removeItemFromRegion(activeRegion.value.id, item.id);
-        }
+        annotStore.removeItemFromRegion(activeRegion.value.id, item.id);
     }
 }
 

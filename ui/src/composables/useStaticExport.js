@@ -12,7 +12,6 @@
  *   - getIiifRegionUrl / getImageUrl             (useImageManifest.js — same IIIF resolution)
  *   - renderSvg                                  (svgRenderer.js — same pattern glyphs)
  */
-import JSZip from 'jszip';
 import { usePersonalTablesStore } from '../stores/personalTables';
 import { useAnnotationsStore } from '../stores/annotations';
 import { useIiifStore } from '../stores/iiif';
@@ -23,6 +22,9 @@ import { buildPatternRefMap, buildManuscriptLines, pointsBoundingBox } from './u
 import { comparePatternIds, compareChantPatterns } from '../utils/sorting';
 import { renderSvg } from '../utils/svgRenderer';
 import { resolveSignGlyphs, splitCodeBySigns } from '../utils/signs';
+import { isPageKeyOf } from '../utils/keys';
+import { pctRegion } from '../services/iiif/imageUrl';
+import { parsePoints } from '../utils/geometry';
 
 
 // ---- small utilities -------------------------------------------------------
@@ -90,7 +92,7 @@ function cropLocalToBlob(imgUrl, bbox) {
  * Returns { blob, ext } or null on failure.
  */
 async function fetchCrop({ getIiifRegionUrl, getImageUrl }, source, folio, bbox, targetWidth) {
-    const region = `pct:${bbox.x.toFixed(3)},${bbox.y.toFixed(3)},${bbox.w.toFixed(3)},${bbox.h.toFixed(3)}`;
+    const region = pctRegion(bbox);
     const url = getIiifRegionUrl(source, folio, region, String(Math.max(120, Math.round(targetWidth))));
     if (url) {
         try {
@@ -232,7 +234,7 @@ h1{margin:4px 0 0;font-size:2.6rem;font-weight:800;letter-spacing:-.02em;}
 .ms-table .num{text-align:right;}
 .pill{background:var(--color-primary-light);color:var(--color-primary-hover);padding:4px 10px;border-radius:20px;font-size:.8rem;font-weight:600;}
 
-/* Neumentabelle Matrix */
+/* Neume Table Matrix */
 .matrix-wrapper{max-width:100%;overflow-x:auto;margin:20px 0;background:#fff;border:1px solid var(--color-border);border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,.05);}
 .neume-matrix{border-collapse:separate;border-spacing:0;width:100%;text-align:left;}
 .matrix-corner{position:sticky;left:0;top:0;z-index:4;background:var(--color-bg);padding:16px;min-width:200px;border-bottom:2px solid var(--color-border);border-right:2px solid var(--color-border);font-weight:700;font-size:.8rem;color:var(--color-text-muted);text-transform:uppercase;}
@@ -284,10 +286,9 @@ function lineCutoutHtml(line, snippetHref) {
     for (const item of line.items || []) {
         if (!item.points) continue;
         overlays += `<polygon points="${esc(item.points)}" fill="rgba(0,255,0,0.10)" stroke="var(--color-success)" stroke-width="0.3" vector-effect="non-scaling-stroke"/>`;
-        const first = String(item.points).split(' ')[0].split(',');
-        const px = parseFloat(first[0]);
-        const py = parseFloat(first[1]);
-        if (!isNaN(px) && !isNaN(py)) {
+        const [firstPoint] = parsePoints(item.points);
+        if (firstPoint) {
+            const [px, py] = firstPoint;
             const leftPct = ((px - bbox.x) / bbox.w) * 100;
             const topPct = ((py - bbox.y) / bbox.h) * 100;
             const lbl = item.displayId || (item.id ? String(item.id).substring(0, 4) : '?');
@@ -346,7 +347,7 @@ function sourcePageHtml({ source, table, patternRefMap, lines, glyphs, displayMo
 
     const body = `<header class="header"><div class="header-content">
 <div><a class="back-link" href="../index.html">&larr; Back to Directory</a></div>
-<div class="brand">Notationsdokumentation</div>
+<div class="brand">Notation Documentation</div>
 <h1>${esc(source)}</h1>
 <p class="subtitle">${esc(table.name || '')}</p>
 ${notes}
@@ -362,13 +363,13 @@ ${notes}
 </section>
 </main>`;
 
-    return htmlDoc(`${source} — Notationsdokumentation`, body);
+    return htmlDoc(`${source} — Notation Documentation`, body);
 }
 
 function sourcePageMarkdown({ source, table, patternRefMap, lines, snippetPathById }) {
     const occ = buildPatternOccurrences(lines);
     const rows = [...(table.rows || [])].sort((a, b) => comparePatternIds(a.customId, b.customId));
-    let md = `# ${source} — Notationsdokumentation\n\n`;
+    let md = `# ${source} — Notation Documentation\n\n`;
     if (table.name) md += `**${table.name}**\n\n`;
     if (table.notes) md += `${table.notes}\n\n`;
 
@@ -410,20 +411,20 @@ function directoryHtml(entries) {
 <div class="dir-header">
 <div class="top-nav-bar">
 <span class="nav-tab active">Manuscript Directory</span>
-<a class="nav-tab" href="neumentabelle.html">Neumentabelle (Comparison) &rarr;</a>
+<a class="nav-tab" href="neumentabelle.html">Neume Table (Comparison) &rarr;</a>
 </div>
-<div class="brand">Notationsdokumentation</div><h1>Manuscripts</h1><p class="subtitle">Static export — ${todayStr()}</p></div>
+<div class="brand">Notation Documentation</div><h1>Manuscripts</h1><p class="subtitle">Static export — ${todayStr()}</p></div>
 <table class="ms-table">
 <thead><tr><th>Source</th><th>Manuscript Title</th><th class="num">Patterns</th><th class="num"></th></tr></thead>
 <tbody>${rows || '<tr><td colspan="4">No published manuscripts.</td></tr>'}</tbody>
 </table>
 </div>`;
-    return htmlDoc('Notationsdokumentation — Manuscripts', body);
+    return htmlDoc('Notation Documentation — Manuscripts', body);
 }
 
 function directoryMarkdown(entries) {
-    let md = `# Notationsdokumentation — Manuscripts\n\nStatic export — ${todayStr()}\n\n`;
-    md += `[View Neumentabelle (Comparison)](neumentabelle.md)\n\n`;
+    let md = `# Notation Documentation — Manuscripts\n\nStatic export — ${todayStr()}\n\n`;
+    md += `[View Neume Table (Comparison)](neumentabelle.md)\n\n`;
     md += `| Source | Manuscript Title | Patterns |\n| --- | --- | --- |\n`;
     for (const e of entries) {
         md += `| [${e.source}](${e.mdHref}) | ${e.name || ''} | ${e.patternCount} |\n`;
@@ -431,7 +432,7 @@ function directoryMarkdown(entries) {
     return md;
 }
 
-// ---- Neumentabelle (Matrix Comparison) -------------------------------------
+// ---- Neume Table (Matrix Comparison) -------------------------------------
 
 function neumentabelleHtml({ publishedSources, allPatterns, matrixSnippets, glyphs, displayMode, signGlyphs = {}, signKeys = [] }) {
     // Header row with patterns
@@ -479,10 +480,10 @@ ${tds}
 <div class="header-content">
 <div class="top-nav-bar">
 <a class="nav-tab" href="index.html">&larr; Manuscript Directory</a>
-<span class="nav-tab active">Neumentabelle (Comparison)</span>
+<span class="nav-tab active">Neume Table (Comparison)</span>
 </div>
 <div class="brand">Comparative Notation Analysis</div>
-<h1>Neumentabelle</h1>
+<h1>Neume Table</h1>
 <p class="subtitle">Side-by-side comparison of annotated neume shapes across published manuscripts.</p>
 </div>
 </header>
@@ -502,11 +503,11 @@ ${trs}
 </div>
 </main>`;
 
-    return htmlDoc('Neumentabelle — Comparative Notation Analysis', body);
+    return htmlDoc('Neume Table — Comparative Notation Analysis', body);
 }
 
 function neumentabelleMarkdown({ publishedSources, allPatterns, matrixSnippets }) {
-    let md = `# Neumentabelle — Comparative Notation Analysis\n\nStatic export — ${todayStr()}\n\n`;
+    let md = `# Neume Table — Comparative Notation Analysis\n\nStatic export — ${todayStr()}\n\n`;
     md += `[Back to Manuscript Directory](README.md)\n\n`;
 
     // Markdown Table
@@ -562,14 +563,15 @@ export async function exportStaticSite(onProgress = () => {}) {
     // 2. Published sources: same predicate as PublicManuscriptsView
     const published = tablesStore.tables.filter(t => {
         if (!t.isPublished) return false;
-        const prefix = t.source + '_';
-        return Object.keys(annotStore.regions).some(k => k.startsWith(prefix) && annotStore.regions[k].length > 0);
+        return Object.keys(annotStore.regions).some(k => isPageKeyOf(k, t.source) && annotStore.regions[k].length > 0);
     });
 
     if (published.length === 0) {
         throw new Error('No published manuscripts with annotations found. Mark a manuscript as "Published" and add at least one annotated line first.');
     }
 
+    // Loaded on demand: only the export needs it.
+    const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
     const displayMode = settings.displayMode || 'svg';
     const directoryEntries = [];
@@ -577,7 +579,7 @@ export async function exportStaticSite(onProgress = () => {}) {
     let totalSnippets = 0;
     let totalFailures = 0;
 
-    // Neumentabelle collection state
+    // Neume Table collection state
     const publishedSourcesForMatrix = [];
     const matrixSnippets = {}; // source -> pattern -> Array<{ displayId, folio, snippetRelHref }>
     const patternCountMap = new Map();
@@ -642,7 +644,7 @@ export async function exportStaticSite(onProgress = () => {}) {
                 zip.file(`${folder}/snippets/${itemFname}`, icrop.blob);
                 totalSnippets++;
 
-                // Track item snippet for the Neumentabelle matrix
+                // Track item snippet for the Neume Table matrix
                 const pat = item.pattern.trim();
                 if (!matrixSnippets[source][pat]) matrixSnippets[source][pat] = [];
                 matrixSnippets[source][pat].push({
@@ -676,8 +678,8 @@ export async function exportStaticSite(onProgress = () => {}) {
         });
     }
 
-    // 3. Build Neumentabelle (Comparison Matrix)
-    report('neumentabelle', 'Building Neumentabelle comparative matrix…');
+    // 3. Build Neume Table (Comparison Matrix)
+    report('neumentabelle', 'Building Neume Table comparative matrix…');
     const allMatrixPatterns = Array.from(patternCountMap.keys()).sort((a, b) => compareChantPatterns(a, b, 'freq', patternCountMap));
     const glyphs = useTranscriptionData().glyphs.value;
     const ntSignGlyphs = resolveSignGlyphs(settings.customSigns, glyphs);

@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import { useAnnotationsStore } from './annotations'
-import { usePersonalTablesStore } from './personalTables'
-import { useDirectSnippetsStore } from './directSnippets'
+import { revisionOfAll } from '../services/persistence/changeTracker'
+import { DATA_STORE_IDS } from '../services/persistence/storeRegistry'
+import { STORAGE_NS } from '../utils/storageNamespace'
 
 /**
  * Tracks work done since the last local export and decides when to nudge.
@@ -21,7 +21,7 @@ import { useDirectSnippetsStore } from './directSnippets'
  * disposed when a component unmounts.
  */
 
-const LS_KEY = 'saveReminderState'
+const LS_KEY = STORAGE_NS + 'saveReminderState'
 
 // How much work, and how long, before the first nudge.
 const MIN_CHANGES = 15
@@ -58,23 +58,15 @@ export const useSaveReminderStore = defineStore('saveReminder', () => {
         } catch { /* storage full or blocked; not worth failing over */ }
     }
 
-    const annotStore = useAnnotationsStore()
-    const tablesStore = usePersonalTablesStore()
-    const directStore = useDirectSnippetsStore()
-
     // Count meaningful edits. Settings are cheap to recreate, so only the data
-    // stores drive the nudge.
+    // stores drive the nudge. Watching their revision numbers (see changeTracker)
+    // rather than their state means no further walk over the data.
     watch(
-        [
-            () => annotStore.$state,
-            () => tablesStore.$state,
-            () => directStore.collections
-        ],
+        () => revisionOfAll(DATA_STORE_IDS),
         () => {
             changeCount.value++
             persist()
-        },
-        { deep: true }
+        }
     )
 
     setInterval(() => { now.value = Date.now() }, TICK_MS)

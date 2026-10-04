@@ -1,286 +1,171 @@
-import { useSettingsStore } from '../stores/settings';
-import { useAnnotationsStore } from '../stores/annotations';
-import { usePersonalTablesStore } from '../stores/personalTables';
-import { useIiifStore } from '../stores/iiif';
-import { usePatternLibraryStore } from '../stores/patternLibrary';
-import { useOmmrStore } from '../stores/ommr';
-import { useDirectSnippetsStore } from '../stores/directSnippets';
+import { collectStores } from '../services/persistence/storeRegistry';
+import {
+    migrate, sanitizeData, isConfigFile, SchemaError,
+    buildCoreData, buildSettingsData, applyCoreData, applySettingsData,
+    backupEnvelope, manuscriptsEnvelope, configEnvelope
+} from '../services/persistence/workspaceSchema';
 import { useSaveReminderStore } from '../stores/saveReminder';
-import { extractManuscripts, mergeManuscript, getManuscriptStats } from '../utils/workspaceSharing';
+import { useOmmrStore } from '../stores/ommr';
+import { extractManuscripts, mergeManuscript, getManuscriptStats, listSources } from '../utils/workspaceSharing';
+import { downloadJson } from '../utils/download';
 
-const SCHEMA_VERSION = 1;
+const today = () => new Date().toISOString().slice(0, 10);
+const slug = text => String(text).replace(/[^a-z0-9]/gi, '-');
 
+/**
+ * Backups, exports and imports of the workspace.
+ *
+ * The file formats themselves — what a payload contains, how an old one is
+ * upgraded, what is rejected — live in services/persistence/workspaceSchema.js.
+ * This composable is the user-facing layer on top: it picks the data, names the
+ * download, and decides how an incoming file is merged.
+ */
 export function useDataManagement() {
-    const settings = useSettingsStore();
-    const annotStore = useAnnotationsStore();
-    const tablesStore = usePersonalTablesStore();
-    const iiifStore = useIiifStore();
-    const ommrStore = useOmmrStore();
-    const directStore = useDirectSnippetsStore();
-    const libraryStore = usePatternLibraryStore();
+    const stores = collectStores();
+    const reminder = useSaveReminderStore();
+    const ommrDatasets = useOmmrStore();
 
+    /** The manuscript data as it is right now (live references; copy before mutating). */
     function getLocalFullState() {
-        return {
-            personalTables: tablesStore.tables,
-            annotations: annotStore.annotations,
-            regions: annotStore.regions,
-            regionItems: annotStore.regionItems,
-            manualLines: annotStore.manualLines,
-            iiifLinks: iiifStore.links
-        };
+        return buildCoreData(stores);
     }
 
-    // Export whole workspace (filtering only manuscripts with data)
-    function exportData(options = {}) {
+    /**
+     * Export the whole workspace (only manuscripts that hold data).
+     * `includeSettings: false` leaves out the configuration, the pattern library
+     * and the OMMR settings.
+     */
+    async function exportData(options = {}) {
         const { includeSettings = true, onlyWithData = true } = options;
-        const currentState = getLocalFullState();
-        const allSources = extractSourcesFromContent(currentState);
-        const filteredData = extractManuscripts(currentState, allSources, { onlyWithData });
+        // The snippet collections load asynchronously; a backup taken before they
+        // finish would silently omit them.
+        if (!stores.direct.loaded) await stores.direct.load();
 
-        const payload = {
-            schemaVersion: SCHEMA_VERSION,
-            type: 'cm-workspace-backup',
-            exportedAt: new Date().toISOString(),
-            label: settings.backupLabel || 'Workspace',
-            // Direct snippet collections carry their images inline as base64, so a
-            // backup of them is self-contained (no IIIF server needed to restore).
-            directSnippets: directStore.collections,
-            data: {
-                ...filteredData,
-                settings: includeSettings ? {
-                    globalDisplayIds: settings.globalDisplayIds,
-                    autoFillIds: settings.autoFillIds,
-                    displayMode: settings.displayMode,
-                    sourceAlignments: settings.sourceAlignments,
-                    snippetSize: settings.snippetSize,
-                    snippetPadding: settings.snippetPadding,
-                    customSigns: settings.customSigns,
-                    codeVariants: settings.codeVariants,
-                    discriminateSigns: settings.discriminateSigns,
-                    sourceMetaFields: settings.sourceMetaFields,
-                    sourceMeta: settings.sourceMeta
-                } : undefined,
-                patternLibrary: includeSettings ? libraryStore.serialize() : undefined
-            }
+        const state = getLocalFullState();
+        const data = {
+            ...extractManuscripts(state, listSources(state), { onlyWithData }),
+            // Direct snippet images are inline base64, so a backup of them is
+            // self-contained (no IIIF server needed to restore).
+            directSnippets: stores.direct.serialize()
         };
+        if (includeSettings) Object.assign(data, buildSettingsData(stores, { shared: true }));
 
-        const json = JSON.stringify(payload, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-
-        const a = document.createElement('a');
-        a.href = url;
-        const cleanDate = new Date().toISOString().slice(0, 10);
-        const cleanLabel = (settings.backupLabel || 'backup').replace(/[^a-z0-9]/gi, '-');
-        a.download = `cm-transkript-backup-${cleanLabel}-${cleanDate}.json`;
-        a.click();
-
-        URL.revokeObjectURL(url);
-
+        const label = stores.settings.backupLabel || 'Workspace';
+        downloadJson(
+            `cm-transkript-backup-${slug(stores.settings.backupLabel || 'backup')}-${today()}.json`,
+            backupEnvelope({ label, data })
+        );
+        reminder.markExported();
     }
 
-    // Export specific manuscripts (only those with data)
+    /** Export specific manuscripts (only those with data). */
     function exportManuscripts(sourceIds) {
-        const currentState = getLocalFullState();
-        const data = extractManuscripts(currentState, sourceIds, { onlyWithData: true });
-
-        const actualExported = extractSourcesFromContent(data);
-        if (actualExported.length === 0) {
-            throw new Error("None of the selected manuscripts contain any annotations, regions, or pattern rows.");
+        const data = extractManuscripts(getLocalFullState(), sourceIds, { onlyWithData: true });
+        const exported = listSources(data);
+        if (exported.length === 0) {
+            throw new Error('None of the selected manuscripts contain any annotations, regions, or pattern rows.');
         }
-        
-        const payload = {
-            schemaVersion: SCHEMA_VERSION,
-            type: 'cm-manuscript-export',
-            exportedAt: new Date().toISOString(),
-            exportedManuscripts: actualExported,
-            data
-        };
-
-        const json = JSON.stringify(payload, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-
-        const a = document.createElement('a');
-        a.href = url;
-        const cleanDate = new Date().toISOString().slice(0, 10);
-        const sourceName = actualExported.length === 1 ? actualExported[0].replace(/[^a-z0-9]/gi, '-') : 'selected-sources';
-        a.download = `cm-manuscripts-${sourceName}-${cleanDate}.json`;
-        a.click();
-
-        URL.revokeObjectURL(url);
+        const name = exported.length === 1 ? slug(exported[0]) : 'selected-sources';
+        downloadJson(
+            `cm-manuscripts-${name}-${today()}.json`,
+            manuscriptsEnvelope({ exportedManuscripts: exported, data })
+        );
     }
 
-    // Export standalone settings / configuration file
+    /** Export the standalone configuration (settings and pattern library, no manuscript data). */
     function exportConfiguration() {
-        const payload = {
-            schemaVersion: SCHEMA_VERSION,
-            type: 'cm-transcription-config',
-            exportedAt: new Date().toISOString(),
-            label: settings.backupLabel || 'Config',
-            settings: {
-                globalDisplayIds: settings.globalDisplayIds,
-                autoFillIds: settings.autoFillIds,
-                displayMode: settings.displayMode,
-                sourceAlignments: settings.sourceAlignments,
-                snippetSize: settings.snippetSize,
-                snippetPadding: settings.snippetPadding,
-                customSigns: settings.customSigns,
-                codeVariants: settings.codeVariants,
-                discriminateSigns: settings.discriminateSigns,
-                sourceMetaFields: settings.sourceMetaFields,
-                sourceMeta: settings.sourceMeta
-            },
-            patternLibrary: libraryStore.serialize()
-        };
-
-        const json = JSON.stringify(payload, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-
-        const a = document.createElement('a');
-        a.href = url;
-        const cleanDate = new Date().toISOString().slice(0, 10);
-        a.download = `cm-config-${cleanDate}.json`;
-        a.click();
-
-        URL.revokeObjectURL(url);
+        const { settings, patternLibrary } = buildSettingsData(stores, { shared: true });
+        downloadJson(
+            `cm-config-${today()}.json`,
+            configEnvelope({ label: stores.settings.backupLabel || 'Config', settings, patternLibrary })
+        );
     }
 
-    // Apply standalone settings configuration
-    function importConfiguration(configPayload) {
-        if (!configPayload) return;
-        const s = configPayload.settings || configPayload.data?.settings || configPayload;
-        if (s.globalDisplayIds) settings.globalDisplayIds = s.globalDisplayIds;
-        if (s.autoFillIds !== undefined) settings.autoFillIds = s.autoFillIds;
-        if (s.displayMode) settings.displayMode = s.displayMode;
-        if (s.sourceAlignments) settings.sourceAlignments = s.sourceAlignments;
-        if (s.snippetSize) settings.snippetSize = s.snippetSize;
-        if (s.snippetPadding) settings.snippetPadding = s.snippetPadding;
-        if (Array.isArray(s.customSigns)) settings.customSigns = s.customSigns;
-        if (s.codeVariants) settings.codeVariants = s.codeVariants;
-        if (s.discriminateSigns !== undefined) settings.discriminateSigns = s.discriminateSigns;
-        if (Array.isArray(s.sourceMetaFields)) settings.sourceMetaFields = s.sourceMetaFields;
-        if (s.sourceMeta) settings.sourceMeta = s.sourceMeta;
-
-        // The pattern library travels with the configuration (labels, notes, MEI
-        // templates are workspace-wide, not per manuscript).
-        const lib = configPayload.patternLibrary || configPayload.data?.patternLibrary;
-        if (lib) libraryStore.hydrate(lib);
+    /**
+     * Apply a configuration. Accepts a whole configuration file, a backup's
+     * `data`, or a bare settings object.
+     */
+    function importConfiguration(payload) {
+        if (!payload) return;
+        const settings = payload.settings || payload.data?.settings || payload;
+        // The pattern library travels with the configuration (labels, notes and
+        // MEI templates are workspace-wide, not per manuscript).
+        const patternLibrary = payload.patternLibrary || payload.data?.patternLibrary;
+        applySettingsData(stores, { settings, patternLibrary }, { shared: true });
     }
 
-    function readFileAsJson(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    resolve(JSON.parse(e.target.result));
-                } catch (err) {
-                    reject(new Error("Failed to parse JSON file - it might be malformed."));
-                }
-            };
-            reader.onerror = () => reject(new Error("Failed to read the file from disk."));
-            reader.readAsText(file);
-        });
-    }
-
-    function extractSourcesFromContent(content) {
-        if (!content) return [];
-        const sources = new Set();
-        (content.personalTables || []).forEach(t => { if (t?.source) sources.add(t.source); });
-        Object.keys(content.iiifLinks || {}).forEach(s => sources.add(s));
-        
-        // Extract from regions (key is Source_Folio)
-        Object.keys(content.regions || {}).forEach(key => {
-            const parts = key.split('_');
-            if (parts.length > 1) {
-                parts.pop();
-                sources.add(parts.join('_'));
-            }
-        });
-        
-        // Extract from annotations (key is Source_Folio_Pattern)
-        Object.keys(content.annotations || {}).forEach(key => {
-            const parts = key.split('_');
-            if (parts.length > 2) {
-                parts.pop(); // Pattern
-                parts.pop(); // Folio
-                sources.add(parts.join('_'));
-            }
-        });
-        
-        return Array.from(sources);
-    }
-
-    async function analyzeImportFiles(files) {
-        if (!Array.isArray(files) && !(files instanceof FileList)) {
-            files = [files];
+    async function readFileAsJson(file) {
+        let text;
+        try {
+            text = await file.text();
+        } catch {
+            throw new Error('Failed to read the file from disk.');
         }
+        try {
+            return JSON.parse(text);
+        } catch {
+            throw new Error('Failed to parse JSON file - it might be malformed.');
+        }
+    }
+
+    /**
+     * Read import files and describe what each would change, without changing
+     * anything. Old files are upgraded and malformed parts dropped; `notes` says
+     * what happened so the UI can show it.
+     */
+    async function analyzeImportFiles(files) {
+        // A FileList, an array of files, or a single file
+        const list = Array.isArray(files) ? files
+            : files && typeof files.length === 'number' ? Array.from(files)
+            : [files];
 
         const results = [];
         const localState = getLocalFullState();
-        const localSources = extractSourcesFromContent(localState);
-        const localSourcesSet = new Set(localSources);
+        const localSources = new Set(listSources(localState));
 
-        for (const file of Array.from(files)) {
+        for (const file of list) {
             try {
-                const json = await readFileAsJson(file);
-                
-                // Check if this is a standalone configuration file
-                if (json.type === 'cm-transcription-config' || (json.settings && !json.data?.personalTables && !json.data?.regions)) {
+                const raw = await readFileAsJson(file);
+
+                // A standalone configuration file
+                if (isConfigFile(raw)) {
+                    const { json } = migrate(raw);
                     results.push({
                         success: true,
                         isConfigOnly: true,
                         fileName: file.name,
                         parsed: json,
-                        exportedAt: json.exportedAt
+                        exportedAt: json.exportedAt,
+                        notes: []
                     });
                     continue;
                 }
 
-                // Backwards compatibility check with older `version` / `content` format
-                if (json.version && json.content && !json.schemaVersion) {
-                    json.schemaVersion = json.version;
-                    json.data = json.content;
-                }
+                const { json, notes } = migrate(raw);
+                if (!json.data) throw new SchemaError('Invalid backup file format: missing schemaVersion or data object.');
+                const { data, warnings } = sanitizeData(json.data);
+                json.data = data;
 
-                if (!json.schemaVersion || !json.data) {
-                    throw new Error("Invalid backup file format: Missing schemaVersion or data object.");
-                }
-
-                if (json.schemaVersion !== SCHEMA_VERSION) {
-                    throw new Error(`Schema mismatch! File is v${json.schemaVersion}, app expects v${SCHEMA_VERSION}.`);
-                }
-
-                const importedSources = extractSourcesFromContent(json.data);
                 const newSources = [];
                 const overlapSources = []; // [{ source, incomingStats, localStats }]
-
-                for (const src of importedSources) {
-                    const incomingStats = getManuscriptStats(json.data, src);
-                    if (localSourcesSet.has(src)) {
-                        const localStats = getManuscriptStats(localState, src);
-                        overlapSources.push({
-                            source: src,
-                            incomingStats,
-                            localStats
-                        });
+                for (const src of listSources(data)) {
+                    const incomingStats = getManuscriptStats(data, src);
+                    if (localSources.has(src)) {
+                        overlapSources.push({ source: src, incomingStats, localStats: getManuscriptStats(localState, src) });
                     } else {
-                        newSources.push({
-                            source: src,
-                            incomingStats
-                        });
+                        newSources.push({ source: src, incomingStats });
                     }
                 }
 
-                results.push({ 
-                    success: true, 
+                results.push({
+                    success: true,
                     isConfigOnly: false,
-                    fileName: file.name, 
-                    parsed: json, 
-                    hasSettings: !!json.data?.settings,
-                    newSources, 
-                    overlapSources 
+                    fileName: file.name,
+                    parsed: json,
+                    hasSettings: !!data.settings,
+                    newSources,
+                    overlapSources,
+                    notes: [...notes, ...warnings]
                 });
             } catch (err) {
                 results.push({ success: false, fileName: file.name, error: err.message });
@@ -289,41 +174,34 @@ export function useDataManagement() {
         return results;
     }
 
+    /**
+     * Merge an analyzed backup into the workspace.
+     * @param parsedJson a file as returned in `analyzeImportFiles(...)[i].parsed`
+     * @param choices    per source: 'overwrite' | 'copy' | 'skip'
+     */
     function executeImport(parsedJson, choices, options = {}) {
         const { importSettings = true } = options;
-        let currentState = getLocalFullState();
+        const { json } = migrate(parsedJson);
+        const data = json.data;
 
-        const importedSources = extractSourcesFromContent(parsedJson.data);
-
-        for (const src of importedSources) {
+        let state = getLocalFullState();
+        for (const src of listSources(data)) {
             const strategy = choices[src] || 'overwrite';
             if (strategy === 'skip') continue;
-            
-            currentState = mergeManuscript(currentState, parsedJson.data, src, strategy);
+            state = mergeManuscript(state, data, src, strategy);
         }
 
-        // Commit to stores (triggering autosave if folder bound)
-        tablesStore.tables = currentState.personalTables;
-        annotStore.annotations = currentState.annotations;
-        annotStore.regions = currentState.regions;
-        annotStore.regionItems = currentState.regionItems;
-        annotStore.manualLines = currentState.manualLines;
-        iiifStore.links = currentState.iiifLinks;
+        // Commit to the stores (which triggers the autosave if a folder is bound)
+        applyCoreData(stores, state);
 
-        if (importSettings && parsedJson.data?.settings) {
-            importConfiguration(parsedJson.data.settings);
-        }
-
-        // The pattern library is workspace-wide configuration, not per manuscript,
-        // so it travels with the settings rather than through the merge strategies.
-        if (importSettings && parsedJson.data?.patternLibrary) {
-            libraryStore.hydrate(parsedJson.data.patternLibrary);
-        }
+        // The configuration, pattern library and OMMR settings are workspace-wide,
+        // so they travel with the settings rather than through the merge strategies.
+        if (importSettings) applySettingsData(stores, data, { shared: true });
 
         // Direct snippet collections are keyed by their own ids, independent of the
         // manuscript merge strategies above, so merge them by id.
-        if (Array.isArray(parsedJson.directSnippets)) {
-            directStore.mergeCollections(parsedJson.directSnippets);
+        if (Array.isArray(data.directSnippets)) {
+            stores.direct.mergeCollections(data.directSnippets);
         }
     }
 
@@ -341,51 +219,38 @@ export function useDataManagement() {
             patterns = null
         } = options;
 
-        // 1. Clear annotations and lines
         if (snippets || regions || manualLines) {
-            annotStore.clearManuscript(source, {
-                snippets,
-                regions,
-                manualLines,
-                folios,
-                patterns
-            });
+            stores.annotations.clearManuscript(source, { snippets, regions, manualLines, folios, patterns });
         }
 
-        // 2. Personal table
         if (table) {
-            tablesStore.deleteTableForSource(source);
+            stores.tables.deleteTableForSource(source);
         } else if (tableRowsOnly) {
-            tablesStore.clearTableRowsForSource(source);
+            stores.tables.clearTableRowsForSource(source);
         }
 
-        // 3. IIIF manifest link
         if (iiifLink) {
-            iiifStore.removeManifest(source);
+            stores.iiif.removeManifest(source);
         }
 
-        // 4. OMMR in-memory dataset
         if (ommrDataset) {
-            ommrStore.removeDataset(source);
+            ommrDatasets.removeDataset(source);
         }
     }
 
     function clearAllData() {
-        tablesStore.tables = [];
-        annotStore.annotations = {};
-        annotStore.regions = {};
-        annotStore.regionItems = {};
-        annotStore.manualLines = {};
-        iiifStore.links = {};
+        stores.tables.reset();
+        stores.annotations.reset();
+        stores.iiif.reset();
     }
 
-    return { 
-        exportData, 
-        exportManuscripts, 
-        exportConfiguration, 
-        importConfiguration, 
-        analyzeImportFiles, 
-        executeImport, 
+    return {
+        exportData,
+        exportManuscripts,
+        exportConfiguration,
+        importConfiguration,
+        analyzeImportFiles,
+        executeImport,
         deleteManuscriptData,
         clearAllData,
         getLocalFullState

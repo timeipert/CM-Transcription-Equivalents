@@ -10,6 +10,8 @@
  */
 
 import { stripSignKeys, extractSignKeys } from '../utils/signs';
+import { parsePageKey } from '../utils/keys';
+import { parsePoints, pointsToRect } from '../utils/geometry';
 
 /** First whitespace-delimited token of a pattern (the "base" pattern). */
 export function getBasePattern(p) {
@@ -99,10 +101,10 @@ export function buildManuscriptLines({ source, rawDataForSource, regions, region
     }
 
     // 2. Overlay with real annotations (polygons)
-    const prefix = source + '_';
     for (const [key, pageRegions] of Object.entries(regions || {})) {
-        if (!key.startsWith(prefix)) continue;
-        const folio = key.substring(prefix.length);
+        const k = parsePageKey(key);
+        if (k?.source !== source) continue;
+        const folio = k.folio;
 
         for (const r of pageRegions) {
             const lKey = `${folio}|${r.name}`;
@@ -163,25 +165,9 @@ export function buildManuscriptLines({ source, rawDataForSource, regions, region
  */
 export function pointsBoundingBox(pointsStr, padding = 0.05) {
     if (!pointsStr) return null;
-    const pts = String(pointsStr).split(' ')
-        .filter(s => s.trim().length > 0)
-        .map(p => {
-            const [x, y] = p.split(',').map(parseFloat);
-            return { x, y };
-        })
-        .filter(p => !isNaN(p.x) && !isNaN(p.y));
+    if (parsePoints(pointsStr).length === 0) return null;
 
-    if (pts.length === 0) return null;
-
-    const xs = pts.map(p => p.x);
-    const ys = pts.map(p => p.y);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-
-    const w = maxX - minX;
-    const h = maxY - minY;
+    const { x: minX, y: minY, w, h } = pointsToRect(pointsStr);
 
     const padX = Math.max(w * padding, 1);
     const padY = Math.max(h * padding, 1);

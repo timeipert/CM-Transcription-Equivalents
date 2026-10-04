@@ -1,194 +1,113 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { ref, computed } from 'vue'
+import { newId } from '../utils/id'
+import { pageKey, parsePageKey } from '../utils/keys'
+import { isPlainObject } from '../utils/shape'
+import { pointsToRect, rectToPolygon } from '../utils/geometry'
+import { foldLegacyAnnotations, hasLegacyAnnotations } from '../services/persistence/migrations/legacyAnnotations'
 
+/**
+ * The annotation model: line regions on a page, and the snippets (items) inside
+ * each region.
+ *
+ *   regions      { "Source_Folio": [ { id, name, points, ommrLineId?, unassigned? } ] }
+ *   regionItems  { [regionId]: [ { id, pattern, points, variant?, linkData?, … } ] }
+ *   manualLines  { "Source_Folio": [ lineNumber, … ] }
+ *
+ * Pattern codes carry no variant suffix: a snippet's variant is its own field.
+ *
+ * A fourth map, `annotations` ("Source_Folio_Pattern" → entries, no region), used
+ * to live beside these. It is gone: `hydrate()` folds any legacy entries it is
+ * given into regions (see migrations/legacyAnnotations.js), so data written by an
+ * older build still loads.
+ */
 export const useAnnotationsStore = defineStore('annotations', () => {
-    // Legacy: "Source_Folio_Pattern" -> [...]
-    // We might migrate away from this, or keep it for non-line-based usage?
-    // For now, let's keep it to avoid breaking existing views until fully migrated.
-    const annotations = ref({})
-
-    // New: Regions (Lines)
-    // Key: "Source_Folio" -> [{ id: "ts", name: "Line 1", points: "x1,y1 x2,y2..." }]
     const regions = ref({})
-
-    // New: Items within Regions
-    // Key: "RegionID" -> [{ id: "ts", pattern: "clef", points: "x1,y1...", linkData: {} }]
     const regionItems = ref({})
-
-    // New: Manual Lines
-    // Key: "Source_Folio" -> [lineNum1, lineNum2, ...]
     const manualLines = ref({})
 
-    // Load
-    const stored = localStorage.getItem('annotations_v2') // Versioning 
-    if (stored) {
-        try {
-            const data = JSON.parse(stored)
-            annotations.value = data.annotations || {}
-            regions.value = data.regions || {}
-            regionItems.value = data.regionItems || {}
-            manualLines.value = data.manualLines || {}
-            
-            // Ensure all legacy annotations have IDs
-            let fallbackId = 0;
-            for (const key in annotations.value) {
-                annotations.value[key] = annotations.value[key].map(a => {
-                    if (!a.id) return { ...a, id: `migrated-${Date.now()}-${fallbackId++}` };
-                    return a;
-                });
-            }
-        } catch (e) {
-            console.error("Error loading annotations", e)
+    // Which page a region lives on. Items reference their region by id only, so
+    // answering "which page is this item on?" otherwise means scanning every page.
+    const pageKeyByRegionId = computed(() => {
+        const index = {}
+        for (const [key, list] of Object.entries(regions.value)) {
+            for (const r of list) index[r.id] = key
         }
-    } else {
-        // Fallback to v1 if v2 not found
-        const v1 = localStorage.getItem('annotations')
-        if (v1) {
-            try {
-                const v1Data = JSON.parse(v1)
-                let fallbackId = 0;
-                for (const key in v1Data) {
-                    v1Data[key] = v1Data[key].map(a => {
-                        if (!a.id) return { ...a, id: `migrated-${Date.now()}-${fallbackId++}` };
-                        return a;
-                    });
-                }
-                annotations.value = v1Data;
-            } catch (e) { }
-        }
-    }
+        return index
+    })
 
-    // Save
-    watch([annotations, regions, regionItems, manualLines], () => {
-        localStorage.setItem('annotations_v2', JSON.stringify({
-            annotations: annotations.value,
+    // --- Persistence ---------------------------------------------------------
+
+    function serialize() {
+        return {
             regions: regions.value,
             regionItems: regionItems.value,
             manualLines: manualLines.value
-        }))
-    }, { deep: true })
-
-    // --- Legacy Actions (Updated to include Region Items) ---
-    function getAnnotations(source, folio, pattern) {
-        const key = `${source}_${folio}_${pattern}`
-        const legacy = annotations.value[key] || []
-
-        // Gather items from regions on this page
-        const pageRegions = getRegions(source, folio);
-        const regionBased = [];
-
-        for (const r of pageRegions) {
-            const items = regionItems.value[r.id] || [];
-            const matches = items.filter(i => i.pattern === pattern);
-            // Attach region info to items so consumers know they belong to a Line
-            const enhanced = matches.map(m => ({
-                ...m,
-                regionId: r.id,
-                regionPoints: r.points,
-                source,  // ensure context is present
-                folio
-            }));
-            regionBased.push(...enhanced);
         }
-
-        return [...legacy, ...regionBased];
     }
 
-    function addAnnotation(source, folio, pattern, points, metadata = {}) {
-        const key = `${source}_${folio}_${pattern}`
-        if (!annotations.value[key]) annotations.value[key] = []
-        annotations.value[key].push({
-            points,
-            id: Date.now(),
-            ...metadata
-        })
+    /**
+     * Replace the parts present in `payload`. Legacy whole-page entries (an
+     * `annotations` map from an older build) are folded into regions on the way in.
+     */
+    function hydrate(payload) {
+        if (!isPlainObject(payload)) return
+        let nextRegions = isPlainObject(payload.regions) ? payload.regions : undefined
+        let nextItems = isPlainObject(payload.regionItems) ? payload.regionItems : undefined
+        const nextLines = isPlainObject(payload.manualLines) ? payload.manualLines : undefined
+
+        if (hasLegacyAnnotations(payload)) {
+            const { state } = foldLegacyAnnotations({
+                annotations: payload.annotations,
+                regions: nextRegions ?? regions.value,
+                regionItems: nextItems ?? regionItems.value
+            })
+            nextRegions = state.regions
+            nextItems = state.regionItems
+        }
+
+        if (nextRegions) regions.value = nextRegions
+        if (nextItems) regionItems.value = nextItems
+        if (nextLines) manualLines.value = nextLines
+    }
+
+    function reset() {
+        regions.value = {}
+        regionItems.value = {}
+        manualLines.value = {}
+    }
+
+    // --- Items (snippets) ----------------------------------------------------
+
+    /** All snippets of a pattern on a page, each tagged with its region and page. */
+    function getAnnotations(source, folio, pattern) {
+        const out = []
+        for (const r of getRegions(source, folio)) {
+            for (const item of regionItems.value[r.id] || []) {
+                if (item.pattern !== pattern) continue
+                out.push({ ...item, regionId: r.id, regionPoints: r.points, source, folio })
+            }
+        }
+        return out
+    }
+
+    /** Find an item by id among the regions of a page. */
+    function findItem(source, folio, id) {
+        for (const r of getRegions(source, folio)) {
+            const item = (regionItems.value[r.id] || []).find(i => i.id === id)
+            if (item) return { item, regionId: r.id }
+        }
+        return null
     }
 
     function removeAnnotation(source, folio, pattern, id) {
-        // 1. Try Legacy
-        const key = `${source}_${folio}_${pattern}`
-        if (annotations.value[key]) {
-            const initialLen = annotations.value[key].length;
-            annotations.value[key] = annotations.value[key].filter(a => a.id !== id)
-            if (annotations.value[key].length < initialLen) return; // Found and removed
-        }
-
-        // 2. Try Regions
-        const pageRegions = getRegions(source, folio);
-        for (const r of pageRegions) {
-            if (regionItems.value[r.id]) {
-                const initialLen = regionItems.value[r.id].length;
-                regionItems.value[r.id] = regionItems.value[r.id].filter(i => i.id !== id);
-                if (regionItems.value[r.id].length < initialLen) return; // Found and removed
-            }
-        }
+        const found = findItem(source, folio, id)
+        if (found) removeItemFromRegion(found.regionId, id)
     }
 
     function updateAnnotation(source, folio, pattern, id, updates) {
-        // 1. Try Legacy
-        const key = `${source}_${folio}_${pattern}`
-        if (annotations.value[key]) {
-            const item = annotations.value[key].find(a => a.id === id)
-            if (item) {
-                Object.assign(item, updates);
-                return;
-            }
-        }
-
-        // 2. Try Regions
-        const pageRegions = getRegions(source, folio);
-        for (const r of pageRegions) {
-            if (regionItems.value[r.id]) {
-                const item = regionItems.value[r.id].find(i => i.id === id);
-                if (item) {
-                    Object.assign(item, updates);
-                    return;
-                }
-            }
-        }
-    }
-
-    // --- Region Actions ---
-
-    function getRegions(source, folio) {
-        const key = `${source}_${folio}`
-        return regions.value[key] || []
-    }
-
-    function addRegion(source, folio, name, points) {
-        const key = `${source}_${folio}`
-        if (!regions.value[key]) regions.value[key] = []
-
-        const id = 'r_' + Date.now()
-        regions.value[key].push({
-            id,
-            name,
-            points
-        })
-        return id
-    }
-
-    function updateRegion(source, folio, regionId, updates) {
-        const key = `${source}_${folio}`
-        if (regions.value[key]) {
-            const reg = regions.value[key].find(r => r.id === regionId);
-            if (reg) {
-                if (updates.name !== undefined) reg.name = updates.name;
-                if (updates.points !== undefined) reg.points = updates.points;
-                return true;
-            }
-        }
-        return false;
-    }
-
-    function removeRegion(source, folio, regionId) {
-        const key = `${source}_${folio}`
-        // Remove region
-        if (regions.value[key]) {
-            regions.value[key] = regions.value[key].filter(r => r.id !== regionId)
-        }
-        // Remove associated items
-        delete regionItems.value[regionId]
+        const found = findItem(source, folio, id)
+        if (found) Object.assign(found.item, updates)
     }
 
     function getRegionItems(regionId) {
@@ -197,12 +116,9 @@ export const useAnnotationsStore = defineStore('annotations', () => {
 
     function addItemToRegion(regionId, pattern, points, metadata = {}) {
         if (!regionItems.value[regionId]) regionItems.value[regionId] = []
-        regionItems.value[regionId].push({
-            id: Date.now(),
-            pattern,
-            points,
-            ...metadata
-        })
+        const id = newId('i')
+        regionItems.value[regionId].push({ id, pattern, points, ...metadata })
+        return id
     }
 
     function removeItemFromRegion(regionId, itemId) {
@@ -210,15 +126,44 @@ export const useAnnotationsStore = defineStore('annotations', () => {
         regionItems.value[regionId] = regionItems.value[regionId].filter(i => i.id !== itemId)
     }
 
-    // --- Manual Lines Actions ---
+    // --- Regions -------------------------------------------------------------
+
+    function getRegions(source, folio) {
+        return regions.value[pageKey(source, folio)] || []
+    }
+
+    function addRegion(source, folio, name, points) {
+        const key = pageKey(source, folio)
+        if (!regions.value[key]) regions.value[key] = []
+        const id = newId('r')
+        regions.value[key].push({ id, name, points })
+        return id
+    }
+
+    function updateRegion(source, folio, regionId, updates) {
+        const reg = (regions.value[pageKey(source, folio)] || []).find(r => r.id === regionId)
+        if (!reg) return false
+        if (updates.name !== undefined) reg.name = updates.name
+        if (updates.points !== undefined) reg.points = updates.points
+        return true
+    }
+
+    function removeRegion(source, folio, regionId) {
+        const key = pageKey(source, folio)
+        if (regions.value[key]) {
+            regions.value[key] = regions.value[key].filter(r => r.id !== regionId)
+        }
+        delete regionItems.value[regionId]
+    }
+
+    // --- Manual lines --------------------------------------------------------
 
     function getManualLines(source, folio) {
-        const key = `${source}_${folio}`
-        return manualLines.value[key] || []
+        return manualLines.value[pageKey(source, folio)] || []
     }
 
     function addManualLine(source, folio, lineNum) {
-        const key = `${source}_${folio}`
+        const key = pageKey(source, folio)
         if (!manualLines.value[key]) manualLines.value[key] = []
         if (!manualLines.value[key].includes(lineNum)) {
             manualLines.value[key].push(lineNum)
@@ -227,240 +172,195 @@ export const useAnnotationsStore = defineStore('annotations', () => {
     }
 
     function removeManualLine(source, folio, lineNum) {
-        const key = `${source}_${folio}`
+        const key = pageKey(source, folio)
         if (manualLines.value[key]) {
             manualLines.value[key] = manualLines.value[key].filter(l => l !== lineNum)
         }
     }
 
-    /**
-     * Convert an axis-aligned bounding box {x, y, w, h} into a standard polygon string "x1,y1 x2,y2 x3,y3 x4,y4"
-     */
-    function bboxToPolygon(bbox) {
-        if (!bbox) return "0,0 0,0 0,0 0,0";
-        const x1 = Math.max(0, +bbox.x).toFixed(2);
-        const y1 = Math.max(0, +bbox.y).toFixed(2);
-        const x2 = Math.min(100, +(bbox.x + bbox.w)).toFixed(2);
-        const y2 = Math.min(100, +(bbox.y + bbox.h)).toFixed(2);
-        return `${x1},${y1} ${x2},${y1} ${x2},${y2} ${x1},${y2}`;
-    }
-
-    function getRectFromPoints(pointsStr) {
-        if (!pointsStr) return { x: 0, y: 0, w: 0, h: 0 };
-        const pairs = pointsStr.trim().split(/\s+/).map(p => p.split(',').map(Number));
-        const xs = pairs.map(p => p[0]).filter(n => !isNaN(n));
-        const ys = pairs.map(p => p[1]).filter(n => !isNaN(n));
-        if (!xs.length || !ys.length) return { x: 0, y: 0, w: 0, h: 0 };
-        const minX = Math.min(...xs);
-        const maxX = Math.max(...xs);
-        const minY = Math.min(...ys);
-        const maxY = Math.max(...ys);
-        return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
-    }
+    // --- OMMR import ---------------------------------------------------------
 
     /**
-     * Imports staff line regions from OMMR dataset for a manuscript.
+     * Imports staff line regions from an OMMR dataset for a manuscript.
      * lineList: Array of { id, source, folio, bbox, ... }
      */
     function importOmmrLines(source, lineList) {
-        if (!source || !Array.isArray(lineList) || !lineList.length) return 0;
-        let createdCount = 0;
+        if (!source || !Array.isArray(lineList) || !lineList.length) return 0
+        let createdCount = 0
 
-        // Group lines by folio
-        const linesByFolio = {};
+        const linesByFolio = {}
         for (const ln of lineList) {
-            if (!ln.folio || !ln.bbox) continue;
-            if (!linesByFolio[ln.folio]) linesByFolio[ln.folio] = [];
-            linesByFolio[ln.folio].push(ln);
+            if (!ln.folio || !ln.bbox) continue
+            if (!linesByFolio[ln.folio]) linesByFolio[ln.folio] = []
+            linesByFolio[ln.folio].push(ln)
         }
 
         for (const [folio, fLines] of Object.entries(linesByFolio)) {
-            const key = `${source}_${folio}`;
-            if (!regions.value[key]) regions.value[key] = [];
-            if (!manualLines.value[key]) manualLines.value[key] = [];
+            const key = pageKey(source, folio)
+            if (!regions.value[key]) regions.value[key] = []
+            if (!manualLines.value[key]) manualLines.value[key] = []
 
             // Sort lines top-to-bottom by y coordinate
-            fLines.sort((a, b) => (a.bbox.y || 0) - (b.bbox.y || 0));
+            fLines.sort((a, b) => (a.bbox.y || 0) - (b.bbox.y || 0))
 
             fLines.forEach((ln, idx) => {
-                const lineNum = idx + 1;
-                const lineName = `Line ${lineNum}`;
-                const polyPoints = bboxToPolygon(ln.bbox);
+                const lineNum = idx + 1
+                const lineName = `Line ${lineNum}`
 
-                // Check if a region already exists at similar coords or with same line id
-                let existing = regions.value[key].find(r => r.ommrLineId === ln.id || r.name === lineName);
+                // A region may already exist for this OMMR line, or under the same name
+                const existing = regions.value[key].find(r => r.ommrLineId === ln.id || r.name === lineName)
                 if (!existing) {
-                    const regionId = `r_${source}_${folio}_l${lineNum}_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
                     regions.value[key].push({
-                        id: regionId,
+                        id: newId('r'),
                         name: lineName,
-                        points: polyPoints,
+                        points: rectToPolygon(ln.bbox),
                         ommrLineId: ln.id
-                    });
-                    createdCount++;
+                    })
+                    createdCount++
                 }
 
                 if (!manualLines.value[key].includes(lineNum)) {
-                    manualLines.value[key].push(lineNum);
-                    manualLines.value[key].sort((a, b) => a - b);
+                    manualLines.value[key].push(lineNum)
+                    manualLines.value[key].sort((a, b) => a - b)
                 }
-            });
+            })
         }
 
-        return createdCount;
+        return createdCount
+    }
+
+    /** The page's "Unassigned" whole-page region, created on first use. */
+    function ensureUnassignedRegion(source, folio) {
+        const key = pageKey(source, folio)
+        if (!regions.value[key]) regions.value[key] = []
+        let region = regions.value[key].find(r => r.unassigned)
+        if (!region) {
+            region = {
+                id: `r_unassigned_${source}_${folio}`,
+                name: 'Unassigned',
+                points: '0,0 100,0 100,100 0,100',
+                unassigned: true
+            }
+            regions.value[key].push(region)
+        }
+        return region
     }
 
     /**
-     * Imports selected OMMR snippets and links them to line regions.
+     * Imports selected OMMR snippets into the line regions of their page.
      * @param {string} source
      * @param {Array} snippetList
-     * @param {Array} allLines (optional list of OMMR lines from store)
+     * @param {Array} allLines (optional list of OMMR lines to create regions from first)
+     * @returns {number} how many snippets were added (re-imports add nothing)
      */
     function importOmmrSnippets(source, snippetList, allLines = []) {
-        let count = 0;
-        if (!source || !Array.isArray(snippetList) || !snippetList.length) return 0;
+        let count = 0
+        if (!source || !Array.isArray(snippetList) || !snippetList.length) return 0
 
-        // 1. Ensure staff line regions exist for folios in the dataset
-        if (allLines && allLines.length) {
-            importOmmrLines(source, allLines);
-        }
+        // Make sure staff line regions exist for the folios in the dataset
+        if (allLines && allLines.length) importOmmrLines(source, allLines)
 
         for (const s of snippetList) {
-            const folio = s.folio;
-            const pattern = s.pattern;
-            const points = s.points;
-            if (!folio || !pattern || !points) continue;
+            const { folio, pattern, points } = s
+            if (!folio || !pattern || !points) continue
 
-            const itemId = `ommr_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-
-            // 2. Add to legacy annotations for full backward compatibility
-            addAnnotation(source, folio, pattern, points, {
-                id: itemId,
-                importedFrom: 'OMMR4all',
-                displayId: s.pattern,
-                aspectRatio: s.aspectRatio
-            });
-
-            // 3. Find corresponding staff line region and attach item
-            const pageRegions = getRegions(source, folio);
-            if (pageRegions && pageRegions.length) {
-                let targetRegion = pageRegions.find(r => r.ommrLineId === s.lineId);
-                if (!targetRegion && s.notePoints && s.notePoints.length) {
-                    const avgY = s.notePoints.reduce((sum, p) => sum + p.y, 0) / s.notePoints.length;
-                    targetRegion = pageRegions.find(r => {
-                        const rect = getRectFromPoints(r.points);
-                        return avgY >= rect.y && avgY <= (rect.y + rect.h);
-                    }) || pageRegions[0];
-                } else if (!targetRegion) {
-                    targetRegion = pageRegions[0];
+            // Prefer the region of the OMMR line the snippet came from, then the
+            // region whose vertical extent holds it, then the first region.
+            const pageRegions = getRegions(source, folio).filter(r => !r.unassigned)
+            let target = pageRegions.find(r => r.ommrLineId === s.lineId)
+            if (!target && pageRegions.length) {
+                if (s.notePoints && s.notePoints.length) {
+                    const avgY = s.notePoints.reduce((sum, p) => sum + p.y, 0) / s.notePoints.length
+                    target = pageRegions.find(r => {
+                        const rect = pointsToRect(r.points)
+                        return avgY >= rect.y && avgY <= rect.y + rect.h
+                    })
                 }
-
-                if (targetRegion) {
-                    if (!regionItems.value[targetRegion.id]) regionItems.value[targetRegion.id] = [];
-                    // Avoid duplicates
-                    const exists = regionItems.value[targetRegion.id].some(i => i.points === points && i.pattern === pattern);
-                    if (!exists) {
-                        regionItems.value[targetRegion.id].push({
-                            id: itemId,
-                            pattern: pattern,
-                            points: points,
-                            displayId: pattern,
-                            importedFrom: 'OMMR4all',
-                            aspectRatio: s.aspectRatio
-                        });
-                    }
-                }
+                target = target || pageRegions[0]
             }
+            if (!target) target = ensureUnassignedRegion(source, folio)
 
-            count++;
+            if (!regionItems.value[target.id]) regionItems.value[target.id] = []
+            const exists = regionItems.value[target.id].some(i => i.points === points && i.pattern === pattern)
+            if (exists) continue
+
+            regionItems.value[target.id].push({
+                id: newId('ommr'),
+                pattern,
+                points,
+                displayId: pattern,
+                importedFrom: 'OMMR4all',
+                aspectRatio: s.aspectRatio
+            })
+            count++
         }
 
-        return count;
+        return count
     }
 
     /**
-     * Granularly removes annotations, regions, items, and manual lines for a specific manuscript.
+     * Granularly removes regions, items and manual lines for a specific manuscript.
      * @param {string} source
      * @param {Object} options { snippets: boolean, regions: boolean, manualLines: boolean, folios: string[], patterns: string[] }
      */
     function clearManuscript(source, options = {}) {
-        if (!source) return;
+        if (!source) return
         const {
             snippets = true,
             regions: clearRegs = true,
             manualLines: clearLines = true,
             folios = null,
             patterns = null
-        } = options;
+        } = options
 
-        const folioSet = folios && folios.length ? new Set(folios) : null;
-        const patternSet = patterns && patterns.length ? new Set(patterns) : null;
-        const prefix = `${source}_`;
+        const folioSet = folios && folios.length ? new Set(folios) : null
+        const patternSet = patterns && patterns.length ? new Set(patterns) : null
 
-        // 1. Clear legacy annotations
-        if (snippets) {
-            for (const key in annotations.value) {
-                if (key.startsWith(prefix)) {
-                    const sub = key.substring(prefix.length); // "folio_pattern"
-                    const parts = sub.split('_');
-                    const fol = parts[0];
-                    const pat = parts.slice(1).join('_');
+        // Regions & their items
+        for (const key of Object.keys(regions.value)) {
+            const k = parsePageKey(key)
+            if (k?.source !== source) continue
+            if (folioSet && !folioSet.has(k.folio)) continue
 
-                    if (folioSet && !folioSet.has(fol)) continue;
-                    if (patternSet && !patternSet.has(pat)) continue;
+            const regList = regions.value[key] || []
 
-                    delete annotations.value[key];
-                }
-            }
-        }
-
-        // 2. Clear regions & region items
-        for (const key in regions.value) {
-            if (key.startsWith(prefix)) {
-                const fol = key.substring(prefix.length);
-                if (folioSet && !folioSet.has(fol)) continue;
-
-                const regList = regions.value[key] || [];
-
-                if (clearRegs) {
-                    // Remove all region items for these regions
-                    for (const r of regList) {
-                        delete regionItems.value[r.id];
-                    }
-                    delete regions.value[key];
-                } else if (snippets) {
-                    // Keep regions but remove/filter their items
-                    for (const r of regList) {
-                        if (patternSet) {
-                            if (regionItems.value[r.id]) {
-                                regionItems.value[r.id] = regionItems.value[r.id].filter(i => !patternSet.has(i.pattern));
-                            }
-                        } else {
-                            delete regionItems.value[r.id];
+            if (clearRegs) {
+                for (const r of regList) delete regionItems.value[r.id]
+                delete regions.value[key]
+            } else if (snippets) {
+                // Keep the regions, drop (or filter) what is inside them
+                for (const r of regList) {
+                    if (patternSet) {
+                        if (regionItems.value[r.id]) {
+                            regionItems.value[r.id] = regionItems.value[r.id].filter(i => !patternSet.has(i.pattern))
                         }
+                    } else {
+                        delete regionItems.value[r.id]
                     }
                 }
             }
         }
 
-        // 3. Clear manual lines
+        // Manual lines
         if (clearLines) {
-            for (const key in manualLines.value) {
-                if (key.startsWith(prefix)) {
-                    const fol = key.substring(prefix.length);
-                    if (folioSet && !folioSet.has(fol)) continue;
-                    delete manualLines.value[key];
-                }
+            for (const key of Object.keys(manualLines.value)) {
+                const k = parsePageKey(key)
+                if (k?.source !== source) continue
+                if (folioSet && !folioSet.has(k.folio)) continue
+                delete manualLines.value[key]
             }
         }
     }
 
     return {
-        annotations,
         regions,
         regionItems,
+        manualLines,
+        pageKeyByRegionId,
+        serialize,
+        hydrate,
+        reset,
         getAnnotations,
-        addAnnotation,
         removeAnnotation,
         updateAnnotation,
         getRegions,
@@ -470,10 +370,10 @@ export const useAnnotationsStore = defineStore('annotations', () => {
         getRegionItems,
         addItemToRegion,
         removeItemFromRegion,
-        manualLines,
         getManualLines,
         addManualLine,
         removeManualLine,
+        ensureUnassignedRegion,
         importOmmrLines,
         importOmmrSnippets,
         clearManuscript

@@ -161,7 +161,7 @@ export async function setHandle(key, value) {
         const tx = db.transaction('handles', 'readwrite');
         const store = tx.objectStore('handles');
         const req = store.put(value, key);
-        req.onsuccess = () => resolve();
+        req.onsuccess = () => resolve(undefined);
         req.onerror = () => reject(req.error);
     });
 }
@@ -172,7 +172,7 @@ export async function deleteHandle(key) {
         const tx = db.transaction('handles', 'readwrite');
         const store = tx.objectStore('handles');
         const req = store.delete(key);
-        req.onsuccess = () => resolve();
+        req.onsuccess = () => resolve(undefined);
         req.onerror = () => reject(req.error);
     });
 }

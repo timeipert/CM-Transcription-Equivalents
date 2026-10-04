@@ -1,26 +1,40 @@
 import { defineStore } from 'pinia';
-import { ref, watch } from 'vue';
+import { ref } from 'vue';
 import { iiifParseRules } from '../config/iiifRules';
+import { fetchManifestJson } from '../services/iiif/manifestFetch';
+import { parseManifest } from '../services/iiif/manifestParser';
 import { getCachedItem, setCachedItem, deleteCachedItem, clearStore } from '../utils/idb';
+import { isPlainObject } from '../utils/shape';
 
 export const useIiifStore = defineStore('iiif', () => {
     // State
-    const links = ref(JSON.parse(localStorage.getItem('iiifLinks') || '{}'));
+    const links = ref({}); // source -> manifest URL (the only persisted state)
     const parsedData = ref({}); // source -> array of { folio, imgUrl }
     const manifestStatus = ref({}); // source -> { status: 'loading' | 'ok' | 'error', error: null }
     
     // In-flight manifest request deduplication
     const inflightFetches = new Map();
 
-    // Persist links
-    watch(links, (newLinks) => {
-        localStorage.setItem('iiifLinks', JSON.stringify(newLinks));
-    }, { deep: true });
+    // --- Persistence ---
 
-    async function loadAllManifests() {
-        for (const [source, url] of Object.entries(links.value)) {
-            await fetchAndParseManifest(source, url);
+    function serialize() {
+        return links.value;
+    }
+
+    /** Replace the manifest links; entries that are not URL strings are dropped. */
+    function hydrate(payload) {
+        if (!isPlainObject(payload)) return;
+        const next = {};
+        for (const [source, url] of Object.entries(payload)) {
+            if (typeof url === 'string') next[source] = url;
         }
+        links.value = next;
+    }
+
+    function reset() {
+        links.value = {};
+        parsedData.value = {};
+        manifestStatus.value = {};
     }
 
     async function addManifest(source, url) {
@@ -52,7 +66,7 @@ export const useIiifStore = defineStore('iiif', () => {
 
     async function fetchAndParseManifest(source, url, forceRefresh = false) {
         if (parsedData.value[source] && !forceRefresh) return;
-        
+
         // If already in flight, reuse promise — but a forced refresh must not
         // piggy-back on a stale in-flight (possibly cache-backed) request.
         if (!forceRefresh && inflightFetches.has(source)) {
@@ -61,7 +75,7 @@ export const useIiifStore = defineStore('iiif', () => {
 
         const fetchPromise = (async () => {
             manifestStatus.value[source] = { status: 'loading', error: null };
-            
+
             // Check IndexedDB cache first
             if (!forceRefresh) {
                 try {
@@ -77,145 +91,25 @@ export const useIiifStore = defineStore('iiif', () => {
             }
 
             try {
-                let attempt = 0;
-                const retries = 3;
-                const timeout = 15000;
-                let res;
-                
-                while (attempt < retries) {
-                    const controller = new AbortController();
-                    const id = setTimeout(() => controller.abort(), timeout);
-                    try {
-                        res = await fetch(url, { signal: controller.signal });
-                        clearTimeout(id);
-                        if (res.ok || res.status === 404 || res.status === 401 || res.status === 403) {
-                            break;
-                        }
-                        throw new Error(`HTTP ${res.status}`);
-                    } catch (e) {
-                        clearTimeout(id);
-                        attempt++;
-                        if (attempt >= retries) {
-                            if (e.name === 'AbortError') throw new Error(`Manifest fetch timed out after ${timeout/1000}s`);
-                            throw e;
-                        }
-                        // exponential backoff with jitter
-                        await new Promise(r => setTimeout(r, (800 * Math.pow(2, attempt)) + Math.random() * 200));
-                    }
-                }
+                const data = await fetchManifestJson(url);
+                const folios = parseManifest(data, { labelRule: iiifParseRules[source] });
 
-            if (!res.ok) {
-                 throw new Error(`Failed to load manifest: HTTP ${res.status}`);
-            }
-            
-            const data = await res.json();
-            
-            const folios = [];
-            
-            // IIIF v2 Parsing
-            if (data['@context'] && data['@context'].includes('2/context.json')) {
-                if (data.sequences && data.sequences.length > 0) {
-                    for (const canvas of data.sequences[0].canvases) {
-                        const label = canvas.label || 'Unknown';
-                        let imgUrl = null;
-                        let serviceUrl = null;
-                        const cw = canvas.width || 0;
-                        const ch = canvas.height || 0;
-                        if (canvas.images && canvas.images[0].resource) {
-                            const res = canvas.images[0].resource;
-                            if (res.service && res.service['@id']) {
-                                serviceUrl = res.service['@id'];
-                                imgUrl = serviceUrl + '/full/full/0/default.jpg';
-                            } else {
-                                imgUrl = res['@id'];
-                            }
-                        }
-                        if (imgUrl) {
-                            let mappedLabels = [label];
-                            if (iiifParseRules[source]) {
-                                const mapped = iiifParseRules[source](label);
-                                if (Array.isArray(mapped)) {
-                                    mappedLabels = mapped;
-                                } else if (mapped !== null && mapped !== undefined) {
-                                    mappedLabels = [mapped];
-                                }
-                            }
-                            for (const mappedLabel of mappedLabels) {
-                                const cleanLabel = String(mappedLabel).replace(/^p\.?\s*/i, '').trim();
-                                folios.push({ folio: cleanLabel, imgUrl, serviceUrl, w: cw, h: ch, originalFolio: label });
-                            }
-                        }
-                    }
+                if (folios.length > 0) {
+                    parsedData.value[source] = folios;
+                    manifestStatus.value[source] = { status: 'ok', error: null };
+                    // Cache parsed manifest data in IndexedDB for fast reloads
+                    setCachedItem('manifests', source, folios).catch(e => console.warn('Failed caching manifest', e));
+                } else {
+                    const msg = `No canvases found in manifest for ${source}`;
+                    console.warn(msg);
+                    manifestStatus.value[source] = { status: 'error', error: msg };
                 }
-            } 
-            // IIIF v3 Parsing
-            else if (data['@context'] && (data['@context'].includes('3/context.json') || data['@context'] === 'http://iiif.io/api/presentation/3/context.json')) {
-                if (data.items) {
-                    for (const item of data.items) {
-                        let label = 'Unknown';
-                        if (typeof item.label === 'string') {
-                            label = item.label;
-                        } else if (item.label && typeof item.label === 'object') {
-                            const keys = Object.keys(item.label);
-                            if (keys.length > 0) {
-                                label = item.label[keys[0]][0];
-                            }
-                        }
-                        
-                        let imgUrl = null;
-                        let serviceUrl = null;
-                        const cw = item.width || 0;
-                        const ch = item.height || 0;
-                        if (item.items && item.items.length > 0 && item.items[0].items && item.items[0].items.length > 0) {
-                            const body = item.items[0].items[0].body;
-                            if (body && body.service && body.service.length > 0) {
-                                const sid = body.service[0].id || body.service[0]['@id'];
-                                if (sid) {
-                                    serviceUrl = sid;
-                                    imgUrl = sid + '/full/max/0/default.jpg';
-                                }
-                            } else if (body && body.id) {
-                                imgUrl = body.id;
-                            }
-                        }
-                        if (imgUrl) {
-                            let mappedLabels = [label];
-                            if (iiifParseRules[source]) {
-                                const mapped = iiifParseRules[source](label);
-                                if (Array.isArray(mapped)) {
-                                    mappedLabels = mapped;
-                                } else if (mapped !== null && mapped !== undefined) {
-                                    mappedLabels = [mapped];
-                                }
-                            }
-                            for (const mappedLabel of mappedLabels) {
-                                const cleanLabel = String(mappedLabel).replace(/^p\.?\s*/i, '').trim();
-                                folios.push({ folio: cleanLabel, imgUrl, serviceUrl, w: cw, h: ch, originalFolio: label });
-                            }
-                        }
-                    }
-                }
-            } else {
-                 console.warn("Unknown IIIF manifest version", data['@context']);
+            } catch (e) {
+                console.error(`Failed to load IIIF manifest for ${source}`, e);
+                manifestStatus.value[source] = { status: 'error', error: e.message };
+            } finally {
+                inflightFetches.delete(source);
             }
-            
-            if (folios.length > 0) {
-                parsedData.value[source] = folios;
-                manifestStatus.value[source] = { status: 'ok', error: null };
-                // Cache parsed manifest data in IndexedDB for fast reloads
-                setCachedItem('manifests', source, folios).catch(e => console.warn("Failed caching manifest", e));
-            } else {
-                const msg = `No canvases found in manifest for ${source}`;
-                console.warn(msg);
-                manifestStatus.value[source] = { status: 'error', error: msg };
-            }
-            
-        } catch (e) {
-            console.error(`Failed to load IIIF manifest for ${source}`, e);
-            manifestStatus.value[source] = { status: 'error', error: e.message };
-        } finally {
-            inflightFetches.delete(source);
-        }
         })();
 
         inflightFetches.set(source, fetchPromise);
@@ -252,6 +146,9 @@ export const useIiifStore = defineStore('iiif', () => {
 
     return {
         links,
+        serialize,
+        hydrate,
+        reset,
         parsedData,
         manifestStatus,
         addManifest,

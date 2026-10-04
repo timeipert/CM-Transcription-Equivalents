@@ -1,5 +1,12 @@
-# Vue 3 + Vite
+# Neume Viewer — frontend
 
-This template should help get you started developing with Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+Vue 3 + Vite single-page app. See the repository's [README](../README.md) for what it does and [ARCHITECTURE.md](../ARCHITECTURE.md) for how it is built.
 
-Learn more about IDE Support for Vue in the [Vue Docs Scaling up Guide](https://vuejs.org/guide/scaling-up/tooling.html#ide-support).
+```bash
+npm install
+npm run dev         # development server
+npm test            # unit tests (vitest)
+npm run lint        # eslint
+npm run typecheck   # tsc over the core modules (see jsconfig.json)
+npm run build       # production build into ../docs (gitignored), then verify it
+```

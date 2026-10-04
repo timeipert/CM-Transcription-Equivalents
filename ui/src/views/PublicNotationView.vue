@@ -194,12 +194,12 @@ watch([() => route.query.zoomId, manuscriptLines], ([zId, groups]) => {
                     <span class="icon">&larr;</span> Back to Directory
                 </button>
                 <button class="back-link" @click="router.push('/public/table')">
-                    Neumentabelle (Comparison) &rarr;
+                    Neume Table (Comparison) &rarr;
                 </button>
             </div>
             <div class="title-stack">
                 <div class="brand">
-                    Notationsdokumentation
+                    Notation Documentation
                     <span class="info-icon" title="This page provides a detailed index of transcription patterns and their corresponding locations within the manuscript. Patterns are identified by Ref IDs, which are cross-referenced with the annotated line gallery below.">?</span>
                 </div>
                 <h1>{{ source }}</h1>

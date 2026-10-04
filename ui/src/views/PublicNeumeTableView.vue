@@ -33,6 +33,7 @@ const onlyAnnotatedPatterns = ref(true); // If true, only show patterns that hav
 const patternSortMode = ref('freq'); // 'freq' | 'length' | 'alpha' | 'id'
 
 import { compareChantPatterns } from '../utils/sorting';
+import { isPageKeyOf, parsePageKey } from '../utils/keys';
 
 // Magnifier / Zoom Modal
 const isZoomOpen = ref(false);
@@ -64,9 +65,8 @@ function toggleStar(item) {
 const publishedTables = computed(() => {
     return tableStore.tables.filter(t => {
         if (!t.isPublished) return false;
-        const prefix = t.source + '_';
         return Object.keys(annotStore.regions).some(k => 
-            k.startsWith(prefix) && annotStore.regions[k].length > 0
+            isPageKeyOf(k, t.source) && annotStore.regions[k].length > 0
         );
     });
 });
@@ -105,10 +105,10 @@ const snippetMatrix = computed(() => {
         const source = table.source;
         matrix[source] = {};
 
-        const prefix = source + '_';
         for (const [key, pageRegions] of Object.entries(annotStore.regions || {})) {
-            if (!key.startsWith(prefix)) continue;
-            const folio = key.substring(prefix.length);
+            const k = parsePageKey(key);
+            if (k?.source !== source) continue;
+            const folio = k.folio;
 
             for (const r of pageRegions) {
                 const items = annotStore.regionItems?.[r.id] || [];
@@ -333,12 +333,12 @@ const visibleFilterSources = computed(() => {
         <div class="header-content">
             <div class="top-nav-bar">
                 <button class="nav-tab" @click="router.push('/public')">&larr; Manuscript Directory</button>
-                <div class="nav-tab active">Neumentabelle (Comparison)</div>
+                <div class="nav-tab active">Neume Table (Comparison)</div>
             </div>
 
             <div class="title-stack">
                 <div class="brand">Comparative Notation Analysis</div>
-                <h1>Neumentabelle</h1>
+                <h1>Neume Table</h1>
                 <p class="subtitle">Side-by-side comparison of annotated neume shapes across published manuscripts.</p>
             </div>
 

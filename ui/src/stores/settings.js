@@ -1,78 +1,119 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
+import { isPlainObject } from '../utils/shape'
 
-export const useSettingsStore = defineStore('settings', () => {
-    // State
-    const displayMode = ref('svg') // 'svg', 'arrow', 'text'
-    const autoFillIds = ref(true)
-    const globalDisplayIds = ref({}) // { pattern: "customId" }
-    const snippetSize = ref(60)
-    const snippetPadding = ref(0.3)
-    const backupLabel = ref("My Backup")
-    const sourceAlignments = ref({}) // { [source]: { iiifType: 'paginated'|'foliated', dataType: 'paginated'|'foliated', offset: 0 } }
-    // Code-changing variants (project-wide):
-    // customSigns: the reusable sign vocabulary. Each: { key, label, abbrev, description, glyph, glyphSvg }
-    const customSigns = ref([])
-    // codeVariants: per-base-pattern list of derived variant codes.
-    // { [baseCode]: [ { id, code, label, description } ] }
-    const codeVariants = ref({})
+/**
+ * Every setting that persists, in one table.
+ *
+ * Loading from browser storage, the workspace file, backups and configuration
+ * exports all iterate this table, so adding a setting is a one-line change and
+ * cannot be forgotten in one of the places (a setting added to the store but not
+ * to a hand-written field list used to silently drop out of backups).
+ *
+ *   default  value for a fresh workspace (a function for objects/arrays, so each
+ *            store instance gets its own copy)
+ *   share    false keeps it out of exported backups and configuration files
+ *            (it is still kept in browser storage and the workspace file)
+ *
+ * The comments describe each value's shape.
+ */
+export const PERSISTED_SETTINGS = {
+    // 'svg' | 'arrow' | 'text'
+    displayMode: { default: 'svg' },
+    autoFillIds: { default: true },
+    // { [pattern]: "customId" }
+    globalDisplayIds: { default: () => ({}) },
+    snippetSize: { default: 60 },
+    snippetPadding: { default: 0.3 },
+    backupLabel: { default: 'My Backup', share: false },
+    // { [source]: { iiifType, dataType, offset, pins, … } }
+    sourceAlignments: { default: () => ({}) },
+    // The reusable sign vocabulary: [{ key, label, abbrev, description, glyph, glyphSvg }]
+    customSigns: { default: () => [] },
+    // Per base pattern, its derived variant codes: { [baseCode]: [{ id, code, label, description }] }
+    codeVariants: { default: () => ({}) },
     // When true, overviews/IDs treat a code variant as distinct; when false they
     // are merged back into their base pattern ("all in one").
-    const discriminateSigns = ref(true)
-    // Source metadata: a project-defined set of free-text attributes (e.g. "Century",
-    // "Region", "Notation type") plus per-source values, used for filtering in the
-    // public views.
-    // sourceMetaFields: [{ key, label, description }]
-    const sourceMetaFields = ref([])
-    // sourceMeta: { [source]: { [fieldKey]: "value" } }
-    const sourceMeta = ref({})
-    // Snippet variants: the classifier letters offered when annotating a snippet
-    // (same code, different graphical realisation). Empty = the built-in a–g.
-    // Each: { key, label }
-    const snippetVariants = ref([])
+    discriminateSigns: { default: true },
+    // Project-defined free-text attributes of a source (century, region, …) used
+    // for filtering in the public views: [{ key, label, description, type }]
+    sourceMetaFields: { default: () => [] },
+    // { [source]: { [fieldKey]: "value" } }
+    sourceMeta: { default: () => ({}) },
+    // The classifier letters offered when annotating a snippet (same code,
+    // different graphical realisation); empty = the built-in a–g: [{ key, label }]
+    snippetVariants: { default: () => [] }
+};
 
-    // Load from LocalStorage
-    const stored = localStorage.getItem('globalSettings')
-    if (stored) {
-        try {
-            const parsed = JSON.parse(stored)
-            // Restore individually to handle missing keys in old versions
-            if (parsed.displayMode) displayMode.value = parsed.displayMode
-            if (parsed.autoFillIds !== undefined) autoFillIds.value = parsed.autoFillIds
-            if (parsed.globalDisplayIds) globalDisplayIds.value = parsed.globalDisplayIds
-            if (parsed.snippetSize) snippetSize.value = parsed.snippetSize
-            if (parsed.snippetPadding) snippetPadding.value = parsed.snippetPadding
-            if (parsed.backupLabel) backupLabel.value = parsed.backupLabel
-            if (parsed.sourceAlignments) sourceAlignments.value = parsed.sourceAlignments
-            if (Array.isArray(parsed.customSigns)) customSigns.value = parsed.customSigns
-            if (parsed.codeVariants) codeVariants.value = parsed.codeVariants
-            if (parsed.discriminateSigns !== undefined) discriminateSigns.value = parsed.discriminateSigns
-            if (Array.isArray(parsed.sourceMetaFields)) sourceMetaFields.value = parsed.sourceMetaFields
-            if (parsed.sourceMeta) sourceMeta.value = parsed.sourceMeta
-            if (Array.isArray(parsed.snippetVariants)) snippetVariants.value = parsed.snippetVariants
-        } catch (e) {
-            console.error("Error loading settings", e)
+const specDefault = spec => (typeof spec.default === 'function' ? spec.default() : spec.default);
+
+/**
+ * The value if it fits the shape of the setting's default, otherwise undefined.
+ * A wrong container type is rejected instead of being assigned into the store;
+ * numeric strings are accepted for numeric settings (older builds bound range
+ * inputs without `.number`).
+ */
+function coerceSetting(spec, value) {
+    const sample = specDefault(spec);
+    if (Array.isArray(sample)) return Array.isArray(value) ? value : undefined;
+    if (isPlainObject(sample)) return isPlainObject(value) ? value : undefined;
+    if (typeof sample === 'boolean') return typeof value === 'boolean' ? value : undefined;
+    if (typeof sample === 'number') {
+        const n = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+        return typeof n === 'number' && Number.isFinite(n) ? n : undefined;
+    }
+    if (typeof sample === 'string') return typeof value === 'string' ? value : undefined;
+    return undefined;
+}
+
+export const useSettingsStore = defineStore('settings', () => {
+    // State: one ref per entry of PERSISTED_SETTINGS
+    const state = {}
+    for (const [key, spec] of Object.entries(PERSISTED_SETTINGS)) {
+        state[key] = ref(specDefault(spec))
+    }
+
+    /**
+     * The persisted settings as a plain object.
+     * @param {{ shared?: boolean }} [options] `shared` leaves out settings that
+     *   should not travel in exported backups and configuration files.
+     */
+    function serialize({ shared = false } = {}) {
+        const out = {}
+        for (const [key, spec] of Object.entries(PERSISTED_SETTINGS)) {
+            if (shared && spec.share === false) continue
+            out[key] = state[key].value
+        }
+        return out
+    }
+
+    /**
+     * Apply a settings object. Keys that are absent, or whose value has the wrong
+     * shape, keep their current value, so an old or partial payload cannot wipe a
+     * setting it never mentioned.
+     */
+    function hydrate(payload, { shared = false } = {}) {
+        if (!isPlainObject(payload)) return
+        for (const [key, spec] of Object.entries(PERSISTED_SETTINGS)) {
+            if (shared && spec.share === false) continue
+            if (!(key in payload)) continue
+            const value = coerceSetting(spec, payload[key])
+            if (value !== undefined) state[key].value = value
         }
     }
 
-    // Persist to LocalStorage
-    watch([displayMode, autoFillIds, globalDisplayIds, snippetSize, snippetPadding, backupLabel, sourceAlignments, customSigns, codeVariants, discriminateSigns, sourceMetaFields, sourceMeta, snippetVariants], () => {
-        localStorage.setItem('globalSettings', JSON.stringify({
-            displayMode: displayMode.value,
-            autoFillIds: autoFillIds.value,
-            globalDisplayIds: globalDisplayIds.value,
-            snippetSize: snippetSize.value,
-            snippetPadding: snippetPadding.value,
-            backupLabel: backupLabel.value,
-            sourceAlignments: sourceAlignments.value,
-            customSigns: customSigns.value,
-            codeVariants: codeVariants.value,
-            discriminateSigns: discriminateSigns.value,
-            sourceMetaFields: sourceMetaFields.value,
-            sourceMeta: sourceMeta.value,
-            snippetVariants: snippetVariants.value
-        }))
-    }, { deep: true })
+    /** Back to the defaults of a fresh workspace. */
+    function reset() {
+        for (const [key, spec] of Object.entries(PERSISTED_SETTINGS)) {
+            state[key].value = specDefault(spec)
+        }
+    }
+
+    // The refs the actions below work on
+    const {
+        globalDisplayIds, sourceAlignments, customSigns, codeVariants,
+        sourceMetaFields, sourceMeta, snippetVariants
+    } = state
 
     // Actions
     function setGlobalId(pattern, id) {
@@ -232,20 +273,46 @@ export const useSettingsStore = defineStore('settings', () => {
         sourceAlignments.value = next
     }
 
+    function alignmentFor(source) {
+        return sourceAlignments.value[source] || null
+    }
+
+    function mergeAlignment(source, patch) {
+        const current = sourceAlignments.value[source] || {}
+        sourceAlignments.value = { ...sourceAlignments.value, [source]: { ...current, ...patch } }
+    }
+
+    /**
+     * A manual pin fixes one canvas to one data folio, keyed by the canvas's
+     * position in the manifest. The alignment engine treats every pin both as
+     * that canvas's resolved folio AND as a resync point for the running count
+     * it applies to every page after it — so fixing one drifted page fixes
+     * every page that follows, not just that one.
+     *
+     * An empty-string folio pins the canvas to "not a page", for the rare
+     * stray scan (a color chart, a ruler) that carries a digit but should be
+     * skipped like a structural divider rather than counted.
+     */
+    function setAlignmentPin(source, canvasIndex, dataFolio) {
+        const current = sourceAlignments.value[source] || {}
+        const pins = { ...(current.pins || {}) }
+        if (dataFolio || dataFolio === '') pins[canvasIndex] = dataFolio
+        else delete pins[canvasIndex]
+        mergeAlignment(source, { pins })
+    }
+
+    function removeAlignmentPin(source, canvasIndex) {
+        const current = sourceAlignments.value[source] || {}
+        const pins = { ...(current.pins || {}) }
+        delete pins[canvasIndex]
+        mergeAlignment(source, { pins })
+    }
+
     return {
-        displayMode,
-        autoFillIds,
-        globalDisplayIds,
-        snippetSize,
-        snippetPadding,
-        backupLabel,
-        sourceAlignments,
-        customSigns,
-        codeVariants,
-        discriminateSigns,
-        sourceMetaFields,
-        sourceMeta,
-        snippetVariants,
+        ...state,
+        serialize,
+        hydrate,
+        reset,
         getSnippetVariants,
         hasSnippetVariantConfig,
         setSnippetVariants,
@@ -267,6 +334,9 @@ export const useSettingsStore = defineStore('settings', () => {
         removeGlobalId,
         getGlobalId,
         setSourceAlignment,
-        removeSourceAlignment
+        removeSourceAlignment,
+        alignmentFor,
+        setAlignmentPin,
+        removeAlignmentPin
     }
 })

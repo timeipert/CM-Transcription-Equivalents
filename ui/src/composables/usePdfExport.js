@@ -1,6 +1,4 @@
-import { jsPDF } from "jspdf";
-import autoTable from 'jspdf-autotable';
-import { Canvg } from 'canvg';
+import { parsePoints, pointsToRect } from '../utils/geometry';
 import { renderSvg } from '../utils/svgRenderer.js';
 import { resolveSignGlyphs } from '../utils/signs';
 import { useAnnotationsStore } from '../stores/annotations';
@@ -20,22 +18,10 @@ export function usePdfExport() {
             const img = new Image();
             img.crossOrigin = "anonymous";
             img.onload = () => {
-                const pts = points.split(' ').filter(p => p).map(p => {
-                    const [x, y] = p.split(',').map(parseFloat);
-                    return { x, y };
-                });
-
+                const pts = parsePoints(points).map(([x, y]) => ({ x, y }));
                 if (pts.length === 0) return resolve(null);
 
-                const xs = pts.map(p => p.x);
-                const ys = pts.map(p => p.y);
-                const minX = Math.min(...xs);
-                const maxX = Math.max(...xs);
-                const minY = Math.min(...ys);
-                const maxY = Math.max(...ys);
-
-                const wP = maxX - minX;
-                const hP = maxY - minY;
+                const { x: minX, y: minY, w: wP, h: hP } = pointsToRect(points);
 
                 // Add 30% padding context
                 const padX = wP * 0.3;
@@ -85,6 +71,14 @@ export function usePdfExport() {
 
     async function generatePdf(tableConfig, allData, glyphs) {
         if (!tableConfig.name) return;
+
+        // The PDF libraries are large and only this button needs them, so they load
+        // on demand instead of weighing down every page of the app.
+        const [{ jsPDF }, { default: autoTable }, { Canvg }] = await Promise.all([
+            import('jspdf'),
+            import('jspdf-autotable'),
+            import('canvg')
+        ]);
 
         // 1. Prepare Doc
         const doc = new jsPDF();

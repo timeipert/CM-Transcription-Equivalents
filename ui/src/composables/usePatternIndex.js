@@ -6,6 +6,7 @@ import { usePatternLibraryStore } from '../stores/patternLibrary';
 import { useTranscriptionData } from './useTranscriptionData';
 import { getBaseCode } from '../utils/patternCode';
 import { stripSignKeys } from '../utils/signs';
+import { parsePageKey } from '../utils/keys';
 
 /**
  * Collects every pattern the workspace knows about:
@@ -92,10 +93,10 @@ export function usePatternIndex() {
         // 3. Annotations
         for (const t of tableStore.tables) {
             if (!t.source) continue;
-            const prefix = t.source + '_';
             for (const [key, pageRegions] of Object.entries(annotStore.regions || {})) {
-                if (!key.startsWith(prefix)) continue;
-                const folio = key.substring(prefix.length);
+                const k = parsePageKey(key);
+                if (k?.source !== t.source) continue;
+                const folio = k.folio;
 
                 for (const r of pageRegions || []) {
                     for (const item of annotStore.regionItems?.[r.id] || []) {

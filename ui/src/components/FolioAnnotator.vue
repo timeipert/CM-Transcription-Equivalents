@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { pointsToRect as getRectFromPoints } from '../utils/geometry';
 
 const props = defineProps({
     imageUrl: { type: String, required: true },
@@ -80,21 +81,6 @@ function getRelativeCoords(e) {
     const x = ((e.clientX - rootRect.left) / rootRect.width) * 100;
     const y = ((e.clientY - rootRect.top) / rootRect.height) * 100;
     return { x, y };
-}
-
-function getRectFromPoints(pointsStr) {
-    if (!pointsStr) return { x: 0, y: 0, w: 0, h: 0 };
-    const parts = pointsStr.split(' ');
-    let minX = 100, minY = 100, maxX = 0, maxY = 0;
-    for (const p of parts) {
-        if (!p.trim()) continue;
-        const [x, y] = p.split(',').map(Number);
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-    }
-    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }
 
 function onMouseDown(e) {

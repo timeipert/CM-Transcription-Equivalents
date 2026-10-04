@@ -1,3 +1,5 @@
+import { parsePoints } from './geometry';
+
 /**
  * Geometry helpers for OMMR neume regions.
  *
@@ -28,13 +30,8 @@ export function undeskewPoint(px, py, angle, W, H) {
     return [(ox / W) * 100, (oy / H) * 100];
 }
 
-/** Parse a "x,y x,y ..." percent-point string into [[x,y],...]. */
-export function parsePoints(pointsStr) {
-    return (pointsStr || '')
-        .split(/\s+/)
-        .map(p => p.split(',').map(parseFloat))
-        .filter(([x, y]) => !isNaN(x) && !isNaN(y));
-}
+// Parsing a points string is shared by everything that reads one: see geometry.js.
+export { parsePoints };
 
 /**
  * Deskew-correct a polygon (optionally) and return its axis-aligned bounding

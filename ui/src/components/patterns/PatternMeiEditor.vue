@@ -84,9 +84,9 @@ const copyState = ref('');
 async function copyXml() {
     try {
         await navigator.clipboard.writeText(xml.value);
-        copyState.value = 'Kopiert!';
+        copyState.value = 'Copied!';
     } catch (e) {
-        copyState.value = 'Kopieren fehlgeschlagen';
+        copyState.value = 'Copy failed';
     }
     setTimeout(() => (copyState.value = ''), 1800);
 }
@@ -110,11 +110,11 @@ function downloadXml() {
         <div class="nc-panel">
             <div class="panel-head">
                 <h5>Neume Components ({{ rows.length }} <code>&lt;nc&gt;</code>)</h5>
-                <button type="button" class="btn-xs" @click="clearAll">Alle leeren</button>
+                <button type="button" class="btn-xs" @click="clearAll">Clear all</button>
             </div>
 
             <div v-if="rows.length === 0" class="nc-empty">
-                Dieser Code beschreibt keine Tonfolge — kein MEI-Template möglich.
+                This code describes no melody, so there is no MEI template for it.
             </div>
 
             <table v-else class="nc-table">
@@ -149,8 +149,8 @@ function downloadXml() {
                             />
                         </td>
                         <td class="col-actions">
-                            <button type="button" class="btn-xs" title="Diese Attribute auf alle nc übertragen" @click="applyToAll(i)">↓ alle</button>
-                            <button type="button" class="btn-xs" title="Zeile leeren" @click="clearRow(i)">×</button>
+                            <button type="button" class="btn-xs" title="Copy these attributes to every nc" @click="applyToAll(i)">↓ all</button>
+                            <button type="button" class="btn-xs" title="Clear row" @click="clearRow(i)">×</button>
                         </td>
                     </tr>
                 </tbody>
@@ -158,7 +158,7 @@ function downloadXml() {
 
             <!-- Custom attributes per nc -->
             <div v-if="rows.length" class="custom-section">
-                <h6>Eigene Attribute</h6>
+                <h6>Custom attributes</h6>
                 <div v-for="(nc, i) in rows" :key="'c' + i" class="custom-row">
                     <span class="custom-idx">nc {{ i + 1 }}</span>
                     <span v-for="ce in customEntries(i)" :key="ce.name" class="custom-chip">
@@ -167,14 +167,14 @@ function downloadXml() {
                     </span>
                     <input
                         class="custom-input"
-                        placeholder="Attribut"
+                        placeholder="Attribute"
                         :value="newAttrName[i] || ''"
                         @input="newAttrName = { ...newAttrName, [i]: $event.target.value }"
                         @keyup.enter="addCustomAttr(i)"
                     />
                     <input
                         class="custom-input"
-                        placeholder="Wert"
+                        placeholder="Value"
                         :value="newAttrValue[i] || ''"
                         @input="newAttrValue = { ...newAttrValue, [i]: $event.target.value }"
                         @keyup.enter="addCustomAttr(i)"
@@ -187,16 +187,16 @@ function downloadXml() {
         <!-- Live XML preview -->
         <div class="xml-panel">
             <div class="panel-head">
-                <h5>MEI-Vorschau</h5>
+                <h5>MEI preview</h5>
                 <div class="xml-actions">
                     <span v-if="copyState" class="copy-state">{{ copyState }}</span>
-                    <button type="button" class="btn-xs" @click="copyXml">Kopieren</button>
-                    <button type="button" class="btn-xs" @click="downloadXml">.xml laden</button>
+                    <button type="button" class="btn-xs" @click="copyXml">Copy</button>
+                    <button type="button" class="btn-xs" @click="downloadXml">Download .xml</button>
                 </div>
             </div>
             <pre class="xml-preview">{{ xml }}</pre>
             <p class="xml-hint">
-                Tonhöhen (<code>pname</code>, <code>oct</code>) ergänzt Monodi Zero anhand der Position im System.
+                Pitches (<code>pname</code>, <code>oct</code>) are filled in by Monodi Zero from the position in the staff.
             </p>
         </div>
     </div>

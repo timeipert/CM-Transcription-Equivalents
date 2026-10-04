@@ -11,15 +11,18 @@
  * Snippets carry base64 image data, so this must not be localStorage.
  */
 
-const DB_NAME = 'CMDirectSnippets';
+import { STORAGE_NS } from './storageNamespace';
+
+const PLAIN_DB_NAME = 'CMDirectSnippets';
+const DB_NAME = STORAGE_NS + PLAIN_DB_NAME;
 const DB_VERSION = 1;
 const STORE = 'collections';
 
-let dbPromise = null;
+const dbPromises = new Map();
 
-function initDB() {
-    if (!dbPromise) {
-        dbPromise = new Promise((resolve, reject) => {
+function initDB(name = DB_NAME) {
+    if (!dbPromises.has(name)) {
+        const promise = new Promise((resolve, reject) => {
             // Never hang a caller on a stuck connection request.
             const timer = setTimeout(() => reject(
                 new Error('Timed out opening the snippet database.')
@@ -28,7 +31,7 @@ function initDB() {
             resolve = settle(resolve);
             reject = settle(reject);
 
-            const request = indexedDB.open(DB_NAME, DB_VERSION);
+            const request = indexedDB.open(name, DB_VERSION);
             request.onerror = () => reject(request.error);
             request.onsuccess = () => {
                 const db = request.result;
@@ -47,21 +50,36 @@ function initDB() {
             };
         });
         // Never cache a failed attempt, so a retry can recover.
-        dbPromise.catch(() => { dbPromise = null; });
+        promise.catch(() => { dbPromises.delete(name); });
+        dbPromises.set(name, promise);
     }
-    return dbPromise;
+    return dbPromises.get(name);
 }
 
 const KEY = 'all';
 
+/** The stored collections, or undefined if this database has never held any. */
+async function readCollections(name) {
+    const db = await initDB(name);
+    return new Promise((resolve) => {
+        const req = db.transaction(STORE, 'readonly').objectStore(STORE).get(KEY);
+        req.onsuccess = () => resolve(Array.isArray(req.result) ? req.result : undefined);
+        req.onerror = () => resolve(undefined);
+    });
+}
+
 export async function loadCollections() {
     try {
-        const db = await initDB();
-        return await new Promise((resolve) => {
-            const req = db.transaction(STORE, 'readonly').objectStore(STORE).get(KEY);
-            req.onsuccess = () => resolve(Array.isArray(req.result) ? req.result : []);
-            req.onerror = () => resolve([]);
-        });
+        const own = await readCollections(DB_NAME);
+        if (own !== undefined) return own;
+        // First visit of a build with its own database: start from a copy of what
+        // the unprefixed build stored, and fork from there (see storageNamespace.js).
+        if (DB_NAME !== PLAIN_DB_NAME) {
+            const plain = (await readCollections(PLAIN_DB_NAME)) || [];
+            if (plain.length) await saveCollections(plain);
+            return plain;
+        }
+        return [];
     } catch (e) {
         console.error('Could not load direct snippet collections', e);
         return [];

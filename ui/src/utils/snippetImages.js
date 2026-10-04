@@ -73,7 +73,7 @@ export function fileToSnippet(file, opts = {}) {
 
                 resolve({ dataUrl, width, height, bytes: dataUrlBytes(dataUrl) });
             };
-            img.src = reader.result;
+            img.src = String(reader.result);
         };
         reader.readAsDataURL(file);
     });

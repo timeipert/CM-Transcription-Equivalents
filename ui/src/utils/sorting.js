@@ -44,7 +44,7 @@ export function compareFolios(a, b) {
  */
 export function cleanPatternForSorting(p) {
     if (!p) return '';
-    return String(p).replace(/[\[\]\{\}\*\(\)]/g, '').trim();
+    return String(p).replace(/[[\]{}*()]/g, '').trim();
 }
 
 /**

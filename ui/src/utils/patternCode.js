@@ -28,18 +28,18 @@ const MOVEMENT = { u: 'up', d: 'down', e: 'same' };
 
 /** Direction labels, level 1 of the hierarchy. */
 export const DIRECTIONS = {
-    base: 'Basis',
-    up: 'Aufwärts',
-    down: 'Abwärts',
-    same: 'Gleich',
-    mixed: 'Gemischt'
+    base: 'Base',
+    up: 'Upward',
+    down: 'Downward',
+    same: 'Same pitch',
+    mixed: 'Mixed'
 };
 
 /** Ligature labels, level 2 of the hierarchy. */
 export const LIGATURES = {
-    open: 'Offen',
-    partial: 'Teilweise verbunden',
-    connected: 'Verbunden'
+    open: 'Open',
+    partial: 'Partly connected',
+    connected: 'Connected'
 };
 
 /** First whitespace-delimited token of a pattern (drops a legacy " b" variant). */
@@ -118,13 +118,15 @@ export function parsePatternCode(code, signKeys = []) {
     }
 
     const moves = notes.map(n => n.move).filter(m => MOVEMENT[m]);
+    /** @type {'base'|'up'|'down'|'same'|'mixed'} */
     let direction = 'base';
     if (moves.length > 0) {
         const kinds = new Set(moves.map(m => MOVEMENT[m]));
-        direction = kinds.size > 1 ? 'mixed' : [...kinds][0];
+        direction = kinds.size > 1 ? 'mixed' : /** @type {'up'|'down'|'same'} */ ([...kinds][0]);
     }
 
     const groupedCount = notes.filter(n => n.grouped).length;
+    /** @type {'open'|'connected'|'partial'} */
     let ligature = 'open';
     if (groupedCount === notes.length) ligature = 'connected';
     else if (groupedCount > 0) ligature = 'partial';
@@ -164,7 +166,7 @@ export function modifierKey(parsed) {
  * @param {Array<{key: string, label: string}>} [customSigns]
  */
 export function modifierLabel(key, customSigns = []) {
-    if (!key) return 'Basis';
+    if (!key) return 'Base';
     return [...key]
         .map(ch => {
             const def = (customSigns || []).find(s => s.key === ch);
@@ -239,7 +241,7 @@ export function buildPatternHierarchy(codes, options = {}) {
 
         return {
             key: dirKey,
-            label: dirKey === 'other' ? 'Sonstige' : DIRECTIONS[dirKey],
+            label: dirKey === 'other' ? 'Other' : DIRECTIONS[dirKey],
             count: groups.reduce((s, g) => s + g.count, 0),
             groups
         };

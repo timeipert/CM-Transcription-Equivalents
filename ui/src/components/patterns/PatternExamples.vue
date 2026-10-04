@@ -41,7 +41,7 @@ const hiddenCount = computed(() => Math.max(0, props.examples.length - visible.v
         />
     </div>
     <span v-if="hiddenCount > 0" class="more">+{{ hiddenCount }}</span>
-    <span v-if="visible.length === 0 && hiddenCount === 0" class="no-examples">keine Bildbeispiele</span>
+    <span v-if="visible.length === 0 && hiddenCount === 0" class="no-examples">no image examples</span>
 </div>
 </template>
 

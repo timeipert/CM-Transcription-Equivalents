@@ -117,7 +117,7 @@ describe('buildPatternHierarchy', () => {
 describe('modifierLabel', () => {
     it('uses the configured sign label', () => {
         expect(modifierLabel('V', [{ key: 'V', label: 'Virga' }])).toBe('V (Virga)');
-        expect(modifierLabel('')).toBe('Basis');
+        expect(modifierLabel('')).toBe('Base');
         expect(modifierLabel('V')).toBe('V');
     });
 });

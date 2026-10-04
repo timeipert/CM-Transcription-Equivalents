@@ -19,7 +19,7 @@ const props = defineProps({
     forceOpen: { type: Boolean, default: false },
     // Show "n" badges next to group headers
     showCounts: { type: Boolean, default: true },
-    emptyText: { type: String, default: 'Keine Pattern vorhanden.' }
+    emptyText: { type: String, default: 'No patterns.' }
 });
 
 const settings = useSettingsStore();

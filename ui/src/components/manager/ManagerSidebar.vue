@@ -1,9 +1,10 @@
 <script setup>
 import { ref, watch, computed, reactive } from 'vue';
 import { useTranscriptionData } from '../../composables/useTranscriptionData';
-import { useImageManifest, compareFolios } from '../../composables/useImageManifest';
+import { useImageManifest } from '../../composables/useImageManifest';
 import { useIiifStore } from '../../stores/iiif';
 import { useAnnotationsStore } from '../../stores/annotations';
+import AlignmentReview from './AlignmentReview.vue';
 
 const props = defineProps(['selectedSource', 'selectedFolio']);
 const emits = defineEmits(['select']);
@@ -12,84 +13,75 @@ const iiifStore = useIiifStore();
 const annotStore = useAnnotationsStore();
 
 const { sourceFolios, loading: dataLoading } = useTranscriptionData();
-const { manifest, hasImage, loaded: manifestLoaded, getManifestStructure, getStandardFolio, hasTranscriptionData } = useImageManifest();
+const { hasImage, loaded: manifestLoaded, getManifestStructure, getStandardFolio, hasTranscriptionData, getAlignmentReport, resolveIiifSource } = useImageManifest();
+
+const alignSource = ref(null);
 
 function getFolioRegionsCount(src, fol) {
     const key = `${src}_${fol}`;
     return (annotStore.regions[key] || []).length;
 }
 
-// Tree Structure
-const tree = computed(() => {
-    // We need at least one source of truth loaded.
-    // Ideally both, but if only manifest is loaded, we can show images without data.
-    if (!manifestLoaded.value) return {};
-    
-    // 1. Get structure from Manifest
-    const manifestStruct = getManifestStructure();
-    
-    // 2. Get structure from Data (if loaded)
-    const dataStruct = sourceFolios.value || {};
-    
-    // 3. Merge
-    const t = {};
-    const allSources = new Set([
-        ...Object.keys(manifestStruct),
-        ...Object.keys(dataStruct)
-    ]);
-    
-    const sortedSources = Array.from(allSources).sort();
-    
-    for (const src of sortedSources) {
-        const validFoliosSet = new Set();
-        
-        // Add from Manifest
-        if (manifestStruct[src]) {
-            for (const f of manifestStruct[src]) {
-                validFoliosSet.add(getStandardFolio(src, f));
-            }
-        }
-        
-        // Add from Data (mapped to standard folio)
-        if (dataStruct[src]) {
-            for (const f of dataStruct[src]) {
-                const stdFol = getStandardFolio(src, f);
-                if (hasImage(src, stdFol)) {
-                    validFoliosSet.add(stdFol);
-                }
-            }
-        }
-        
-        const validFolios = Array.from(validFoliosSet);
-        
-        if (validFolios.length > 0) {
-            const orderMap = {};
-            if (iiifStore.parsedData[src]) {
-                iiifStore.parsedData[src].forEach((item, idx) => {
-                    orderMap[item.folio] = idx;
-                });
-            }
 
-            t[src] = validFolios.sort((a, b) => {
-                // 1. IIIF Order
-                if (iiifStore.parsedData[src]) {
-                    const idxA = orderMap[a] ?? 9999;
-                    const idxB = orderMap[b] ?? 9999;
-                    if (idxA !== idxB) return idxA - idxB;
+/**
+ * Per-source page list that keeps the original scan label visible and shows the
+ * data folio it resolved to alongside it, rather than silently replacing one
+ * with the other.
+ */
+const pageTree = computed(() => {
+    if (!manifestLoaded.value) return {};
+
+    const manifestStruct = getManifestStructure();
+    const dataStruct = sourceFolios.value || {};
+    const sources = Array.from(new Set([...Object.keys(manifestStruct), ...Object.keys(dataStruct)])).sort();
+
+    const result = {};
+    for (const src of sources) {
+        const iiifKey = resolveIiifSource(src) || src;
+        const report = iiifStore.parsedData[iiifKey] ? getAlignmentReport(src) : null;
+        const hasIiif = !!(iiifStore.links[src] || iiifStore.parsedData[iiifKey]);
+
+        let pages;
+        if (report) {
+            pages = report.entries.map(e => ({
+                key: `c${e.canvasIndex}`,
+                label: e.originalLabel,
+                folio: e.resolvedFolio,
+                via: e.via,
+                isDivider: e.isDivider
+            }));
+        } else {
+            const folios = (manifestStruct[src] || dataStruct[src] || []);
+            const seen = new Set();
+            pages = [];
+            for (const f of folios) {
+                const std = getStandardFolio(src, f);
+                if (seen.has(std)) continue;
+                seen.add(std);
+                if (manifestStruct[src] || hasImage(src, std)) {
+                    pages.push({ key: std, label: std, folio: std, via: 'label' });
                 }
-                
-                // 2. Fallback Natural Sort
-                return compareFolios(a, b);
-            });
+            }
         }
+
+        if (pages.length > 0 || hasIiif) result[src] = { hasIiif, pages };
     }
-    return t;
+    return result;
 });
 
 const folioSearch = reactive({});
 
-function onSelect(src, fol) {
-    emits('select', { source: src, folio: fol });
+function pageMatchesSearch(page, term) {
+    if (!term) return true;
+    const t = term.toLowerCase();
+    return String(page.label).toLowerCase().includes(t)
+        || (page.folio && String(page.folio).toLowerCase().includes(t));
+}
+
+function onSelect(src, page) {
+    const folio = page.folio || page.label;
+    if (!folio) return;
+    emits('select', { source: src, folio });
 }
 
 // Accordion State
@@ -142,13 +134,13 @@ async function submitIiif() {
     </div>
     
     <div v-if="dataLoading">Loading Data...</div>
-    <div v-else-if="Object.keys(tree).length === 0">
+    <div v-else-if="Object.keys(pageTree).length === 0">
         <div class="empty-state">
             No manuscripts with images found.
         </div>
     </div>
     <div class="tree" v-else>
-        <div v-for="(folios, src) in tree" :key="src" class="tree-node">
+        <div v-for="(node, src) in pageTree" :key="src" class="tree-node">
             <div class="src-label-container">
                 <div class="src-label" @click="toggleSource(src)">
                     <span class="chevron">{{ expandedSources.has(src) ? '▼' : '▶' }}</span>
@@ -156,32 +148,41 @@ async function submitIiif() {
                     <span v-if="iiifStore.manifestStatus[src]?.status === 'loading'" class="manifest-status loading" title="Loading Manifest...">↻</span>
                     <span v-else-if="iiifStore.manifestStatus[src]?.status === 'error'" class="manifest-status error" :title="iiifStore.manifestStatus[src]?.error">⚠️</span>
                 </div>
+                <button v-if="node.hasIiif" class="align-icon-btn" @click.stop="alignSource = src" title="Review how scan pages map to folios">⇄</button>
                 <button v-if="iiifStore.manifestStatus[src]?.status === 'error'" class="btn-xs retry-btn" @click.stop="iiifStore.ensureLoaded(src)" title="Retry loading IIIF Manifest">Retry</button>
             </div>
             <div class="folio-list" v-show="expandedSources.has(src)">
-                <input v-if="folios.length > 10" 
-                       v-model="folioSearch[src]" 
-                       placeholder="Search folio..." 
-                       class="folio-search" 
+                <input v-if="node.pages.length > 10"
+                       v-model="folioSearch[src]"
+                       placeholder="Search page or folio..."
+                       class="folio-search"
                        @click.stop />
-                <div v-for="fol in folios.filter(f => !folioSearch[src] || f.toLowerCase().includes(folioSearch[src].toLowerCase()))" :key="fol" 
-                     class="folio-item" 
+                <div v-for="page in node.pages.filter(p => pageMatchesSearch(p, folioSearch[src]))" :key="page.key"
+                     class="folio-item"
                      :class="{
-                         active: selectedSource===src && selectedFolio===fol, 
-                         'has-data': hasTranscriptionData(src, fol),
-                         'has-regions': getFolioRegionsCount(src, fol) > 0
+                         active: selectedSource===src && selectedFolio===(page.folio || page.label),
+                         'has-data': page.folio && hasTranscriptionData(src, page.folio),
+                         'has-regions': page.folio && getFolioRegionsCount(src, page.folio) > 0,
+                         unresolved: node.hasIiif && !page.folio && !page.isDivider,
+                         divider: page.isDivider
                       }"
-                     :title="(getFolioRegionsCount(src, fol) > 0 ? `${getFolioRegionsCount(src, fol)} line regions annotated. ` : '') + (hasTranscriptionData(src, fol) ? 'Contains Monodi data' : '')"
-                     @click="onSelect(src, fol)">
-                    <span v-if="hasTranscriptionData(src, fol)" class="data-indicator">•</span>
-                    <span class="folio-name">{{ fol }}</span>
-                    <span v-if="getFolioRegionsCount(src, fol) > 0" class="folio-lines-badge">
-                        {{ getFolioRegionsCount(src, fol) }}L
+                     :title="page.isDivider ? `“${page.label}” — a structural marker, not a page` : (page.folio ? `Scan “${page.label}” → folio ${page.folio}. ` : `Scan “${page.label}” — no folio matched. `) + (page.folio && getFolioRegionsCount(src, page.folio) > 0 ? `${getFolioRegionsCount(src, page.folio)} line regions annotated. ` : '') + (page.folio && hasTranscriptionData(src, page.folio) ? 'Contains Monodi data' : '')"
+                     @click="onSelect(src, page)">
+                    <span class="scan-label">{{ page.label }}</span>
+                    <span class="folio-side">
+                        <span v-if="page.folio && getFolioRegionsCount(src, page.folio) > 0" class="folio-lines-badge">
+                            {{ getFolioRegionsCount(src, page.folio) }}L
+                        </span>
+                        <span v-if="page.isDivider" class="folio-tag divider">—</span>
+                        <span v-else-if="page.folio" class="folio-tag" :class="'via-' + page.via">{{ page.folio }}</span>
+                        <span v-else class="folio-tag none">?</span>
                     </span>
                 </div>
             </div>
         </div>
     </div>
+
+    <AlignmentReview v-if="alignSource" :source="alignSource" @close="alignSource = null" />
 
     <!-- IIIF Modal -->
     <div v-if="showIiifModal" class="modal">
@@ -239,6 +240,26 @@ async function submitIiif() {
 .folio-item.active.has-data { color: white; }
 .data-indicator { color: var(--color-warning); font-size: 1.2em; line-height: 0.5; margin-right: 2px; }
 .folio-name { flex: 1; }
+.scan-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-muted, #666); }
+.folio-item.active .scan-label { color: rgba(255,255,255,0.85); }
+.folio-item.has-data .scan-label { color: var(--color-text); }
+.folio-side { display: flex; align-items: center; gap: 5px; flex: 0 0 auto; }
+.folio-tag { font-size: 0.82em; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: var(--color-border, #e5e7eb); color: var(--color-text); }
+.folio-tag.via-position { background: #fef9c3; color: #854d0e; }
+.folio-tag.via-pinned { background: #dbeafe; color: #1e40af; }
+.folio-tag.none { background: #fee2e2; color: #991b1b; }
+.folio-item.active .folio-tag { background: rgba(255,255,255,0.25); color: #fff; }
+.folio-item.unresolved { opacity: 0.7; }
+.folio-item.divider { opacity: 0.55; cursor: default; font-style: italic; }
+.folio-item.divider .scan-label { color: var(--color-text-muted, #999); }
+.folio-tag.divider { background: transparent; color: var(--color-text-muted, #aaa); font-weight: 400; }
+.align-icon-btn {
+    background: none; border: none; cursor: pointer; font-size: 13px; line-height: 1;
+    padding: 3px 5px; border-radius: 4px; color: var(--color-text-light, #999);
+    opacity: 0.4; transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+.src-label-container:hover .align-icon-btn { opacity: 1; }
+.align-icon-btn:hover { background: var(--color-border, #e5e7eb); color: var(--color-text); opacity: 1; }
 .folio-lines-badge { background: #dcfce7; color: #166534; font-size: 0.72rem; padding: 1px 5px; border-radius: 10px; font-weight: 700; border: 1px solid #bbf7d0; }
 .folio-item.active .folio-lines-badge { background: rgba(255,255,255,0.25); color: white; border-color: rgba(255,255,255,0.4); }
 

@@ -161,12 +161,12 @@ function goToEditor() {
                             type="button"
                             class="variant-btn"
                             :class="{ active: (liveAnnotation?.variant || '') === v.key, legacy: v.legacy }"
-                            :title="v.legacy ? 'Nicht mehr konfiguriert — stammt aus einer älteren Einteilung' : ''"
+                            :title="v.legacy ? 'No longer configured — comes from an older classification' : ''"
                             @click="updateVariant(v.key)"
                         >{{ v.label }}<span v-if="v.legacy" class="legacy-mark">*</span></button>
                     </div>
                     <router-link v-if="!settings.hasSnippetVariantConfig()" class="variant-config-link" to="/patterns">
-                        Varianten konfigurieren →
+                        Configure variants →
                     </router-link>
                 </div>
                 

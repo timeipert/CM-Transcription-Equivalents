@@ -5,6 +5,7 @@ import { storeToRefs } from 'pinia';
 import { useSaveReminderStore } from '../stores/saveReminder';
 import { useWorkspaceStorage } from '../composables/useWorkspaceStorage';
 import { useDataManagement } from '../composables/useDataManagement';
+import { storageError } from '../utils/safeStorage';
 
 const router = useRouter();
 const reminder = useSaveReminderStore();
@@ -20,9 +21,8 @@ const changeCountText = computed(() => changeCount.value);
 const sinceText = computed(() => sinceExportLabel.value);
 const neverExportedFlag = computed(() => neverExported.value);
 
-const storage = useWorkspaceStorage();
-const storageStatus = storage.status;
-const folderName = storage.folderName;
+const workspace = useWorkspaceStorage();
+const { status: storageStatus, folderName, lastError, readOnly, notice } = workspace;
 /** No folder bound means browser storage is the only copy of the work. */
 const isBrowserOnly = computed(() => !folderName.value);
 
@@ -35,9 +35,15 @@ const { exportData } = useDataManagement();
  */
 const state = computed(() => {
     if (folderName.value) {
-        if (storageStatus.value === 'error') return { tone: 'bad', label: 'Save failed', detail: `Folder: ${folderName.value}` };
+        // A workspace file that cannot be read is never written over, so nothing is being saved.
+        if (readOnly.value) return { tone: 'bad', label: 'Not saving', detail: lastError.value || `Folder: ${folderName.value}` };
+        if (storageStatus.value === 'error') return { tone: 'bad', label: 'Save failed', detail: lastError.value || `Folder: ${folderName.value}` };
         if (storageStatus.value === 'saving') return { tone: 'busy', label: 'Saving…', detail: `Folder: ${folderName.value}` };
         return { tone: 'good', label: 'Autosaved', detail: `Folder: ${folderName.value}` };
+    }
+    // Browser storage is the only copy here, so a failed write is the headline.
+    if (storageError.value) {
+        return { tone: 'bad', label: 'Not saved', detail: storageError.value.message };
     }
     if (!hasUnsavedWork.value) {
         // "Backed up" would be a lie when nothing was ever exported — there is simply
@@ -70,6 +76,21 @@ function goToBackup() {
         <span class="dot"></span>
         <span class="pill-label">{{ state.label }}</span>
     </button>
+
+    <!-- Something the folder service did that the user should know about (a safety
+         copy was kept, an old workspace was upgraded) — never silently. -->
+    <Transition name="slide-up">
+        <div v-if="notice" class="reminder-toast notice-toast" role="status">
+            <div class="toast-icon">ℹ️</div>
+            <div class="toast-body">
+                <strong>Workspace folder</strong>
+                <p>{{ notice }}</p>
+                <div class="toast-actions">
+                    <button class="btn-quiet" @click="workspace.dismissNotice()">Dismiss</button>
+                </div>
+            </div>
+        </div>
+    </Transition>
 
     <!-- Nudge: only when there is real work at risk -->
     <Transition name="slide-up">
@@ -126,6 +147,7 @@ function goToBackup() {
     border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.15);
     text-align: left;
 }
+.notice-toast { border-left-color: var(--color-primary); bottom: 24px; }
 .toast-icon { font-size: 22px; line-height: 1; }
 .toast-body { flex: 1; min-width: 0; }
 .toast-body strong { display: block; margin-bottom: 4px; font-size: 14px; color: var(--color-text); }

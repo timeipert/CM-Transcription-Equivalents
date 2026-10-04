@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "strict": false
+  },
+  "include": [
+    "src/services/persistence/**/*.js",
+    "src/services/iiif/**/*.js",
+    "src/services/ommr/**/*.js",
+    "src/utils/keys.js",
+    "src/utils/id.js",
+    "src/utils/shape.js",
+    "src/utils/geometry.js",
+    "src/utils/safeStorage.js",
+    "src/utils/workspaceSharing.js",
+    "src/utils/ommr*.js"
+  ],
+  "exclude": ["**/*.test.js"]
+}
