@@ -143,11 +143,15 @@ the components a screen merely hosts.
 
 The site is built from source by GitHub Actions (`.github/workflows/pages.yml`); `docs/` is gitignored build output. Anything the site ships must be in `ui/public/` — `verify-build.mjs` fails the build otherwise. The workflow publishes the previous version at the site root (from a pinned commit) and the current one under `/next/`. See "Publishing" in the README.
 
-### Two versions on one origin
+### Moving from the previous version
 
-Browser storage (localStorage, IndexedDB) belongs to an origin, and both versions live on `neume.monodi.app`. Left alone they would read and overwrite each other's data, which have different shapes. So the build for `/next/` sets `VITE_STORAGE_NS=next:` (`utils/storageNamespace.js`) and prefixes what it owns: the store keys and the reminder state in localStorage, the folder handle and sync record, and the direct-snippet database. On its first visit it starts from a copy of what the unprefixed version stored (the `legacy` readers in `storeRegistry.js`, and `loadCollections()` for the snippets) and the two are independent from then on; edits in one never reach the other. Shared on purpose: the GitHub connection (`monodi_github_config`, so it is entered once) and the image/manifest caches. Not shared: the bound workspace folder, which has to be chosen again in the new version (choose a different folder: the old version would overwrite the new one's file with its own format).
+The app replaced an earlier version at the same address, so the data that version left in the browser and in bound workspace folders is read, never discarded:
 
-Any new key a build writes to browser storage must go through the prefix.
+* **Browser storage.** Each store loads from its own key; if that is empty, the `legacy` readers in `storeRegistry.js` try the older layouts (`annotations_v2`, the flat v1 map, the three OMMR keys) and the new layout is written at once. The old keys are left in place as a snapshot. Keys whose shape did not change (`globalSettings`, `personalTables`, `iiifLinks`, `patternLibrary_v1`) are shared in place and stay readable by the old version, so a rollback finds its data.
+* **Workspace folders** the previous version bound are found again (the folder handle lives in IndexedDB under the same key). `workspace.json` is upgraded by `migrate()` and the original kept as `workspace.pre-v1.json`. The previous version's autosave was unreliable, so the folder file can be older than browser storage; the first time this version meets a folder (no sync record), anything in browser storage that the file would replace is saved as `workspace.replaced-<time>.json` and a notice says so.
+* **`/next/`.** The new version was briefly published under `/next/` with a key prefix (`VITE_STORAGE_NS=next:`, see `utils/storageNamespace.js`). The unprefixed build still picks that data up when it has none of its own, and `ui/public/next/index.html` redirects old links to the root. The prefix mechanism itself is kept (it is what lets two builds share an origin) but is not used in production.
+
+Any new key written to browser storage must go through the prefix.
 
 ## Loading
 

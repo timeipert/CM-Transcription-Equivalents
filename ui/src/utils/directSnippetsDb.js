@@ -79,7 +79,10 @@ export async function loadCollections() {
             if (plain.length) await saveCollections(plain);
             return plain;
         }
-        return [];
+        // The unprefixed build also picks up what the build once published under /next/ kept.
+        const preview = (await readCollections('next:' + PLAIN_DB_NAME).catch(() => undefined)) || [];
+        if (preview.length) await saveCollections(preview);
+        return preview;
     } catch (e) {
         console.error('Could not load direct snippet collections', e);
         return [];

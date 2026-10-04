@@ -116,18 +116,42 @@ export function createWorkspaceStorage(deps) {
         return { schemaVersion: SCHEMA_VERSION, savedAt: new Date().toISOString(), collections: stores.direct.serialize() };
     }
 
-    /** Save the app's current work into the folder before a load replaces it. */
-    async function snapshotLocalWork() {
+    /** `value` as JSON with object keys in a fixed order, so two equal states compare equal. */
+    const canonical = value => JSON.stringify(value, (_, v) =>
+        v && typeof v === 'object' && !Array.isArray(v)
+            ? Object.fromEntries(Object.keys(v).sort().map(k => [k, v[k]]))
+            : v);
+
+    /**
+     * Whether loading `incoming` would replace anything the app holds. A file only
+     * replaces the parts it contains (and, of the settings, only the keys it has), so
+     * only those are compared.
+     */
+    function wouldReplace(local, incoming) {
+        const parts = ['personalTables', 'regions', 'regionItems', 'manualLines', 'iiifLinks'];
+        if (parts.some(key => incoming[key] !== undefined && canonical(incoming[key]) !== canonical(local[key]))) return true;
+        const settings = incoming.settings || {};
+        return Object.keys(settings).some(key => canonical(settings[key]) !== canonical((local.settings || {})[key]));
+    }
+
+    /**
+     * Save the app's current work into the folder before a load replaces it.
+     * With `incoming` (the data about to be loaded) nothing is written if the app
+     * already holds exactly that.
+     * @returns {Promise<string|null>} the file name, or null if there was nothing to keep
+     */
+    async function snapshotLocalWork(incoming = null) {
         const stores = getStores();
         const hasWork = Object.keys(stores.annotations.regions).length > 0
             || stores.tables.tables.length > 0
             || (stores.direct.loaded && stores.direct.collections.length > 0);
-        if (!hasWork) return;
+        if (!hasWork) return null;
         const payload = workspacePayload(stores);
+        if (incoming && !wouldReplace(payload.data, incoming)) return null;
         if (stores.direct.loaded && stores.direct.collections.length) payload.data.directSnippets = stores.direct.serialize();
         const name = `workspace.replaced-${stamp()}.json`;
         await writeTextFile(dir, name, JSON.stringify(payload));
-        notice.value = `This folder already had a workspace, so it was loaded. What was in the app before is saved as ${name}.`;
+        return name;
     }
 
     /**
@@ -184,7 +208,14 @@ export function createWorkspaceStorage(deps) {
         }
 
         if (from < SCHEMA_VERSION) await writeTextFileIfAbsent(dir, `workspace.pre-v${from}.json`, ws.text);
-        if (source === 'choose') await snapshotLocalWork();
+        // Loading the folder's workspace replaces what the app holds. Keep that aside when
+        // it is work the folder does not have: when the user picked this folder, and the
+        // first time this build meets a folder it was bound to by another version (there
+        // is no record of the last sync, so nothing says which side is newer).
+        const firstMeeting = sync.folder !== dir.name;
+        const keptAs = source === 'choose'
+            ? await snapshotLocalWork()
+            : firstMeeting ? await snapshotLocalWork(data) : null;
 
         const stores = getStores();
         await untracked(async () => {
@@ -207,6 +238,11 @@ export function createWorkspaceStorage(deps) {
         if (from < SCHEMA_VERSION || inlineDirect) scheduleSave(0);
 
         const messages = [...notes, ...warnings];
+        if (keptAs) {
+            messages.unshift(source === 'choose'
+                ? `This folder already had a workspace, so it was loaded. What was in the app before is saved as ${keptAs}.`
+                : `The folder's workspace was loaded. The app held different work, which is saved as ${keptAs} (Settings → Import brings it back).`);
+        }
         if (messages.length) notice.value = messages.join(' ');
     }
 

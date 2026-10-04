@@ -13,7 +13,7 @@ vi.mock('../utils/download', () => ({
 
 import { useDataManagement } from './useDataManagement';
 import { collectStores } from '../services/persistence/storeRegistry';
-import { SCHEMA_VERSION, ENVELOPE_TYPES } from '../services/persistence/workspaceSchema';
+import { SCHEMA_VERSION, ENVELOPE_TYPES, workspaceFile, buildCoreData, buildSettingsData } from '../services/persistence/workspaceSchema';
 import { useSaveReminderStore } from '../stores/saveReminder';
 import { createFakeStorage } from '../test/fakes';
 
@@ -350,5 +350,43 @@ describe('deleting', () => {
         expect(stores.iiif.links).toEqual({});
         expect(stores.settings.snippetSize).toBe(80);
         expect(stores.library.getLabel('*dd')).toBe('clivis');
+    });
+
+    it('imports a workspace file as the folder service writes it (the safety copies workspace.replaced-*.json)', async () => {
+        fillWorkspace();
+        const kept = workspaceFile({
+            label: 'Workspace',
+            data: { ...buildCoreData(stores), ...buildSettingsData(stores) }
+        });
+
+        freshApp();
+        const [analysis] = await dm.analyzeImportFiles([fileOf(kept, 'workspace.replaced-2026-10-04.json')]);
+        expect(analysis.success).toBe(true);
+        expect(analysis.newSources.map(s => s.source).sort()).toEqual(['Lo 4', 'Pa 1']);
+
+        dm.executeImport(analysis.parsed, {});
+        expect(Object.keys(stores.annotations.regions).sort()).toEqual(['Lo 4_2v', 'Pa 1_1r']);
+        expect(stores.tables.tables.map(t => t.source).sort()).toEqual(['Lo 4', 'Pa 1']);
+        expect(stores.settings.snippetSize).toBe(80);
+    });
+
+    it('imports an older (v1) workspace file, folding its whole-page annotations into regions', async () => {
+        const v1 = {
+            schemaVersion: 1,
+            savedAt: '2026-07-15T17:33:49.391Z',
+            label: 'My Backup',
+            data: {
+                personalTables: [],
+                annotations: { 'Pa 1235_9_*u': [{ id: 'a1', points: '10,10 20,10 20,20 10,20', variant: 'b' }] },
+                regions: {}, regionItems: {}, manualLines: {}, iiifLinks: {}
+            }
+        };
+        freshApp();
+        const [analysis] = await dm.analyzeImportFiles([fileOf(v1, 'workspace.pre-v1.json')]);
+        expect(analysis.success).toBe(true);
+        dm.executeImport(analysis.parsed, {});
+        const items = Object.values(stores.annotations.regionItems).flat();
+        expect(items).toHaveLength(1);
+        expect(items[0]).toMatchObject({ pattern: '*u', variant: 'b' });
     });
 });

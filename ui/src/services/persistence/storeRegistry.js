@@ -121,6 +121,9 @@ function quarantine(storage, key, raw) {
     try { storage.setItem(`${key}__corrupt`, raw); } catch { /* storage full: nothing more to do */ }
 }
 
+/** The prefix the build published under /next/ used (2026-10); its data is still picked up. */
+const PREVIEW_NS = 'next:';
+
 /** Prefix for this run's keys (see utils/storageNamespace.js); set by initPersistence. */
 let namespace = STORAGE_NS;
 const keyOf = entry => namespace + entry.local.key;
@@ -131,7 +134,9 @@ function loadLocal(store, entry, storage) {
     const plain = entry.local.key;
     const legacy = [
         ...(namespace ? [s => parseJson(s.getItem(plain))] : []),
-        ...(entry.local.legacy || [])
+        ...(entry.local.legacy || []),
+        // The build that was briefly published under /next/ kept its data under this prefix.
+        ...(namespace === PREVIEW_NS ? [] : [s => parseJson(s.getItem(PREVIEW_NS + plain))])
     ];
     const raw = storage.getItem(key);
 

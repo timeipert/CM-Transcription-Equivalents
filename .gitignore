@@ -1,5 +1,5 @@
 # Site build output (`npm run build` in ui/ writes it; GitHub Actions publishes it)
-docs/
+/docs/
 
 # Node / Frontend
 node_modules/

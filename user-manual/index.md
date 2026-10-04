@@ -18,6 +18,8 @@ features:
     details: Manage stable reference IDs for graphical signs across manuscripts.
   - title: IIIF Annotation
     details: Draw regions and link transcriptions directly on manuscript scans.
+  - title: Safe by design
+    details: Work is autosaved into a folder you choose; the app never overwrites a file it cannot read and keeps a copy of anything it replaces.
   - title: Public Gallery
     details: Automatically generate interactive galleries for notation systems.
 ---

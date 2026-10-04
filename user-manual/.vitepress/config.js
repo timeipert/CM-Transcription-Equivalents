@@ -23,6 +23,9 @@ export default defineConfig({
         items: [
           { text: 'Equivalents Management', link: '/docs/equivalents' },
           { text: 'Manuscript Annotation', link: '/docs/annotation' },
+          { text: 'Pattern Library', link: '/docs/pattern-library' },
+          { text: 'Importing OMMR4all Data', link: '/docs/ommr-import' },
+          { text: 'Custom Manuscripts', link: '/docs/custom-manuscripts' },
           { text: 'Settings & Data Backup', link: '/docs/settings-and-data' },
           { text: 'Public Documentation', link: '/docs/public-view' }
         ]

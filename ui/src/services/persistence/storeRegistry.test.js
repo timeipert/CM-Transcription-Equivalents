@@ -280,3 +280,19 @@ describe('a build with its own key prefix (served beside another build on one or
         expect(storage.getItem('next:globalSettings__corrupt')).toBe('{nope');
     });
 });
+
+describe('data left by the build once published under /next/', () => {
+    it('is picked up by the unprefixed build when it has nothing of its own', () => {
+        const { stores } = boot({ 'next:globalSettings': JSON.stringify({ snippetSize: 55 }) });
+        expect(stores.settings.snippetSize).toBe(55);
+        expect(JSON.parse(storage.getItem('globalSettings')).snippetSize).toBe(55);
+    });
+
+    it('never overrides data the unprefixed build already has', () => {
+        const { stores } = boot({
+            globalSettings: JSON.stringify({ snippetSize: 77 }),
+            'next:globalSettings': JSON.stringify({ snippetSize: 55 })
+        });
+        expect(stores.settings.snippetSize).toBe(77);
+    });
+});

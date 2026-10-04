@@ -99,21 +99,13 @@ servers, so keep the tab connected while it runs.
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit and how to change the data model safely.
 
 ## Publishing
-https://neume.monodi.app serves two versions of the app side by side, built and deployed by `.github/workflows/pages.yml` on every push to `master`:
-
-| URL | version | built from |
-|---|---|---|
-| `neume.monodi.app/` | the previous version, unchanged | the built site of the commit pinned in `LEGACY_SITE_REF` |
-| `neume.monodi.app/next/` | the current version | this commit (tests run first) |
-
-The build output in `docs/` is not committed.
+https://neume.monodi.app is built and deployed by `.github/workflows/pages.yml` on every push to `master`: lint, type-check and tests run first, then the build, and nothing is published if one of them fails. The build output in `docs/` is not committed.
 
 * Everything the site ships must live in `ui/public/` (scans, the manual, `index.json`, the `sources/` data, `CNAME`) or in the bundle. `npm run build` fails if something in `ui/public/` did not reach the output.
-* The repository setting *Pages → Build and deployment → Source* must be **GitHub Actions**.
-* Both versions share one origin and therefore one browser storage. The current version is built with `VITE_STORAGE_NS=next:`, which gives it its own keys; see "Two versions on one origin" in [ARCHITECTURE.md](ARCHITECTURE.md). A workspace folder bound in one version is not bound in the other, and the two should not share a folder: they write different file formats.
-* To retire the previous version: remove the legacy steps from the workflow, publish `docs` at the root and drop `VITE_STORAGE_NS`.
+* The repository setting *Pages → Build and deployment → Source* must be **GitHub Actions**, with the custom domain `neume.monodi.app` (switching the source clears the domain; set it again).
+* **Rolling back:** revert the commit on `master` and push. The last build of the previous app (before the persistence rework) is the commit tagged `legacy-site-2026-10-04`; its saved data stays readable by the current app (see ARCHITECTURE.md, "Moving from the previous version").
 * To publish a change to the manual, run `npm run build:manual` at the repository root and commit `ui/public/manual` (it is checked in because the CI build does not run VitePress).
-* The `Dockerfile` builds the current version from source (multi-stage) and serves it with nginx at the root, without a storage prefix.
+* The `Dockerfile` builds the app from source (multi-stage) and serves it with nginx.
 
 ## Current Project Status
 This tool is designed for personal research and small-scale collaborative documentation. Data is stored locally in the browser. 

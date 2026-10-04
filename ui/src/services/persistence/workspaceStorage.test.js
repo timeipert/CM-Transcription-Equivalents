@@ -298,6 +298,63 @@ describe('a file that cannot be used is never overwritten', () => {
         expect(folder.writes).toEqual([]);
     });
 
+    describe('meeting a folder another version of the app bound (no sync record yet)', () => {
+        const localWork = () => {
+            stores.annotations.regions = { 'Other_1r': [{ id: 'mine', name: 'Line 1', points: box(0, 0) }] };
+            stores.annotations.regionItems = { mine: [{ id: 'mine-i', pattern: '*u', points: box(1, 1) }] };
+        };
+
+        it('keeps work that is only in the app aside before loading the folder, and says so', async () => {
+            localWork();
+            const folder = createFakeFolder('ws', { 'workspace.json': savedWorkspace() });
+            handles.workspaceDirHandle = folder;
+            const svc = service();
+            await svc.initPromise;
+            await flush(DEBOUNCE * 3);
+
+            // the folder's workspace is what is loaded
+            expect(Object.keys(stores.annotations.regions)).toEqual(['Pa 1_1r']);
+            // and what the app held is not lost
+            const kept = folder.names().find(n => n.startsWith('workspace.replaced-'));
+            expect(kept).toBeTruthy();
+            expect(Object.keys(folder.readJson(kept).data.regions)).toEqual(['Other_1r']);
+            expect(svc.notice.value).toContain(kept);
+        });
+
+        it('writes nothing extra when the app already holds exactly what the folder has', async () => {
+            const folder = createFakeFolder('ws', { 'workspace.json': savedWorkspace() });
+            handles.workspaceDirHandle = folder;
+            await service().initPromise;           // first meeting loads the file into the app
+            await flush(DEBOUNCE * 3);
+
+            syncStore.removeItem('workspaceSync_v1'); // a "new" build meets the same folder again
+            const again = service();
+            await again.initPromise;
+            await flush(DEBOUNCE * 3);
+            expect(folder.names().filter(n => n.startsWith('workspace.replaced-'))).toEqual([]);
+        });
+
+        it('does not keep a copy when the app has no work of its own', async () => {
+            const folder = createFakeFolder('ws', { 'workspace.json': savedWorkspace() });
+            handles.workspaceDirHandle = folder;
+            await service().initPromise;
+            expect(folder.names().filter(n => n.startsWith('workspace.replaced-'))).toEqual([]);
+        });
+
+        it('a folder this build already syncs with is not second-guessed on later startups', async () => {
+            const folder = createFakeFolder('ws', { 'workspace.json': savedWorkspace() });
+            handles.workspaceDirHandle = folder;
+            await service().initPromise;
+            await flush(DEBOUNCE * 3);
+
+            localWork();                              // more work, then a reload (sync record kept)
+            await flush(DEBOUNCE * 3);
+            const again = service();
+            await again.initPromise;
+            expect(folder.names().filter(n => n.startsWith('workspace.replaced-'))).toEqual([]);
+        });
+    });
+
     it('JSON that is not a workspace is refused', async () => {
         const folder = createFakeFolder('ws', { 'workspace.json': '{"hello": "world"}' });
         const svc = service();

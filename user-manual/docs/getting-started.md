@@ -11,6 +11,14 @@ When analyzing chant repertoires, scholars often need to bridge the gap between 
 3. Establish a standard typology (Reference IDs) for graphical signs across different manuscript sources.
 4. Generate interactive, public-facing documentation of your notation analysis.
 
+## Opening it and choosing where your work is kept
+Open <https://neume.monodi.app>. The first screen asks where to keep your work:
+
+- **Choose Folder** (recommended, Chrome / Edge): pick a folder on your computer. Everything you do is saved into it automatically as `workspace.json`, so it survives clearing the browser and can be backed up like any file. See [Settings & Data Backup](./settings-and-data).
+- **Continue without a folder**: your work stays in this browser only. Export backups regularly.
+
+If you used an earlier version of the app in this browser, your work is still there: the app finds it and upgrades it, keeping copies of what it replaced.
+
 ## Prerequisites
 - A modern web browser (Chrome, Firefox, Safari).
 - Access to IIIF manifests for the manuscripts you wish to annotate (usually provided by library archives).
