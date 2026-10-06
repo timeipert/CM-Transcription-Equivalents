@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { newId } from '../utils/id'
-import { pageKey, parsePageKey } from '../utils/keys'
+import { pageKey, parsePageKey, folioIdentity } from '../utils/keys'
 import { isPlainObject } from '../utils/shape'
 import { pointsToRect, rectToPolygon } from '../utils/geometry'
 import { foldLegacyAnnotations, hasLegacyAnnotations } from '../services/persistence/migrations/legacyAnnotations'
@@ -35,6 +35,35 @@ export const useAnnotationsStore = defineStore('annotations', () => {
         }
         return index
     })
+
+    // A page can be keyed by more than one spelling of its folio ("18v" from the
+    // transcription, "fol. 18v" from the IIIF canvas). These indexes find every key
+    // of the same page so that data saved under one spelling is found under the other.
+    const indexKeys = map => {
+        const index = new Map()
+        for (const key of Object.keys(map)) {
+            const k = parsePageKey(key)
+            if (!k) continue
+            const id = `${k.source}\u0000${folioIdentity(k.folio)}`
+            if (!index.has(id)) index.set(id, [])
+            index.get(id).push(key)
+        }
+        return index
+    }
+    const regionKeyIndex = computed(() => indexKeys(regions.value))
+    const lineKeyIndex = computed(() => indexKeys(manualLines.value))
+
+    /** Every existing key of this page in `map`, the exactly spelled one first. */
+    function keysOf(map, index, source, folio) {
+        const exact = pageKey(source, folio)
+        const same = index.value.get(`${source}\u0000${folioIdentity(folio)}`) || []
+        return map[exact] !== undefined ? [exact, ...same.filter(k => k !== exact)] : same
+    }
+    const regionKeys = (source, folio) => keysOf(regions.value, regionKeyIndex, source, folio)
+    const lineKeys = (source, folio) => keysOf(manualLines.value, lineKeyIndex, source, folio)
+    /** The key new data for this page goes under: one that already holds data, else the exact spelling. */
+    const regionWriteKey = (source, folio) => regionKeys(source, folio)[0] || pageKey(source, folio)
+    const lineWriteKey = (source, folio) => lineKeys(source, folio)[0] || pageKey(source, folio)
 
     // --- Persistence ---------------------------------------------------------
 
@@ -129,11 +158,15 @@ export const useAnnotationsStore = defineStore('annotations', () => {
     // --- Regions -------------------------------------------------------------
 
     function getRegions(source, folio) {
-        return regions.value[pageKey(source, folio)] || []
+        const keys = regionKeys(source, folio)
+        if (keys.length === 0) return []
+        if (keys.length === 1) return regions.value[keys[0]]
+        const seen = new Set()
+        return keys.flatMap(k => regions.value[k]).filter(r => !seen.has(r.id) && seen.add(r.id))
     }
 
     function addRegion(source, folio, name, points) {
-        const key = pageKey(source, folio)
+        const key = regionWriteKey(source, folio)
         if (!regions.value[key]) regions.value[key] = []
         const id = newId('r')
         regions.value[key].push({ id, name, points })
@@ -141,7 +174,7 @@ export const useAnnotationsStore = defineStore('annotations', () => {
     }
 
     function updateRegion(source, folio, regionId, updates) {
-        const reg = (regions.value[pageKey(source, folio)] || []).find(r => r.id === regionId)
+        const reg = getRegions(source, folio).find(r => r.id === regionId)
         if (!reg) return false
         if (updates.name !== undefined) reg.name = updates.name
         if (updates.points !== undefined) reg.points = updates.points
@@ -149,9 +182,10 @@ export const useAnnotationsStore = defineStore('annotations', () => {
     }
 
     function removeRegion(source, folio, regionId) {
-        const key = pageKey(source, folio)
-        if (regions.value[key]) {
-            regions.value[key] = regions.value[key].filter(r => r.id !== regionId)
+        for (const key of regionKeys(source, folio)) {
+            if (regions.value[key].some(r => r.id === regionId)) {
+                regions.value[key] = regions.value[key].filter(r => r.id !== regionId)
+            }
         }
         delete regionItems.value[regionId]
     }
@@ -159,11 +193,15 @@ export const useAnnotationsStore = defineStore('annotations', () => {
     // --- Manual lines --------------------------------------------------------
 
     function getManualLines(source, folio) {
-        return manualLines.value[pageKey(source, folio)] || []
+        const keys = lineKeys(source, folio)
+        if (keys.length === 0) return []
+        if (keys.length === 1) return manualLines.value[keys[0]]
+        return [...new Set(keys.flatMap(k => manualLines.value[k]))].sort((a, b) => a - b)
     }
 
     function addManualLine(source, folio, lineNum) {
-        const key = pageKey(source, folio)
+        if (getManualLines(source, folio).includes(lineNum)) return
+        const key = lineWriteKey(source, folio)
         if (!manualLines.value[key]) manualLines.value[key] = []
         if (!manualLines.value[key].includes(lineNum)) {
             manualLines.value[key].push(lineNum)
@@ -172,8 +210,7 @@ export const useAnnotationsStore = defineStore('annotations', () => {
     }
 
     function removeManualLine(source, folio, lineNum) {
-        const key = pageKey(source, folio)
-        if (manualLines.value[key]) {
+        for (const key of lineKeys(source, folio)) {
             manualLines.value[key] = manualLines.value[key].filter(l => l !== lineNum)
         }
     }
@@ -196,9 +233,10 @@ export const useAnnotationsStore = defineStore('annotations', () => {
         }
 
         for (const [folio, fLines] of Object.entries(linesByFolio)) {
-            const key = pageKey(source, folio)
+            const key = regionWriteKey(source, folio)
+            const lineKey = lineWriteKey(source, folio)
             if (!regions.value[key]) regions.value[key] = []
-            if (!manualLines.value[key]) manualLines.value[key] = []
+            if (!manualLines.value[lineKey]) manualLines.value[lineKey] = []
 
             // Sort lines top-to-bottom by y coordinate
             fLines.sort((a, b) => (a.bbox.y || 0) - (b.bbox.y || 0))
@@ -208,7 +246,7 @@ export const useAnnotationsStore = defineStore('annotations', () => {
                 const lineName = `Line ${lineNum}`
 
                 // A region may already exist for this OMMR line, or under the same name
-                const existing = regions.value[key].find(r => r.ommrLineId === ln.id || r.name === lineName)
+                const existing = getRegions(source, folio).find(r => r.ommrLineId === ln.id || r.name === lineName)
                 if (!existing) {
                     regions.value[key].push({
                         id: newId('r'),
@@ -219,9 +257,9 @@ export const useAnnotationsStore = defineStore('annotations', () => {
                     createdCount++
                 }
 
-                if (!manualLines.value[key].includes(lineNum)) {
-                    manualLines.value[key].push(lineNum)
-                    manualLines.value[key].sort((a, b) => a - b)
+                if (!manualLines.value[lineKey].includes(lineNum)) {
+                    manualLines.value[lineKey].push(lineNum)
+                    manualLines.value[lineKey].sort((a, b) => a - b)
                 }
             })
         }
@@ -231,9 +269,9 @@ export const useAnnotationsStore = defineStore('annotations', () => {
 
     /** The page's "Unassigned" whole-page region, created on first use. */
     function ensureUnassignedRegion(source, folio) {
-        const key = pageKey(source, folio)
+        const key = regionWriteKey(source, folio)
         if (!regions.value[key]) regions.value[key] = []
-        let region = regions.value[key].find(r => r.unassigned)
+        let region = getRegions(source, folio).find(r => r.unassigned)
         if (!region) {
             region = {
                 id: `r_unassigned_${source}_${folio}`,

@@ -99,6 +99,15 @@ describe('mergeManuscript strategies', () => {
         expect(merged.regionItems.rx).toHaveLength(1);
     });
 
+    it('overwrite keeps the local IIIF link when the incoming data brings none', () => {
+        const inc = incoming();
+        delete inc.iiifLinks.X;
+        const merged = mergeManuscript({ ...local(), iiifLinks: { X: 'mine' } }, inc, 'X', 'overwrite');
+        expect(merged.iiifLinks.X).toBe('mine');
+        const replaced = mergeManuscript({ ...local(), iiifLinks: { X: 'mine' } }, incoming(), 'X', 'overwrite');
+        expect(replaced.iiifLinks.X).toBe('u');
+    });
+
     it('copy keeps the local source and adds the incoming one beside it with fresh ids', () => {
         const merged = mergeManuscript(local(), incoming(), 'X', 'copy');
         expect(Object.keys(merged.regions).sort()).toEqual(['X (copy)_1r', 'X_2r']);

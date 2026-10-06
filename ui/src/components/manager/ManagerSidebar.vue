@@ -18,8 +18,7 @@ const { hasImage, loaded: manifestLoaded, getManifestStructure, getStandardFolio
 const alignSource = ref(null);
 
 function getFolioRegionsCount(src, fol) {
-    const key = `${src}_${fol}`;
-    return (annotStore.regions[key] || []).length;
+    return annotStore.getRegions(src, fol).length;
 }
 
 
@@ -97,10 +96,15 @@ function toggleSource(src) {
     }
 }
 
-// Auto-expand the source if it's selected initially
+// Auto-expand the source if it's selected initially. Expanding by hand loads its
+// IIIF manifest; a page opened by link or after a reload needs it just the same,
+// or its images and canvas labels are missing.
 watch(() => props.selectedSource, (newSrc) => {
     if (newSrc && !expandedSources.has(newSrc)) {
         expandedSources.add(newSrc);
+    }
+    if (newSrc && iiifStore.links[newSrc] && !iiifStore.parsedData[newSrc]) {
+        iiifStore.ensureLoaded(newSrc);
     }
 }, { immediate: true });
 

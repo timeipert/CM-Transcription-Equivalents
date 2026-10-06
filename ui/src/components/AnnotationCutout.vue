@@ -167,7 +167,11 @@ const clipId = computed(() => `clip-${props.source}-${props.folio}-${Math.abs(pr
             </clipPath>
         </defs>
         <!-- Map image to correct space -->
+        <!-- Not rendered until there is a URL: an <image> with an empty href fires
+             @error, which would show "unavailable" for a crop that simply is not
+             on screen yet. -->
         <image
+            v-if="imgUrl"
             :href="imgUrl"
             :x="usingRegion ? vbCoords.x : 0"
             :y="usingRegion ? vbCoords.y : 0"

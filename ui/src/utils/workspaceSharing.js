@@ -227,7 +227,8 @@ export function mergeManuscript(currentState, incomingState, sourceId, strategy)
     // Overwrite strategy: first remove existing data for this source
     if (strategy === 'overwrite') {
         newState.personalTables = newState.personalTables.filter(t => t.source !== targetSourceId);
-        delete newState.iiifLinks[targetSourceId];
+        // The link is replaced below if the incoming file has one; if it has none,
+        // the manuscript keeps the one it has (an IIIF link is not work to overwrite).
 
         for (const key in newState.regions) {
             if (isPageKeyOf(key, targetSourceId)) {

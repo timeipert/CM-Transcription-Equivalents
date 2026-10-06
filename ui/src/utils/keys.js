@@ -54,3 +54,21 @@ export function renameAnnotationKeySource(key, newSource) {
     const p = parseAnnotationKey(key);
     return p ? annotationKey(newSource, p.folio, p.pattern) : key;
 }
+
+/**
+ * A folio label reduced to what identifies the page: case, spacing, a "fol." /
+ * "f." / "p." prefix, leading zeros and recto/verso spelled out are ignored, so
+ * "18v", "fol. 18v", "f.18v" and "018v" are one page. Nothing else is merged
+ * ("22" and "22b" stay different pages).
+ *
+ * Page keys ("Source_Folio") are written with whichever label the code in use
+ * called the page: the transcription's folio or the IIIF canvas label. Data saved
+ * under one is found under the other by comparing identities.
+ */
+export function folioIdentity(folio) {
+    let s = String(folio ?? '').toLowerCase().replace(/\s+/g, '').replace(/[()]/g, '');
+    s = s.replace(/^(fol|f|p|bl|blatt|seite|s)\.?(?=\d)/, '');
+    s = s.replace(/^0+(?=\d)/, '');
+    return s.replace(/recto/g, 'r').replace(/verso/g, 'v');
+}
+

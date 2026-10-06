@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     pageKey, annotationKey, parsePageKey, parseAnnotationKey,
-    isPageKeyOf, isAnnotationKeyOf, renamePageKeySource, renameAnnotationKeySource
+    isPageKeyOf, isAnnotationKeyOf, renamePageKeySource, renameAnnotationKeySource, folioIdentity
 } from './keys';
 
 describe('composite keys', () => {
@@ -32,5 +32,26 @@ describe('composite keys', () => {
     it('renames only the source part', () => {
         expect(renamePageKeySource('WiSch 4_5_12r', 'WiSch 4_5 (copy)')).toBe('WiSch 4_5 (copy)_12r');
         expect(renameAnnotationKeySource('A_1r_*', 'A (copy)')).toBe('A (copy)_1r_*');
+    });
+});
+
+describe('folioIdentity', () => {
+    it('treats the spellings of one page as one', () => {
+        for (const spelling of ['18v', 'fol. 18v', 'Fol.18v', 'f. 18 v', '018v', '(18v)', '18verso']) {
+            expect(folioIdentity(spelling)).toBe('18v');
+        }
+        expect(folioIdentity('p. 24')).toBe('24');
+        expect(folioIdentity('0007r')).toBe('7r');
+    });
+
+    it('keeps different pages apart', () => {
+        expect(folioIdentity('22')).not.toBe(folioIdentity('22b'));
+        expect(folioIdentity('22r')).not.toBe(folioIdentity('22v'));
+        expect(folioIdentity('117bv')).not.toBe(folioIdentity('117v'));
+    });
+
+    it('tolerates empty input', () => {
+        expect(folioIdentity(undefined)).toBe('');
+        expect(folioIdentity(null)).toBe('');
     });
 });

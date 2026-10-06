@@ -389,4 +389,41 @@ describe('deleting', () => {
         expect(items).toHaveLength(1);
         expect(items[0]).toMatchObject({ pattern: '*u', variant: 'b' });
     });
+
+    it('a manuscript the workspace only knows by its IIIF link is imported, not offered as a conflict to skip', async () => {
+        freshApp();
+        // what a fresh workspace holds: the built-in manifest link, no work
+        stores.iiif.hydrate({ 'Ox 340': 'https://example.org/ox340.json' });
+        const file = {
+            schemaVersion: 1,
+            type: 'cm-manuscript-export',
+            data: {
+                personalTables: [{ id: 't1', name: 'Ox 340', source: 'Ox 340', rows: [{ pattern: '*', customId: '10' }], patterns: [] }],
+                annotations: {},
+                regions: { 'Ox 340_18v': [{ id: 'r1', name: 'Line 2', points: '0,0 1,1' }] },
+                regionItems: { r1: [{ id: 1788384676397, pattern: '*ddu', points: '0,0', variant: '' }] },
+                manualLines: {}
+            }
+        };
+        const [analysis] = await dm.analyzeImportFiles([fileOf(file, 'cm-manuscripts-Ox-340.json')]);
+        expect(analysis.overlapSources).toEqual([]);
+        expect(analysis.newSources.map(s => s.source)).toEqual(['Ox 340']);
+
+        dm.executeImport(analysis.parsed, {});
+        expect(stores.annotations.getRegions('Ox 340', '18v').map(r => r.id)).toEqual(['r1']);
+        expect(stores.tables.tables.map(t => t.source)).toEqual(['Ox 340']);
+        // the file had no IIIF link, so the one the workspace had stays
+        expect(stores.iiif.links['Ox 340']).toBe('https://example.org/ox340.json');
+    });
+
+    it('a manuscript with real local work is still offered as a conflict', async () => {
+        fillWorkspace();
+        const file = { schemaVersion: 2, type: 'cm-manuscript-export', data: {
+            personalTables: [{ id: 'tx', name: 'Pa 1', source: 'Pa 1', rows: [{ pattern: '*u', customId: '9' }], patterns: [] }],
+            regions: {}, regionItems: {}, manualLines: {}
+        } };
+        const [analysis] = await dm.analyzeImportFiles([fileOf(file)]);
+        expect(analysis.overlapSources.map(o => o.source)).toEqual(['Pa 1']);
+    });
 });
+

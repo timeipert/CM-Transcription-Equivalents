@@ -6,7 +6,7 @@ import { useImageManifest } from '../../composables/useImageManifest';
 import { useIiifStore } from '../../stores/iiif';
 import AnnotationCutout from '../AnnotationCutout.vue';
 import { compareFolios } from '../../utils/sorting';
-import { parsePageKey } from '../../utils/keys';
+import { parsePageKey, folioIdentity } from '../../utils/keys';
 
 const props = defineProps({
     pattern: { type: String, required: true },
@@ -188,10 +188,9 @@ watch([() => props.visible, () => iiifStore.parsedData, () => props.pattern, () 
                 const stf = getStandardFolio(p.d, p.f);
                 
                 // Check if this page is in our snippets list or has defined line regions
-                const snippetMatch = currentGalleryItems.value.find(s => s.source === std && s.folio === stf);
+                const snippetMatch = currentGalleryItems.value.find(s => s.source === std && folioIdentity(s.folio) === folioIdentity(stf));
                 const hasAnnot = !!snippetMatch;
-                const pageKey = `${std}_${stf}`;
-                const pageRegions = annotStore.regions[pageKey] || [];
+                const pageRegions = annotStore.getRegions(std, stf);
                 const regionsCount = pageRegions.length;
 
                 result.push({

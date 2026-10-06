@@ -150,8 +150,12 @@ export function useDataManagement() {
                 const overlapSources = []; // [{ source, incomingStats, localStats }]
                 for (const src of listSources(data)) {
                     const incomingStats = getManuscriptStats(data, src);
-                    if (localSources.has(src)) {
-                        overlapSources.push({ source: src, incomingStats, localStats: getManuscriptStats(localState, src) });
+                    const localStats = getManuscriptStats(localState, src);
+                    // Only work that exists here can conflict. A manuscript the app merely
+                    // knows (an IIIF link from the built-in list, an empty table) is not a
+                    // conflict: asking would default it to "skip" and import nothing.
+                    if (localSources.has(src) && localStats.hasData) {
+                        overlapSources.push({ source: src, incomingStats, localStats });
                     } else {
                         newSources.push({ source: src, incomingStats });
                     }

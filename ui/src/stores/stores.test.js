@@ -240,6 +240,63 @@ describe('annotations store', () => {
     });
 });
 
+describe('annotations store: one page, two spellings of its folio', () => {
+    // An older build keyed this page by the transcription's folio ("18v"); the
+    // workspace now asks by the IIIF canvas label ("fol. 18v").
+    let ann;
+    beforeEach(() => {
+        ann = useAnnotationsStore();
+        ann.hydrate({
+            regions: { 'Ox 340_18v': [{ id: 'r1', name: 'Line 2', points: '0,0 1,1' }] },
+            regionItems: { r1: [{ id: 'i1', pattern: '*', points: '0,0' }] },
+            manualLines: { 'Ox 340_18v': [2] }
+        });
+    });
+
+    it('finds the lines under either spelling', () => {
+        expect(ann.getRegions('Ox 340', 'fol. 18v').map(r => r.id)).toEqual(['r1']);
+        expect(ann.getRegions('Ox 340', '18v').map(r => r.id)).toEqual(['r1']);
+        expect(ann.getManualLines('Ox 340', 'fol. 18v')).toEqual([2]);
+        expect(ann.getAnnotations('Ox 340', 'fol. 18v', '*')).toHaveLength(1);
+    });
+
+    it('adds new lines to the key that already holds the page, so it does not split', () => {
+        ann.addRegion('Ox 340', 'fol. 18v', 'Line 5', '0,2 1,3');
+        ann.addManualLine('Ox 340', 'fol. 18v', 5);
+        expect(Object.keys(ann.regions)).toEqual(['Ox 340_18v']);
+        expect(ann.regions['Ox 340_18v'].map(r => r.name)).toEqual(['Line 2', 'Line 5']);
+        expect(ann.manualLines['Ox 340_18v']).toEqual([2, 5]);
+    });
+
+    it('updates and removes under either spelling', () => {
+        expect(ann.updateRegion('Ox 340', 'fol. 18v', 'r1', { name: 'Line 3' })).toBe(true);
+        expect(ann.regions['Ox 340_18v'][0].name).toBe('Line 3');
+        ann.removeManualLine('Ox 340', 'fol. 18v', 2);
+        expect(ann.getManualLines('Ox 340', '18v')).toEqual([]);
+        ann.removeRegion('Ox 340', 'fol. 18v', 'r1');
+        expect(ann.getRegions('Ox 340', '18v')).toEqual([]);
+        expect(ann.regionItems.r1).toBeUndefined();
+    });
+
+    it('shows a page whose lines ended up under both spellings as one page', () => {
+        ann.hydrate({ regions: {
+            'Ox 340_18v': [{ id: 'r1', name: 'Line 2', points: '' }],
+            'Ox 340_fol. 18v': [{ id: 'r2', name: 'Line 5', points: '' }]
+        } });
+        expect(ann.getRegions('Ox 340', 'fol. 18v').map(r => r.id)).toEqual(['r2', 'r1']);
+        expect(ann.getRegions('Ox 340', '18v').map(r => r.id)).toEqual(['r1', 'r2']);
+    });
+
+    it('does not mix up different pages or sources', () => {
+        ann.hydrate({ regions: {
+            'Ox 340_18v': [{ id: 'r1', name: 'Line 2', points: '' }],
+            'Ox 340_18r': [{ id: 'r3', name: 'Line 1', points: '' }],
+            'Ox 3401_18v': [{ id: 'r4', name: 'Line 1', points: '' }]
+        } });
+        expect(ann.getRegions('Ox 340', 'fol. 18v').map(r => r.id)).toEqual(['r1']);
+    });
+});
+
 describe('personal tables store', () => {
     it('round-trips tables and starred items', () => {
         const t = usePersonalTablesStore();
