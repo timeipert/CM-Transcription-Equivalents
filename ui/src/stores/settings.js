@@ -45,6 +45,18 @@ export const PERSISTED_SETTINGS = {
     snippetVariants: { default: () => [] }
 };
 
+/**
+ * The alignment in force for a source: the built-in default with the user's own
+ * settings on top — the user's pin for a canvas wins over the default pin for it.
+ * Plain data in, plain data out (reactive code reads it from the store's state
+ * without going through an action).
+ */
+export function effectiveAlignment(own, base) {
+    if (!base) return own || null
+    if (!own) return base
+    return { ...base, ...own, pins: { ...(base.pins || {}), ...(own.pins || {}) } }
+}
+
 const specDefault = spec => (typeof spec.default === 'function' ? spec.default() : spec.default);
 
 /**
@@ -273,8 +285,31 @@ export const useSettingsStore = defineStore('settings', () => {
         sourceAlignments.value = next
     }
 
-    function alignmentFor(source) {
+    /**
+     * Alignments that ship with the app (pins that fix a manuscript's numbering,
+     * from index.json). Not saved with the workspace: they arrive with every load.
+     */
+    const defaultAlignments = ref({})
+
+    function setDefaultAlignments(map) {
+        defaultAlignments.value = isPlainObject(map) ? map : {}
+    }
+
+    /** What the user configured for a source, without the built-in defaults. */
+    function userAlignmentFor(source) {
         return sourceAlignments.value[source] || null
+    }
+
+    function defaultAlignmentFor(source) {
+        return defaultAlignments.value[source] || null
+    }
+
+    /**
+     * The alignment in force: the built-in default with the user's own settings
+     * on top — the user's pin for a canvas wins over the default pin for it.
+     */
+    function alignmentFor(source) {
+        return effectiveAlignment(sourceAlignments.value[source], defaultAlignments.value[source])
     }
 
     function mergeAlignment(source, patch) {
@@ -313,6 +348,10 @@ export const useSettingsStore = defineStore('settings', () => {
         serialize,
         hydrate,
         reset,
+        defaultAlignments,
+        setDefaultAlignments,
+        userAlignmentFor,
+        defaultAlignmentFor,
         getSnippetVariants,
         hasSnippetVariantConfig,
         setSnippetVariants,

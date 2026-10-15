@@ -21,7 +21,7 @@ const props = defineProps({
 });
 const emit = defineEmits(['close', 'set-offset']);
 
-const { getIiifThumbnailUrl, getStandardFolio } = useImageManifest();
+const { getIiifThumbnailUrl, canvasLabel: labelOfCanvas } = useImageManifest();
 
 const imgStatus = ref('loading');
 const pageUrl = computed(() => {
@@ -31,7 +31,7 @@ const pageUrl = computed(() => {
 watch(pageUrl, () => { imgStatus.value = 'loading'; });
 
 const resolvedLabel = computed(() =>
-    props.canvasLabel || getStandardFolio(props.snippet.source, props.effectiveFolio)
+    props.canvasLabel || labelOfCanvas(props.snippet.source, props.effectiveFolio) || props.effectiveFolio
 );
 
 // Deskew-corrected geometry in percent (matches the IIIF original space).

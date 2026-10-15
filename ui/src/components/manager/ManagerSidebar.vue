@@ -13,7 +13,7 @@ const iiifStore = useIiifStore();
 const annotStore = useAnnotationsStore();
 
 const { sourceFolios, loading: dataLoading } = useTranscriptionData();
-const { hasImage, loaded: manifestLoaded, getManifestStructure, getStandardFolio, hasTranscriptionData, getAlignmentReport, resolveIiifSource } = useImageManifest();
+const { hasImage, loaded: manifestLoaded, getManifestStructure, pageFolio, hasTranscriptionData, getAlignmentReport, resolveIiifSource } = useImageManifest();
 
 const alignSource = ref(null);
 
@@ -54,7 +54,8 @@ const pageTree = computed(() => {
             const seen = new Set();
             pages = [];
             for (const f of folios) {
-                const std = getStandardFolio(src, f);
+                // No manifest: the page names are the transcription's folios or scan file names.
+                const std = pageFolio(src, f);
                 if (seen.has(std)) continue;
                 seen.add(std);
                 if (manifestStruct[src] || hasImage(src, std)) {

@@ -165,11 +165,17 @@ export const useAnnotationsStore = defineStore('annotations', () => {
         return keys.flatMap(k => regions.value[k]).filter(r => !seen.has(r.id) && seen.add(r.id))
     }
 
-    function addRegion(source, folio, name, points) {
+    /**
+     * @param {Object} [extra]  `canvas: { index, label }` — the scan the line was
+     *   drawn on, so a later change of the page alignment can be noticed.
+     */
+    function addRegion(source, folio, name, points, extra = {}) {
         const key = regionWriteKey(source, folio)
         if (!regions.value[key]) regions.value[key] = []
         const id = newId('r')
-        regions.value[key].push({ id, name, points })
+        const region = { id, name, points }
+        if (extra.canvas) region.canvas = extra.canvas
+        regions.value[key].push(region)
         return id
     }
 
@@ -178,6 +184,7 @@ export const useAnnotationsStore = defineStore('annotations', () => {
         if (!reg) return false
         if (updates.name !== undefined) reg.name = updates.name
         if (updates.points !== undefined) reg.points = updates.points
+        if (updates.canvas) reg.canvas = updates.canvas
         return true
     }
 
@@ -213,6 +220,54 @@ export const useAnnotationsStore = defineStore('annotations', () => {
         for (const key of lineKeys(source, folio)) {
             manualLines.value[key] = manualLines.value[key].filter(l => l !== lineNum)
         }
+    }
+
+    // --- Page keys ------------------------------------------------------------
+
+    /**
+     * Move pages to other keys (planned by services/alignment/pageKeys.js): the
+     * regions and manual lines stored under `from` join those under `to`. Nothing
+     * is dropped — regions keep their ids, so their snippets stay attached; two
+     * "Unassigned" holders of one page become one; manual lines are united. A move
+     * that knows the scan the lines were drawn on records it on the regions.
+     * @param {Array<{ from: string, to: string, canvas?: { index: number, label: string } }>} moves
+     * @returns {number} how many keys were moved
+     */
+    function rekeyPages(moves) {
+        let moved = 0
+        const nextRegions = { ...regions.value }
+        const nextLines = { ...manualLines.value }
+        for (const { from, to, canvas } of moves || []) {
+            if (!from || !to || from === to) continue
+            if (nextRegions[from] === undefined && nextLines[from] === undefined) continue
+            if (nextRegions[from]) {
+                const target = [...(nextRegions[to] || [])]
+                const ids = new Set(target.map(r => r.id))
+                let holder = target.find(r => r.unassigned)
+                for (const r of nextRegions[from]) {
+                    if (ids.has(r.id)) continue
+                    if (r.unassigned && holder) {
+                        regionItems.value[holder.id] = [...(regionItems.value[holder.id] || []), ...(regionItems.value[r.id] || [])]
+                        delete regionItems.value[r.id]
+                        continue
+                    }
+                    const region = canvas && !r.canvas ? { ...r, canvas } : r
+                    target.push(region)
+                    ids.add(r.id)
+                    if (r.unassigned) holder = region
+                }
+                nextRegions[to] = target
+                delete nextRegions[from]
+            }
+            if (nextLines[from]) {
+                nextLines[to] = [...new Set([...(nextLines[to] || []), ...nextLines[from]])].sort((a, b) => a - b)
+                delete nextLines[from]
+            }
+            moved++
+        }
+        regions.value = nextRegions
+        manualLines.value = nextLines
+        return moved
     }
 
     // --- OMMR import ---------------------------------------------------------
@@ -405,6 +460,7 @@ export const useAnnotationsStore = defineStore('annotations', () => {
         addRegion,
         updateRegion,
         removeRegion,
+        rekeyPages,
         getRegionItems,
         addItemToRegion,
         removeItemFromRegion,

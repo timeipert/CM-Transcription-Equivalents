@@ -1,0 +1,273 @@
+{
+  "schemaVersion": 1,
+  "type": "cm-manuscript-export",
+  "exportedAt": "2026-09-02T21:55:58.446Z",
+  "exportedManuscripts": [
+    "Ox 340"
+  ],
+  "data": {
+    "personalTables": [
+      {
+        "id": "1788383703711",
+        "name": "Ox 340",
+        "source": "Ox 340",
+        "notes": "",
+        "patterns": [],
+        "rows": [
+          {
+            "pattern": "*",
+            "customId": "10",
+            "notes": ""
+          },
+          {
+            "pattern": "*e",
+            "customId": "11",
+            "notes": ""
+          },
+          {
+            "pattern": "[*d]",
+            "customId": "20",
+            "notes": ""
+          },
+          {
+            "pattern": "[*du]",
+            "customId": "21",
+            "notes": ""
+          },
+          {
+            "pattern": "[*dud]",
+            "customId": "22",
+            "notes": ""
+          },
+          {
+            "pattern": "*dd",
+            "customId": "30",
+            "notes": ""
+          },
+          {
+            "pattern": "*ddu",
+            "customId": "31",
+            "notes": ""
+          },
+          {
+            "pattern": "[*u]",
+            "customId": "40",
+            "notes": ""
+          },
+          {
+            "pattern": "[*ud]",
+            "customId": "41",
+            "notes": ""
+          },
+          {
+            "pattern": "[*udu]",
+            "customId": "42",
+            "notes": ""
+          },
+          {
+            "pattern": "[*udd]",
+            "customId": "43",
+            "notes": ""
+          },
+          {
+            "pattern": "[*u]dd",
+            "customId": "44",
+            "notes": ""
+          },
+          {
+            "pattern": "[*uu]",
+            "customId": "45",
+            "notes": ""
+          },
+          {
+            "pattern": "[*uud]",
+            "customId": "46",
+            "notes": ""
+          },
+          {
+            "pattern": "[*uuud]",
+            "customId": "47",
+            "notes": ""
+          },
+          {
+            "pattern": "[*u]u",
+            "customId": "48",
+            "notes": ""
+          },
+          {
+            "pattern": "*LA",
+            "customId": "10+/20-",
+            "notes": ""
+          },
+          {
+            "pattern": "*LD",
+            "customId": "10+/40-",
+            "notes": ""
+          }
+        ]
+      }
+    ],
+    "annotations": {},
+    "regions": {
+      "Ox 340_18r": [
+        {
+          "id": "r_1788384196457",
+          "name": "Line 3",
+          "points": "8.48,66.09 69.42,66.09 69.42,70.69 8.48,70.69"
+        }
+      ],
+      "Ox 340_18v": [
+        {
+          "id": "r_1788384645775",
+          "name": "Line 2",
+          "points": "35.27,10.84 92.90,10.84 92.90,15.48 35.27,15.48"
+        },
+        {
+          "id": "r_1788384726669",
+          "name": "Line 5",
+          "points": "34.25,22.06 93.32,22.06 93.32,26.89 34.25,26.89"
+        },
+        {
+          "id": "r_1788384913860",
+          "name": "Line 7",
+          "points": "34.06,29.91 92.88,29.91 92.88,34.92 34.06,34.92"
+        }
+      ],
+      "Ox 340_19v": [
+        {
+          "id": "r_1788385211579",
+          "name": "Line 6",
+          "points": "33.43,37.48 91.40,37.48 91.40,42.74 33.43,42.74"
+        }
+      ],
+      "Ox 340_20r": [
+        {
+          "id": "r_1788385768740",
+          "name": "Line 3",
+          "points": "7.11,15.75 67.59,15.75 67.59,20.11 7.11,20.11"
+        }
+      ],
+      "Ox 340_23r": [
+        {
+          "id": "r_1788385973023",
+          "name": "Line 3",
+          "points": "7.82,65.30 69.67,65.30 69.67,70.30 7.82,70.30"
+        }
+      ]
+    },
+    "regionItems": {
+      "r_1788384196457": [],
+      "r_1788384645775": [
+        {
+          "id": 1788384676397,
+          "pattern": "*ddu",
+          "points": "46.78,11.47 50.10,11.47 50.10,13.93 46.78,13.93",
+          "linkData": {
+            "sysId": "Ox 340-18-14|18v|2|to-|G4-F4-E4-F4"
+          },
+          "variant": ""
+        },
+        {
+          "id": 1788384762777,
+          "pattern": "*",
+          "points": "63.82,12.98 65.34,12.98 65.34,13.87 63.82,13.87",
+          "linkData": {
+            "sysId": "Ox 340-18-14|18v|2|tes|D4"
+          },
+          "variant": "b"
+        },
+        {
+          "id": 1788384830101,
+          "pattern": "[*udu]",
+          "points": "79.32,12.32 81.98,12.32 81.98,14.34 79.32,14.34",
+          "linkData": {
+            "sysId": "Ox 340-18-14|18v|2|per-|D4-F4-E4-F4"
+          },
+          "variant": ""
+        }
+      ],
+      "r_1788384726669": [
+        {
+          "id": 1788384859749,
+          "pattern": "[*uuud]",
+          "points": "60.48,22.44 63.23,22.44 63.23,24.39 60.48,24.39",
+          "linkData": {
+            "sysId": "Ox 340-18-14|18v|5|me-|G4-A4-B4-C5-A4"
+          },
+          "variant": ""
+        }
+      ],
+      "r_1788384913860": [
+        {
+          "id": 1788384956987,
+          "pattern": "[*u]dd",
+          "points": "36.52,30.03 39.65,30.03 39.65,32.42 36.52,32.42",
+          "linkData": {
+            "sysId": "Ox 340-18-14|18v|7|tu-|G4-B4-A4-G4"
+          },
+          "variant": "a"
+        },
+        {
+          "id": 1788384995096,
+          "pattern": "[*du]",
+          "points": "55.56,30.45 57.80,30.45 57.80,33.00 55.56,33.00",
+          "linkData": {
+            "sysId": "Ox 340-18-14|18v|7|in|A4-G4-A4"
+          },
+          "variant": "c"
+        },
+        {
+          "id": 1788385074185,
+          "pattern": "[*udd]",
+          "points": "58.15,30.03 60.97,30.03 60.97,32.82 58.15,32.82",
+          "linkData": {
+            "sysId": "Ox 340-18-14|18v|7|tu-|A4-C5-G4-F4"
+          },
+          "variant": ""
+        },
+        {
+          "id": 1788385106414,
+          "pattern": "[*u]u",
+          "points": "69.98,31.14 71.63,31.14 71.63,33.50 69.98,33.50",
+          "linkData": {
+            "sysId": "Ox 340-18-14|18v|7|ca-|D4-F4-G4"
+          },
+          "variant": ""
+        }
+      ],
+      "r_1788385211579": [
+        {
+          "id": 1788385236901,
+          "pattern": "[*uu]",
+          "points": "49.55,37.81 52.38,37.81 52.38,40.06 49.55,40.06",
+          "linkData": {},
+          "variant": ""
+        }
+      ],
+      "r_1788385768740": [
+        {
+          "id": 1788385835770,
+          "pattern": "[*du]",
+          "points": "20.66,16.13 23.50,16.13 23.50,17.76 20.66,17.76",
+          "linkData": {
+            "sysId": "Ox 340-19v-4|20r|3|mus|A4-G4-A4"
+          },
+          "variant": "b"
+        },
+        {
+          "id": 1788385870152,
+          "pattern": "*e",
+          "points": "42.43,16.38 44.77,16.38 44.77,17.91 42.43,17.91",
+          "linkData": {
+            "sysId": "Ox 340-19v-4|20r|3|me-|F4-F4"
+          },
+          "variant": ""
+        }
+      ]
+    },
+    "manualLines": {},
+    "iiifLinks": {
+      "Ox 340": "https://iiif.bodleian.ox.ac.uk/iiif/manifest/88020db6-3258-4ec9-9b18-1f5b35b63149.json"
+    }
+  }
+}

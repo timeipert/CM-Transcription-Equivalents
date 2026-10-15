@@ -1,98 +1,47 @@
 import { ref, computed } from 'vue';
 import { useIiifStore } from '../stores/iiif';
 import { useTranscriptionData } from './useTranscriptionData';
-import { useSettingsStore } from '../stores/settings';
-import { folioToIndex, indexToFolio } from '../utils/folioMath';
-import { inferAlignment } from '../utils/folioAlignment';
+import { useSettingsStore, effectiveAlignment } from '../stores/settings';
 import { iiifPageUrl, iiifRegionUrl } from '../services/iiif/imageUrl';
+import { buildPageMap } from '../services/alignment/pageMap';
+import { matchName, canonicalFolio, indexFolios, folioIdentity, compareFolios } from '../services/alignment/folios';
 
-const normCache = new Map();
+/**
+ * Pages and their images, for the views.
+ *
+ * Everything about which canvas shows which folio is decided by the page map
+ * (services/alignment/pageMap.js), one per manuscript, kept as a `computed()` so
+ * a pin, a loaded manifest or new transcription data is reflected at once. This
+ * composable only adds the reactive wiring and the local scans in public/scans.
+ *
+ * Two kinds of folio names, never to be mixed up (see services/alignment/folios.js):
+ *   pageFolio(source, f)   the folio a page is STORED under: the transcription's
+ *                          folio — independent of any manifest.
+ *   canvasLabel(source, f) the IIIF label of the canvas that shows it: display only.
+ */
 
-// Per-source Vue `computed()` refs, created lazily and kept for the rest of
-// the session. A `computed()` tracks its own reactive dependencies and
-// invalidates itself automatically — unlike a plain Map cleared by a
-// `watch()`, it does not depend on which component happened to be mounted
-// when it was first created, so it can never go stale for the rest of a
-// session the way a watcher tied to a since-unmounted component's effect
-// scope silently would.
-const alignReportComputedCache = new Map();
-const stdFolioSetComputedCache = new Map();
+/** @deprecated use `matchName` from services/alignment/folios.js */
+export const normalizeFolioName = matchName;
 
-export function normalizeFolioName(name) {
-    if (!name) return "";
-    if (normCache.has(name)) return normCache.get(name);
-    
-    let s = String(name).toLowerCase();
-    s = s.replace(/\s+/g, '');
-    s = s.replace(/[()]/g, '');
-    // Strip leading folio/page/foliation prefixes: "f.", "fol.", "f", "p.", "bl."
-    s = s.replace(/^(fol|f|p|bl|blatt|seite|s)\.?(?=\d)/, '');
-    s = s.replace(/^0+/, '');
-    // Handle explicit recto/verso
-    s = s.replace(/recto/g, 'r');
-    s = s.replace(/verso/g, 'v');
-    // Remove structural suffixes like -a, /1
-    s = s.replace(/[-/][a-g1-9]$/, '');
-    // Remove trailing letter suffixes (22b -> 22)
-    s = s.replace(/([0-9rv])[a-g]$/, '$1');
-    
-    // If resulting string is pure digits, append 'r'
-    if (/^\d+$/.test(s)) {
-        s += 'r';
-    }
-    
-    normCache.set(name, s);
-    return s;
-}
-
-export function compareFolios(a, b) {
-    const parse = (f) => {
-        const str = String(f || '').toLowerCase().trim();
-        const m = str.match(/^0*(\d+)/);
-        if (!m) return { n: 999999, w: 99, s: str };
-        const n = parseInt(m[1], 10);
-        const s = str.substring(m[0].length).trim();
-        let w;
-        if (s === '') w = 1;
-        else if (s === 'r') w = 2;
-        else if (s === 'v') w = 3;
-        else if (s === 'a') w = 4;
-        else if (s === 'b') w = 5;
-        else w = 6;
-        return { n, w, s };
-    };
-    const pa = parse(a), pb = parse(b);
-    if (pa.n !== pb.n) return pa.n - pb.n;
-    if (pa.w !== pb.w) return pa.w - pb.w;
-    return pa.s.localeCompare(pb.s);
-}
+// Per-source page maps, created lazily and kept for the session. A `computed()`
+// tracks its own dependencies, so it cannot go stale the way a cache tied to a
+// since-unmounted component's watcher would. Kept per IIIF store, so two app
+// instances (or tests) never share a map.
+const pageMapCaches = new WeakMap();
 
 const manifest = ref(new Set());
 const loaded = ref(false);
 
+/** The images in public/scans, by path ("scans/Source/Folio.jpg"). */
 async function loadManifest() {
     if (loaded.value) return;
-
     try {
-        // Automatically find all images in public/scans.
-        // We use eager: false (default) and ONLY read the keys (paths).
-        // We do not import the modules, preventing the "Assets in public..." warning.
+        // Only the keys (paths) are read; the modules are never imported.
         const files = import.meta.glob('../../public/scans/**/*.{jpg,jpeg,png}');
-
-        const paths = Object.keys(files).map(path => {
-            // path is like "../../public/scans/Source/Folio.jpg"
-            // We want "scans/Source/Folio.jpg" (relative to public root for <img>)
-            // or just clean relative paths.
-            // valid for <img> src: "scans/..." if base is root.
-
-            // Remove "../../public/"
-            return path.replace('../../public/', '');
-        });
-
-        manifest.value = new Set(paths);
+        manifest.value = new Set(Object.keys(files).map(path => path.replace('../../public/', '')));
         loaded.value = true;
     } catch (e) {
-        console.error("Failed to load image manifest", e);
+        console.error('Failed to load image manifest', e);
     }
 }
 
@@ -100,412 +49,245 @@ export function useImageManifest() {
     const iiifStore = useIiifStore();
     const settings = useSettingsStore();
 
-    if (!loaded.value) {
-        loadManifest();
-    }
+    if (!loaded.value) loadManifest();
+    if (!pageMapCaches.has(iiifStore)) pageMapCaches.set(iiifStore, new Map());
+    const pageMapCache = pageMapCaches.get(iiifStore);
 
-    // Helper to find the actual path in the manifest
+    // --- Local scans ---------------------------------------------------------
+
     function findManifestPath(source, folio) {
         if (!source || !folio) return null;
-
         const s = String(source).trim();
         const f = String(folio).trim();
 
-        // 1. Try Exact Construction
-        const exact = `${s}/${f}.jpg`;
-        if (manifest.value.has(exact)) return exact;
-
-        // 2. Try with "scans/" prefix (if manifest has it)
-        const scansPrefixed = `scans/${s}/${f}.jpg`;
-        if (manifest.value.has(scansPrefixed)) return scansPrefixed;
-
-        // 3. Try cleaning source (e.g. "Pa 1235-9-1" -> "Pa 1235")
-        // Rule: try split by '-' and take first part? Or take first 2 parts?
-        // Let's try matching the start.
-
-        // Iterative search (slower but robust for mismatch)
-        // We look for an entry that ENDS with `/${f}.jpg` and STARTS with something similar to `s`.
-
-        for (const entry of manifest.value) {
-            // Check folio match
-            if (entry.endsWith(`/${f}.jpg`) || entry.endsWith(`/${f}.jpeg`)) {
-                // Check source match
-                // If entry is "Pa 1235/9.jpg", and s is "Pa 1235-9-1"
-                // Check if s starts with the directory part of entry? 
-                // Or if entry directory is contained in s?
-
-                const parts = entry.split('/');
-                if (parts.length >= 2) {
-                    const dir = parts[parts.length - 2]; // "Pa 1235"
-                    // If "Pa 1235" is in "Pa 1235-9-1" -> Match
-                    if (s.includes(dir)) {
-                        return entry;
-                    }
-                }
-            }
+        for (const path of [`${s}/${f}.jpg`, `scans/${s}/${f}.jpg`]) {
+            if (manifest.value.has(path)) return path;
         }
-
+        // A compound source ("Pa 1235-9-1") whose scans sit under its base ("Pa 1235").
+        for (const entry of manifest.value) {
+            if (!(entry.endsWith(`/${f}.jpg`) || entry.endsWith(`/${f}.jpeg`))) continue;
+            const parts = entry.split('/');
+            if (parts.length >= 2 && s.includes(parts[parts.length - 2])) return entry;
+        }
         return null;
     }
 
+    // --- Sources -------------------------------------------------------------
+
     /**
-     * Resolve a compound source identifier (e.g. 'Kön D-219v-a-19') to
-     * the base IIIF source key (e.g. 'Kön D').
-     * Results are cached for performance.
+     * The IIIF key of a source: itself, or the longest linked source it starts
+     * with ("Kön D-219v-a-19" -> "Kön D"). Null if it has no manifest link.
      */
     function resolveIiifSource(source) {
         const s = String(source).trim();
-        // 1. Exact match
         if (iiifStore.parsedData[s] || iiifStore.links[s]) return s;
-        // 2. Find longest IIIF key that is a prefix of the source
-        let bestMatch = null;
-        let bestLen = 0;
+        let best = null;
         for (const key of Object.keys(iiifStore.links)) {
-            if (s.startsWith(key) && key.length > bestLen) {
-                const rest = s.substring(key.length);
-                if (rest === '' || rest.startsWith('-') || rest.startsWith(' ')) {
-                    bestMatch = key;
-                }
-            }
+            if (!s.startsWith(key) || (best && key.length <= best.length)) continue;
+            const rest = s.substring(key.length);
+            if (rest === '' || rest.startsWith('-') || rest.startsWith(' ')) best = key;
         }
-        return bestMatch;
-    }
-
-    /** Data folios for a resolved IIIF key, in reading order. */
-    function dataFoliosForKey(iiifKey) {
-        const { sourceFolios } = useTranscriptionData();
-        const set = sourceFolios.value[iiifKey];
-        if (!set || set.size === 0) return [];
-        return Array.from(set).sort(compareFolios);
+        return best;
     }
 
     /**
-     * The canvas → folio mapping for a source. Every canvas keeps its original
-     * IIIF label alongside the folio it was matched to and how confident that
-     * match is, which is what the alignment review and the sidebar render.
-     *
-     * Kept as a lazily-created `computed()` per source (see
-     * `alignReportComputedCache` above) rather than a plain value cache: a
-     * pin or a data-type change must be reflected immediately, and a
-     * `computed()` does that automatically and correctly however many
-     * components mount and unmount around it.
+     * The source a page is stored under: the IIIF key, or the folder of its local
+     * scans, or the source itself. Depends on manifest *links* (saved with the
+     * workspace), never on whether a manifest has loaded.
      */
-    function getAlignmentReport(source) {
-        const iiifKey = resolveIiifSource(source);
-        if (!iiifKey) return null;
-        if (!iiifStore.parsedData[iiifKey]) return null;
-
-        if (!alignReportComputedCache.has(iiifKey)) {
-            alignReportComputedCache.set(iiifKey, computed(() => buildAlignmentReport(iiifKey, source)));
+    function getStandardSource(source, folio) {
+        const resolved = resolveIiifSource(source);
+        if (resolved) return resolved;
+        const path = findManifestPath(source, folio);
+        if (path) {
+            const parts = path.split('/');
+            if (parts.length >= 2) return parts[parts.length - 2];
         }
-        return alignReportComputedCache.get(iiifKey).value;
+        return source ? String(source).trim() : source;
     }
 
-    function buildAlignmentReport(iiifKey, source) {
-        const canvases = iiifStore.parsedData[iiifKey];
-        if (!canvases || canvases.length === 0) return null;
+    /** The transcription's folios of a source (or of its IIIF key), in order. */
+    function dataFoliosOf(source) {
+        const { sourceFolios } = useTranscriptionData();
+        const all = sourceFolios.value || {};
+        const set = all[source] || all[resolveIiifSource(source)] || null;
+        return set ? Array.from(set).filter(Boolean).sort(compareFolios) : [];
+    }
 
-        const align = settings.sourceAlignments[iiifKey] || settings.sourceAlignments[source] || null;
-        const dataFolios = dataFoliosForKey(iiifKey);
-        const dataType = align?.dataType
-            || (dataFolios.some(f => /[rv]$/i.test(String(f))) ? 'foliated' : 'paginated');
+    // --- Page maps -----------------------------------------------------------
 
-        const inferred = inferAlignment({
-            canvasLabels: canvases.map(c => c.originalFolio || c.folio),
-            dataType,
-            pins: align?.pins || {}
-        });
-
-        const entries = inferred.entries.map(e => ({ ...e, canvas: canvases[e.canvasIndex] }));
-
-        // A folio can in principle be claimed by more than one canvas (an
-        // unrelated section that happens to resolve positionally, alongside the
-        // real match) — keep whichever claim the engine trusts more.
-        const byFolio = new Map();
-        for (const e of entries) {
-            if (!e.resolvedFolio) continue;
-            const key = normalizeFolioName(e.resolvedFolio);
-            const existing = byFolio.get(key);
-            if (!existing || e.confidence > existing.confidence) byFolio.set(key, e);
+    /** The page map of a source, or null while it has no parsed manifest. */
+    function pageMapFor(source) {
+        const key = resolveIiifSource(source);
+        if (!key || !iiifStore.parsedData[key]) return null;
+        if (!pageMapCache.has(key)) {
+            pageMapCache.set(key, computed(() => {
+                const pages = iiifStore.parsedData[key];
+                if (!pages || !pages.length) return null;
+                return buildPageMap({
+                    pages,
+                    dataFolios: dataFoliosOf(key),
+                    alignment: effectiveAlignment(settings.sourceAlignments[key], settings.defaultAlignments[key])
+                });
+            }));
         }
+        return pageMapCache.get(key).value;
+    }
 
-        // The count walks the whole folio space (see folioAlignment.js), so
-        // almost every canvas resolves to *some* folio — `withDataCount` is the
-        // more meaningful number: how many of those resolved folios actually
-        // carry transcription rows, versus just being a page with no data yet.
-        const dataFolioSet = new Set(dataFolios.map(f => normalizeFolioName(f)));
-        const withDataCount = entries.filter(e => e.resolvedFolio && dataFolioSet.has(normalizeFolioName(e.resolvedFolio))).length;
-
+    /**
+     * The canvas → folio overview for the alignment review and the sidebar. Each
+     * entry's `resolvedFolio` is the folio the page map really uses for it (both
+     * directions agree), and `via` says how it was found.
+     */
+    function getAlignmentReport(source) {
+        const key = resolveIiifSource(source);
+        const map = pageMapFor(source);
+        if (!map) return null;
+        const entries = map.entries.map(e => {
+            const hit = e.folio ? map.canvasFor(e.folio) : null;
+            return {
+                canvasIndex: e.canvasIndex,
+                originalLabel: e.originalLabel,
+                inferredFolio: e.resolvedFolio,
+                resolvedFolio: e.folio,
+                via: hit ? hit.via : e.via,
+                confidence: hit ? hit.confidence : e.confidence,
+                isDivider: e.isDivider,
+                canvas: e.canvas
+            };
+        });
         return {
-            key: iiifKey,
-            dataType,
-            matched: inferred.matched,
-            withDataCount,
-            dividerCount: inferred.dividerCount,
-            total: canvases.length,
-            dataFolios,
-            entries,
-            byFolio
+            key,
+            dataType: map.dataType,
+            matched: entries.filter(e => e.resolvedFolio).length,
+            withDataCount: map.stats.withDataCount,
+            dividerCount: map.stats.dividerCount,
+            total: map.stats.total,
+            dataFolios: map.dataFolios,
+            entries
         };
     }
 
-    function fuzzyMatchIiifFolio(source, folioName) {
-        const iiifKey = resolveIiifSource(source);
-        if (!iiifKey || !iiifStore.parsedData[iiifKey]) return null;
-
-        const data = iiifStore.parsedData[iiifKey];
-
-        // 0a. Resolved alignment report (overrides, label identity, positional).
-        const report = getAlignmentReport(source);
-        if (report) {
-            const hit = report.byFolio.get(normalizeFolioName(folioName));
-            if (hit && hit.canvas) return { ...hit.canvas, resolvedSource: iiifKey };
-        }
-
-        // 0b. Legacy offset/jump alignment, kept for existing configurations.
-        const align = settings.sourceAlignments[source] || settings.sourceAlignments[iiifKey];
-
-        if (align && (align.offset || (align.adjustments && align.adjustments.length))) {
-            const dataIndex = folioToIndex(folioName, align.dataType);
-            if (dataIndex !== null) {
-                let totalOffset = align.offset || 0;
-                if (align.adjustments && Array.isArray(align.adjustments)) {
-                    for (const rule of align.adjustments) {
-                        const ruleIdx = folioToIndex(rule.fromFolio, align.dataType);
-                        if (ruleIdx !== null && dataIndex >= ruleIdx) {
-                            totalOffset += (rule.adjust || 0);
-                        }
-                    }
-                }
-                const iiifIndex = dataIndex + totalOffset;
-                const expectedIiifLabel = indexToFolio(iiifIndex, align.iiifType);
-                
-                if (expectedIiifLabel) {
-                    const mappedTarget = normalizeFolioName(expectedIiifLabel);
-                    // Match against normalized label or original label (useful for padded labels)
-                    const exactMatch = data.find(i => normalizeFolioName(i.folio) === mappedTarget || normalizeFolioName(i.originalFolio) === mappedTarget);
-                    if (exactMatch) return { ...exactMatch, resolvedSource: iiifKey };
-                }
-            }
-        }
-
-        // 1. Normalized exact match
-        const target = normalizeFolioName(folioName);
-        let match = data.find(i => normalizeFolioName(i.folio) === target);
-        if (match) return { ...match, resolvedSource: iiifKey };
-
-        // 2. Extract number from folioName (e.g., '22b' -> '22', 'V22' -> '22')
-        const numMatch = target.match(/(\d+)/);
-        if (numMatch) {
-            const num = numMatch[1];
-            
-            // Try to find a canvas label that also contains this number
-            // or follows a standard recto/verso pattern
-            match = data.find(i => {
-                const lbl = normalizeFolioName(i.folio);
-                if (lbl === target) return true;
-                
-                // If label is "22r" or "22v" or "22", it's a match for "22b"
-                const lblNumMatch = lbl.match(/(\d+)/);
-                if (lblNumMatch && lblNumMatch[1] === num) {
-                    // Check side if possible
-                    const isVerso = target.includes('v');
-                    const lblIsVerso = lbl.includes('v');
-                    if (isVerso === lblIsVerso) return true;
-                    // If no side info in label, but number matches, it's a candidate
-                    if (!lbl.includes('r') && !lbl.includes('v')) return true;
-                }
-                return false;
-            });
-
-            if (match) return { ...match, resolvedSource: iiifKey };
-        }
-
-        return null;
+    /**
+     * The canvas that shows a folio: `{ index, page, via, confidence, resolvedSource }`,
+     * or null (no manifest, or no canvas for it).
+     */
+    function canvasFor(source, folio) {
+        const map = pageMapFor(source);
+        const hit = map ? map.canvasFor(folio) : null;
+        return hit ? { ...hit, resolvedSource: resolveIiifSource(source) } : null;
     }
 
+    /** The folio a page is stored under (see top of file). */
+    function pageFolio(source, folio) {
+        if (folio === null || folio === undefined || folio === '') return folio;
+        return canonicalFolio(folio, indexFolios(dataFoliosOf(source)));
+    }
+
+    /** The IIIF label of the canvas showing a folio, for display; null if none. */
+    function canvasLabel(source, folio) {
+        return canvasFor(source, folio)?.page.folio ?? null;
+    }
+
+    // --- Images --------------------------------------------------------------
+
     function hasImage(source, folio) {
-        if (fuzzyMatchIiifFolio(source, folio)) return true;
+        if (canvasFor(source, folio)) return true;
         const resolved = resolveIiifSource(source);
-        if (resolved && !iiifStore.parsedData[resolved]) return true;
+        if (resolved && !iiifStore.parsedData[resolved]) return true; // manifest not loaded yet
         return !!findManifestPath(source, folio);
     }
 
     function getImageUrl(source, folio) {
-        const iiifMatch = fuzzyMatchIiifFolio(source, folio);
-        if (iiifMatch) return iiifMatch.imgUrl;
+        const hit = canvasFor(source, folio);
+        if (hit) return hit.page.imgUrl;
         const path = findManifestPath(source, folio);
-        if (path) {
-            if (path.startsWith('scans/')) return path;
-            return `scans/${path}`;
-        }
+        if (path) return path.startsWith('scans/') ? path : `scans/${path}`;
         return `scans/${source}/${folio}.jpg`;
     }
 
-    /**
-     * Returns a IIIF Image API URL for the full page but downsized for performance.
-     * This ensures that component logic (like AnnotationCutout) which expects 
-     * full-page aspect ratios continues to work perfectly while only loading 
-     * a few hundred kilobytes instead of 50MB.
-     */
+    /** The whole page, downsized: a few hundred kB instead of the full-size image. */
     function getIiifThumbnailUrl(source, folio, maxWidth = 1000) {
-        const iiifMatch = fuzzyMatchIiifFolio(source, folio);
-        if (!iiifMatch || !iiifMatch.serviceUrl) {
-            return getImageUrl(source, folio); 
-        }
-        return iiifPageUrl(iiifMatch.serviceUrl, maxWidth);
+        const hit = canvasFor(source, folio);
+        if (!hit || !hit.page.serviceUrl) return getImageUrl(source, folio);
+        return iiifPageUrl(hit.page.serviceUrl, maxWidth);
     }
 
-    /**
-     * Returns a IIIF Image API URL for a specific region.
-     * regionStr: "x,y,w,h" or "pct:x,y,w,h"
-     */
-    function getIiifRegionUrl(source, folio, regionStr, width = "full") {
-        const iiifMatch = fuzzyMatchIiifFolio(source, folio);
-        if (!iiifMatch || !iiifMatch.serviceUrl) return null;
-        return iiifRegionUrl(iiifMatch.serviceUrl, regionStr, width);
+    /** An Image API URL for a region ("x,y,w,h" or "pct:x,y,w,h") of the page. */
+    function getIiifRegionUrl(source, folio, regionStr, width = 'full') {
+        const hit = canvasFor(source, folio);
+        if (!hit || !hit.page.serviceUrl) return null;
+        return iiifRegionUrl(hit.page.serviceUrl, regionStr, width);
     }
 
-    /**
-     * Returns the base IIIF source key for physical manuscripts.
-     */
-    /**
-     * Resolve a canvas by its 0-based position in the manifest (for exports
-     * that name pages by index rather than by folio label). Returns the
-     * canvas's IIIF service URL + label, or null.
-     */
+    /** A canvas by its 0-based position (for exports that name pages by index). */
     function getIiifCanvasByIndex(source, index) {
         const key = resolveIiifSource(source);
         const data = key && iiifStore.parsedData[key];
-        if (!data || !Array.isArray(data)) return null;
-        if (index < 0 || index >= data.length) return null;
+        if (!Array.isArray(data) || index < 0 || index >= data.length) return null;
         const c = data[index];
         return { serviceUrl: c.serviceUrl, label: c.folio, imgUrl: c.imgUrl };
     }
 
-    /** Number of canvases available for a source (0 if unloaded). */
+    /** The folio a canvas shows, in the transcription's spelling; null if none. */
+    function folioOfCanvas(source, index) {
+        return pageMapFor(source)?.folioOf(index) ?? null;
+    }
+
     function getIiifCanvasCount(source) {
         const key = resolveIiifSource(source);
         const data = key && iiifStore.parsedData[key];
         return Array.isArray(data) ? data.length : 0;
     }
 
-    function getStandardSource(source, folio) {
-        const iiifMatch = fuzzyMatchIiifFolio(source, folio);
-        if (iiifMatch) {
-            return iiifMatch.resolvedSource;
-        }
-        const resolved = resolveIiifSource(source);
-        if (resolved) return resolved;
-        const path = findManifestPath(source, folio);
-        if (path) {
-            const parts = path.split('/');
-            if (parts[0] === 'scans' && parts.length > 2) {
-                return parts[parts.length - 2];
-            }
-            if (parts.length >= 2) {
-                return parts[parts.length - 2];
-            }
-        }
-        return source ? String(source).trim() : source;
-    }
+    // --- Transcription -------------------------------------------------------
 
-    /**
-     * Returns the physical folio name from the IIIF manifest. Not cached here:
-     * `fuzzyMatchIiifFolio` already resolves through the memoized alignment
-     * report below, so this call is already cheap (an O(1) map lookup), and a
-     * second cache on top of it would only reintroduce the staleness risk a
-     * plain cache has no reliable way to invalidate.
-     */
-    function getStandardFolio(source, folio) {
-        const iiifMatch = fuzzyMatchIiifFolio(source, folio);
-        return iiifMatch ? iiifMatch.folio : (folio ? String(folio).replace(/^p\.?\s*/i, '').trim() : folio);
-    }
-
+    /** Whether the transcription has this page (any spelling of its folio). */
     function hasTranscriptionData(source, folio) {
-        const { sourceFolios } = useTranscriptionData();
-        if (!sourceFolios.value[source]) return false;
-
-        if (!stdFolioSetComputedCache.has(source)) {
-            stdFolioSetComputedCache.set(source, computed(() => {
-                const srcData = useTranscriptionData().sourceFolios.value[source];
-                const stdSet = new Set();
-                if (srcData) for (const f of srcData) stdSet.add(getStandardFolio(source, f));
-                return stdSet;
-            }));
-        }
-
-        const stdFol = getStandardFolio(source, folio);
-        return stdFolioSetComputedCache.get(source).value.has(stdFol);
+        if (!folio) return false;
+        const id = folioIdentity(folio);
+        return dataFoliosOf(source).some(f => folioIdentity(f) === id);
     }
 
-    /**
-     * Parses the current manifest set into a structured object:
-     * { "Source Name": ["Folio1", "Folio2"], ... }
-     */
+    /** { source: [page names] } of the local scans and the parsed manifests. */
     function getManifestStructure() {
         const structure = {};
         for (const entry of manifest.value) {
-            // Expected formats: "Source/Folio.jpg" or "scans/Source/Folio.jpg"
             const parts = entry.split('/');
-
-            // Need at least Source/Folio.jpg
             if (parts.length < 2) continue;
-
-            let source, filename;
-
-            // Check for "scans" prefix
-            if (parts[0] === 'scans' && parts.length >= 3) {
-                source = parts[parts.length - 2];
-                filename = parts[parts.length - 1]; // "Folio.jpg" or "Folio.jpeg"
-            } else {
-                // Assume "Source/Folio.jpg"
-                source = parts[parts.length - 2];
-                filename = parts[parts.length - 1];
-            }
-
-            // Extract folio name from filename (remove extension)
-            // e.g. "145v.jpg" -> "145v"
-            const lastDot = filename.lastIndexOf('.');
-            const folio = lastDot > 0 ? filename.substring(0, lastDot) : filename;
-
-            if (!structure[source]) {
-                structure[source] = new Set();
-            }
-            structure[source].add(folio);
+            const source = parts[parts.length - 2];
+            const filename = parts[parts.length - 1];
+            const dot = filename.lastIndexOf('.');
+            (structure[source] ||= new Set()).add(dot > 0 ? filename.substring(0, dot) : filename);
         }
-
-        // Add IIIF
         for (const src in iiifStore.parsedData) {
-            if (!structure[src]) structure[src] = new Set();
-            for (const item of iiifStore.parsedData[src]) {
-                structure[src].add(item.folio);
-            }
+            const set = (structure[src] ||= new Set());
+            for (const item of iiifStore.parsedData[src]) set.add(item.folio);
         }
-
-        // Convert Sets to Arrays for easier consumption
         const result = {};
-        for (const src in structure) {
-            result[src] = Array.from(structure[src]).sort(compareFolios);
-        }
+        for (const src in structure) result[src] = Array.from(structure[src]).sort(compareFolios);
         return result;
     }
 
     return {
         manifest,
         loadManifest,
+        loaded,
+        resolveIiifSource,
+        getStandardSource,
+        pageMapFor,
+        getAlignmentReport,
+        canvasFor,
+        pageFolio,
+        canvasLabel,
+        folioOfCanvas,
         hasImage,
         getImageUrl,
         getIiifThumbnailUrl,
         getIiifRegionUrl,
         getIiifCanvasByIndex,
         getIiifCanvasCount,
-        getStandardSource,
-        getStandardFolio,
         hasTranscriptionData,
-        getManifestStructure,
-        getAlignmentReport,
-        resolveIiifSource,
-        loaded
+        getManifestStructure
     };
 }

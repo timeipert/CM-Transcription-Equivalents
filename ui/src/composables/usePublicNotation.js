@@ -10,7 +10,7 @@
  */
 
 import { stripSignKeys, extractSignKeys } from '../utils/signs';
-import { parsePageKey } from '../utils/keys';
+import { parsePageKey, folioIdentity } from '../utils/keys';
 import { parsePoints, pointsToRect } from '../utils/geometry';
 
 /** First whitespace-delimited token of a pattern (the "base" pattern). */
@@ -100,11 +100,15 @@ export function buildManuscriptLines({ source, rawDataForSource, regions, region
         }
     }
 
-    // 2. Overlay with real annotations (polygons)
+    // 2. Overlay with real annotations (polygons). A page stored under another
+    // spelling of its folio ("fol. 18v" for 18v) joins the transcription's lines
+    // of that folio instead of appearing as a separate page.
+    const transcribedFolio = new Map();
+    for (const l of Object.values(linesMap)) transcribedFolio.set(folioIdentity(l.folio), l.folio);
     for (const [key, pageRegions] of Object.entries(regions || {})) {
         const k = parsePageKey(key);
         if (k?.source !== source) continue;
-        const folio = k.folio;
+        const folio = transcribedFolio.get(folioIdentity(k.folio)) ?? k.folio;
 
         for (const r of pageRegions) {
             const lKey = `${folio}|${r.name}`;

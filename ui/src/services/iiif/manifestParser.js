@@ -103,8 +103,15 @@ function applyLabelRule(rule, label) {
     return [label];
 }
 
-/** "p. 12" and "p12" both mean page 12; the app addresses pages by the bare label. */
-const cleanLabel = label => String(label).replace(/^p\.?\s*/i, '').trim();
+/**
+ * "p. 12" and "p12" both mean page 12; the app addresses pages by the bare label.
+ * Only a "p" before a number is a page marker — "page de garde", "plat supérieur"
+ * keep their first letter.
+ */
+export const cleanLabel = label => String(label).replace(/^p\.?\s*(?=\d)/i, '').trim();
+
+/** What `cleanLabel` made of a label before it learned that (kept to read older keys). */
+export const legacyCleanLabel = label => String(label).replace(/^p\.?\s*/i, '').trim();
 
 /**
  * @param {Object} data the parsed manifest JSON

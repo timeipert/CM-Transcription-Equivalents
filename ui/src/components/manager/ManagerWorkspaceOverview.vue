@@ -3,7 +3,7 @@ import AnnotationCutout from '../AnnotationCutout.vue';
 import SmartImage from '../SmartImage.vue';
 
 const props = defineProps([
-    'source', 'folio', 'stdSource', 'stdFolio', 'regions',
+    'source', 'folio', 'stdSource', 'pageFolio', 'regions', 'regionDrift',
     'hasTranscriptionData', 'getIiifThumbnailUrl'
 ]);
 
@@ -16,7 +16,7 @@ const emit = defineEmits(['openRegionCreator', 'selectRegion', 'editRegion', 'de
     <div class="overview-toolbar">
         <div class="toolbar-left">
             <button @click="$emit('openRegionCreator')" class="btn-primary">+ Add Line Region</button>
-            <span v-if="hasTranscriptionData(stdSource, stdFolio)" class="data-badge" title="This page has imported transcription data">
+            <span v-if="hasTranscriptionData(stdSource, pageFolio)" class="data-badge" title="This page has imported transcription data">
                 <span class="dot">•</span> Monodi Data Available
             </span>
         </div>
@@ -39,7 +39,7 @@ const emit = defineEmits(['openRegionCreator', 'selectRegion', 'editRegion', 'de
                      <div class="r-preview">
                          <AnnotationCutout 
                              :source="stdSource" 
-                             :folio="stdFolio" 
+                             :folio="pageFolio" 
                              :points="r.points"
                              :width="320" 
                              :height="85" 
@@ -49,6 +49,10 @@ const emit = defineEmits(['openRegionCreator', 'selectRegion', 'editRegion', 'de
                      </div>
                      <div class="r-info">
                          <h4>{{ r.name }}</h4>
+                         <span v-if="regionDrift && regionDrift[r.id]" class="drift-badge"
+                               :title="`This line was drawn on the scan “${regionDrift[r.id].drawnOn}”, but this folio now shows “${regionDrift[r.id].shownNow}”: the page alignment changed after it was drawn. Check the alignment (⇄ in the sidebar) or redraw the line.`">
+                             ⚠ drawn on another scan
+                         </span>
                          <div class="card-actions">
                              <button @click.stop="$emit('editRegion', r)" class="btn-xs edit-btn" title="Edit line boundaries & name">✎ Edit</button>
                              <button @click.stop="$emit('deleteRegion', r)" class="btn-xs delete-btn" title="Delete this line">Delete</button>
@@ -59,7 +63,7 @@ const emit = defineEmits(['openRegionCreator', 'selectRegion', 'editRegion', 'de
         </section>
 
         <!-- Compact Page Reference on the side/bottom -->
-        <aside class="compact-page-reference" v-if="stdSource && stdFolio">
+        <aside class="compact-page-reference" v-if="stdSource && pageFolio">
             <div class="ref-header">
                 <h4>Folio Overview</h4>
                 <span class="ref-hint">Click to draw new line</span>
@@ -82,7 +86,7 @@ const emit = defineEmits(['openRegionCreator', 'selectRegion', 'editRegion', 'de
                 <button @click="$emit('openRegionCreator')" class="btn-primary btn-large">+ Define First Line Region</button>
             </div>
             
-            <div class="full-page-hero-preview" v-if="stdSource && stdFolio" @click="$emit('openRegionCreator')">
+            <div class="full-page-hero-preview" v-if="stdSource && pageFolio" @click="$emit('openRegionCreator')">
                 <SmartImage :src="getIiifThumbnailUrl(source, folio, 800)" fit="contain" />
                 <div class="hero-overlay">
                     <span class="hero-callout">Click here to draw a line region</span>
@@ -351,5 +355,16 @@ const emit = defineEmits(['openRegionCreator', 'selectRegion', 'editRegion', 'de
     .compact-page-reference {
         order: 2;
     }
+}
+
+.drift-badge {
+    display: inline-block;
+    margin: 2px 0 4px;
+    font-size: 0.75rem;
+    color: var(--color-warning-dark);
+    background: var(--color-warning-light);
+    border-radius: 4px;
+    padding: 1px 6px;
+    cursor: help;
 }
 </style>

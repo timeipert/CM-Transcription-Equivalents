@@ -20,6 +20,7 @@ export class LegacyStaticProvider {
             stats: json.stats || {},
             glyphs: json.glyphs || {},
             manifests: json.manifests || {},
+            alignments: json.alignments || {},
             overallMax: json.overallMax || 0,
             sourceFolios: json.sourceFolios || {},
             documents: [],

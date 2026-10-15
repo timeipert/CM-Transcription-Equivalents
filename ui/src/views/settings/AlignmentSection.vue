@@ -12,6 +12,11 @@ const testDataFolio = ref('170r');
 
 const availableSources = computed(() => Object.keys(sourceFolios.value || {}).sort());
 const configuredAlignments = computed(() => Object.keys(store.sourceAlignments || {}));
+// Pins that ship with the app. Read-only here; a pin of your own on the same scan wins.
+const builtInAlignments = computed(() => Object.entries(store.defaultAlignments || {}).sort(([a], [b]) => a.localeCompare(b)).map(([source, a]) => ({
+    source,
+    pins: Object.entries(a.pins || {}).map(([canvas, folio]) => `scan ${Number(canvas) + 1} = ${folio || 'not a page'}`).join(', ')
+})));
 
 function startEditAlignment(source) {
     const existing = store.sourceAlignments[source];
@@ -112,6 +117,20 @@ const alignPreview = computed(() => {
                     <div v-else class="empty mb-15">No manuscripts have custom alignment rules configured.</div>
                 </div>
                 <button @click="startEditAlignment('')" class="btn-primary">Add Configuration</button>
+
+                <div v-if="builtInAlignments.length" class="ids-list mt-20">
+                    <h3>Built-in alignments</h3>
+                    <p class="desc">Shipped with the app to fix the numbering of these manuscripts. Add a pin of your own in the Manuscripts view to override one.</p>
+                    <table>
+                        <thead><tr><th>Source</th><th>Pins</th></tr></thead>
+                        <tbody>
+                            <tr v-for="b in builtInAlignments" :key="b.source">
+                                <td class="code-font">{{ b.source }}</td>
+                                <td>{{ b.pins }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <div v-else class="alignment-editor">

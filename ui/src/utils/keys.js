@@ -56,19 +56,26 @@ export function renameAnnotationKeySource(key, newSource) {
 }
 
 /**
- * A folio label reduced to what identifies the page: case, spacing, a "fol." /
- * "f." / "p." prefix, leading zeros and recto/verso spelled out are ignored, so
- * "18v", "fol. 18v", "f.18v" and "018v" are one page. Nothing else is merged
- * ("22" and "22b" stay different pages).
- *
- * Page keys ("Source_Folio") are written with whichever label the code in use
- * called the page: the transcription's folio or the IIIF canvas label. Data saved
- * under one is found under the other by comparing identities.
+ * A folio label written the way it is stored: spacing, brackets, a "fol." / "f." /
+ * "p." prefix and leading zeros removed, "recto"/"verso" shortened to r/v. Case is
+ * kept, so a transcription's own spelling survives ("A1r" stays "A1r").
+ *   "fol. 18v" -> "18v"    "018v" -> "18v"    "(18 verso)" -> "18v"
  */
-export function folioIdentity(folio) {
-    let s = String(folio ?? '').toLowerCase().replace(/\s+/g, '').replace(/[()]/g, '');
-    s = s.replace(/^(fol|f|p|bl|blatt|seite|s)\.?(?=\d)/, '');
+export function tidyFolio(folio) {
+    let s = String(folio ?? '').replace(/\s+/g, '').replace(/[()]/g, '');
+    s = s.replace(/^(fol|f|p|bl|blatt|seite|s)\.?(?=\d)/i, '');
     s = s.replace(/^0+(?=\d)/, '');
-    return s.replace(/recto/g, 'r').replace(/verso/g, 'v');
+    return s.replace(/recto/gi, 'r').replace(/verso/gi, 'v');
 }
 
+/**
+ * What identifies a page in a folio label: its tidy form, ignoring case. "18v",
+ * "fol. 18v", "F.18V" and "018v" are one page; nothing else is merged ("22" and
+ * "22b", "22r" and "22v" stay different pages).
+ *
+ * Stored page keys use the transcription's folio (see services/alignment). Older
+ * data was sometimes keyed by a spelling of it, which this identity still finds.
+ */
+export function folioIdentity(folio) {
+    return tidyFolio(folio).toLowerCase();
+}

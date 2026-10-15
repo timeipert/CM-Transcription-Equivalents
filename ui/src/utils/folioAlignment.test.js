@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseFolioLabel, isDividerLabel, detectScheme, inferAlignment, applyOffsetAlignment } from './folioAlignment';
+import { parseFolioLabel, isDividerLabel, isUnnumberedLabel, detectScheme, inferAlignment, applyOffsetAlignment } from './folioAlignment';
 
 describe('parseFolioLabel', () => {
     it('reads an explicit folio marker', () => {
@@ -38,6 +38,22 @@ describe('parseFolioLabel', () => {
         for (const label of ['gedr. Bd. CM', 'Handschrift *', 'CM Transcription Equivalents', 'Fehlende Zeilen']) {
             expect(parseFolioLabel(label)).toMatchObject({ num: null, markerKind: null, confident: false });
         }
+    });
+});
+
+describe('parseFolioLabel — Roman folio numbers', () => {
+    it('reads capital Roman numerals fused to a side as a folio', () => {
+        expect(parseFolioLabel('CVIIv [218]')).toMatchObject({ num: 107, side: 'v', markerKind: 'fused', confident: true });
+        expect(parseFolioLabel('Ir [5]')).toMatchObject({ num: 1, side: 'r' });
+        expect(parseFolioLabel('XIXv')).toMatchObject({ num: 19, side: 'v' });
+        expect(parseFolioLabel('f. XIIr')).toMatchObject({ num: 12, side: 'r' });
+        expect(parseFolioLabel('MCMXCIVr')).toMatchObject({ num: 1994 });
+    });
+    it('does not mistake other letters for numerals', () => {
+        expect(parseFolioLabel('mr').markerKind).not.toBe('fused');
+        expect(parseFolioLabel('v').num).toBeNull();
+        expect(parseFolioLabel('Vorderdeckel').num).toBeNull();
+        expect(parseFolioLabel('IIII r').num).toBeNull();   // not a well-formed numeral
     });
 });
 
@@ -160,7 +176,17 @@ describe('inferAlignment — pins', () => {
             dataType: 'foliated',
             pins: { 1: '2r' } // canvas 1 is actually folio 2r, not 1v as auto-count would guess
         });
-        expect(res.entries.map(e => e.resolvedFolio)).toEqual(['1r', '2r', '2v', '3r']);
+        // the canvas before the pin is counted back from it: the page just before 2r
+        expect(res.entries.map(e => e.resolvedFolio)).toEqual(['1v', '2r', '2v', '3r']);
+    });
+
+    it('counts back from a late pin, so the early scans do not claim folios the pin contradicts', () => {
+        const labels = ['(0001)', '(0002)', '(0003)', '(0004)', '(0005)', '(0006)', '(0007)'];
+        const res = inferAlignment({ canvasLabels: labels, dataType: 'foliated', pins: { 4: '2r' } });
+        expect(res.entries.map(e => e.resolvedFolio)).toEqual([null, null, '1r', '1v', '2r', '2v', '3r']);
+        // no pin, nothing to count back from: the count starts at 1r as before
+        const plain = inferAlignment({ canvasLabels: labels, dataType: 'foliated' });
+        expect(plain.entries.slice(0, 3).map(e => e.resolvedFolio)).toEqual(['1r', '1v', '2r']);
     });
 
     it('an empty-string pin forces a stray page out of the count like a divider', () => {
@@ -204,5 +230,29 @@ describe('applyOffsetAlignment', () => {
 
     it('returns null without a config', () => {
         expect(applyOffsetAlignment('1r', null)).toBeNull();
+    });
+});
+
+describe('inferAlignment — unnumbered pages ("NP")', () => {
+    it('reads Gallica\'s "NP" as an unnumbered page, not a section divider', () => {
+        expect(isUnnumberedLabel('NP')).toBe(true);
+        expect(isUnnumberedLabel('n. p.')).toBe(true);
+        expect(isDividerLabel('NP')).toBe(false);
+        expect(isDividerLabel('Fehlende Zeilen')).toBe(true);
+    });
+
+    it('guesses nothing for a manifest that numbers no page, until a pin says where it is', () => {
+        const labels = Array(10).fill('NP');
+        const none = inferAlignment({ canvasLabels: labels, dataType: 'foliated' });
+        expect(none.entries.every(e => e.resolvedFolio === null && !e.isDivider)).toBe(true);
+
+        // one pin: canvas 4 is 139r — and every page after it follows
+        const pinned = inferAlignment({ canvasLabels: labels, dataType: 'foliated', pins: { 4: '139r' } });
+        expect(pinned.entries.slice(3, 8).map(e => e.resolvedFolio)).toEqual([null, '139r', '139v', '140r', '140v']);
+    });
+
+    it('counts an unnumbered page between numbered ones, and the next label resyncs', () => {
+        const r = inferAlignment({ canvasLabels: ['10r', '10v', 'NP', '12r'], dataType: 'foliated' });
+        expect(r.entries.map(e => e.resolvedFolio)).toEqual(['10r', '10v', '11r', '12r']);
     });
 });

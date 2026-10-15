@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { iiifImageUrl, pctRegion, sizeParam, iiifPageUrl, iiifRegionUrl } from './imageUrl';
 import { parseManifest, manifestVersion } from './manifestParser';
 import { fetchManifestJson } from './manifestFetch';
-import { iiifParseRules } from '../../config/iiifRules';
+import { iiifParseRules, splitSpreadLabel, labelRuleFor } from '../../config/iiifRules';
 
 describe('image URLs', () => {
     it('assembles the IIIF Image API form', () => {
@@ -124,6 +124,23 @@ describe('parseManifest (v2)', () => {
     it('applies the real rule for a spread-labelled source', () => {
         const pages = parseManifest(v2([canvasV2('122v-122r', 's')]), { labelRule: iiifParseRules['Ben 34'] });
         expect(pages.map(p => p.folio)).toEqual(['121v', '122r']);
+    });
+
+    it('reads an opening as the verso of one leaf and the recto of the next', () => {
+        expect(splitSpreadLabel('f. 017v - 018r')).toEqual(['17v', '18r']);
+        expect(splitSpreadLabel('010v-011r')).toEqual(['10v', '11r']);
+        expect(splitSpreadLabel('f. 037v - 038')).toEqual(['37v', '38r']);   // a bare number is a recto
+        expect(splitSpreadLabel('000v-001r')).toEqual(['0v', '1r']);
+        const pages = parseManifest(v2([canvasV2('f. 002v - 003', 's')]), { labelRule: labelRuleFor('Abb 7') });
+        expect(pages.map(p => p.folio)).toEqual(['2v', '3r']);
+        expect(pages[1].originalFolio).toBe('f. 002v - 003');
+    });
+
+    it('leaves every other dashed label alone', () => {
+        for (const label of ['001v-001r', '10r-10v', '5-6', '7v-9r', 'f. 3 - 4', 'plat 1-2', '12r']) {
+            expect(splitSpreadLabel(label)).toBe(label);
+        }
+        expect(labelRuleFor('Ben 34')).toBe(iiifParseRules['Ben 34']);   // a source's own rule wins
     });
 
     it('copes with a manifest that has no sequences', () => {

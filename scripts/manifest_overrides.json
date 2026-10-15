@@ -1,0 +1,160 @@
+{
+ "_about": "Manuscript data decisions that win over data/raw/Quellendaten.xlsx. 'manifests': a source's IIIF manifest (null removes it; 'replaces' lists wrong URLs that earlier loads may have saved in users' browsers, which the new URL then replaces). 'alignments': default pins for a source (a user's own pins win). Applied by scripts/apply_manifest_overrides.py and analyze_transcriptions.py. 'note' is only for people.",
+ "manifests": {
+  "Aa 13": {
+   "url": "https://iiif.diamm.net/manifests/D-AAm-Cod-13/manifest.json",
+   "note": "DIAMM; linked from the spreadsheet (IIIF column)"
+  },
+  "Ba 12": {
+   "url": "https://iiif.diamm.net/manifests/D-BAa-Msc-Lit-12/manifest.json",
+   "note": "DIAMM, found on the musmed.eu page (the 'Solesmes' scans)"
+  },
+  "Mod 7": {
+   "url": "https://iiif.diamm.net/manifests/I-MOd-Cod-O-I-7/manifest.json",
+   "note": "DIAMM, found on the musmed.eu page; spreads labelled 'Nv-Mr'"
+  },
+  "Mod 16": {
+   "url": "https://iiif.diamm.net/manifests/I-MOd-Cod-O-I-16/manifest.json",
+   "note": "DIAMM, found on the musmed.eu page; spreads labelled 'Nv-Mr'"
+  },
+  "Mza 11": {
+   "url": "https://iiif.diamm.net/manifests/I-MZ-Ms-k-11/manifest.json",
+   "note": "DIAMM, found on the musmed.eu page"
+  },
+  "Mza 77": {
+   "url": "https://iiif.diamm.net/manifests/I-MZ-Ms-c-14-77/manifest.json",
+   "note": "DIAMM, found on the musmed.eu page"
+  },
+  "Nea 38": {
+   "url": "https://iiif.diamm.net/manifests/I-Nn-VI-G_38/manifest.json",
+   "note": "DIAMM, found on the musmed.eu page"
+  },
+  "Or 129": {
+   "url": "https://iiif.diamm.net/manifests/F-SO-129-107/manifest.json",
+   "note": "DIAMM (musmed.eu lists it as Orléans Ms 129); check that the images really are Orléans 129"
+  },
+  "PaSG 117": {
+   "url": "https://iiif.diamm.net/manifests/F-Psg_117/manifest.json",
+   "note": "DIAMM, found on the musmed.eu page"
+  },
+  "Pia 65": {
+   "url": "https://iiif.diamm.net/manifests/I-PCd-Ms-65/manifest.json",
+   "note": "DIAMM, found on the musmed.eu page; labels are page numbers"
+  },
+  "Pst 121": {
+   "url": "https://iiif.diamm.net/manifests/I-PS-C_121/manifest.json",
+   "note": "DIAMM, found on the musmed.eu page"
+  },
+  "RoC 1741": {
+   "url": "https://iiif.diamm.net/manifests/I-Rc-1741_C.IV.2/manifest.json",
+   "note": "DIAMM, found on the musmed.eu page"
+  },
+  "RoV 52": {
+   "url": "https://iiif.diamm.net/manifests/I-Rv-C52-19a/manifest.json",
+   "note": "DIAMM, found on the musmed.eu page; spreads labelled 'Nv-Mr'"
+  },
+  "Sal 20": {
+   "url": "https://iiif.diamm.net/manifests/A-Ssp-a-VII-20/manifest.json",
+   "note": "DIAMM, found on the musmed.eu page; labels are page numbers"
+  },
+  "Sol 596": {
+   "url": "https://iiif.diamm.net/manifests/F-SO-Class_596/manifest.json",
+   "note": "DIAMM, found on the musmed.eu page; labels are scan counters"
+  },
+  "To 18": {
+   "url": "https://iiif.diamm.net/manifests/I-Tn-F-IV-18/manifest.json",
+   "note": "DIAMM, found on the musmed.eu page"
+  },
+  "Vce 56": {
+   "url": "https://iiif.diamm.net/manifests/I-VCd-Cod-56/manifest.json",
+   "note": "DIAMM, found on the musmed.eu page"
+  },
+  "Vat 3797": {
+   "url": "https://digi.vatlib.it/iiif/MSS_Vat.lat.3797/manifest.json",
+   "note": "Vatican library standard manifest URL"
+  },
+  "Lü 11": {
+   "url": "https://digital-stadtbibliothek.luebeck.de/viewer/api/v1/records/Mstheollat211/manifest/",
+   "note": "Goobi viewer API of the Lübeck Stadtbibliothek (Mstheollat211)"
+  },
+  "Be 40608": {
+   "url": "https://content.staatsbibliothek-berlin.de/dc/1800117108/manifest",
+   "note": "SBB, from the resolver SBB00032CBE00000000 (PPN1800117108)"
+  },
+  "Be 664": {
+   "url": "https://content.staatsbibliothek-berlin.de/dc/882160672/manifest",
+   "note": "SBB, from the resolver SBB0001F79C00000000 (PPN882160672)"
+  },
+  "GeB 74": {
+   "url": "https://www.e-codices.unifr.ch/metadata/iiif/fmb-cb-0074/manifest.json",
+   "note": "e-codices: Cologny, Fondation Martin Bodmer, Cod. Bodmer 74"
+  },
+  "Wü 165": {
+   "url": "https://www.franconica.online/o/iiif/2/97867/manifest",
+   "note": "Franconica (UB Würzburg), linked from the DOI in the spreadsheet; labels look like '3 [2r]'"
+  },
+  "Mel 109": {
+   "url": "https://iiifpresentation.acdh.oeaw.ac.at/mahss/A-M109/manifest",
+   "note": "cantusplanus.at / ACDH; Melk Cod. 109"
+  },
+  "Pa 1138": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b84324583/manifest.json",
+   "note": "Gallica; identity (BnF Latin 1138) confirmed via the Biblissima record, manifest itself not fetched (Gallica blocked the check)"
+  },
+  "Pa 1338": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8432478v/manifest.json",
+   "note": "Gallica; identity (BnF Latin 1338) confirmed via the Biblissima record, manifest itself not fetched (Gallica blocked the check)"
+  },
+  "Abb 7": {
+   "url": "https://api.irht.cnrs.fr/ark:/63955/fj2uwtcwtj87/manifest.json",
+   "note": "The old URL was the '(décor)' manifest: 46 canvases showing only decorated pages. This is the full set (235 canvases)",
+   "replaces": [
+    "https://api.irht.cnrs.fr/ark:/63955/fqy1dnjxro7t/manifest.json"
+   ]
+  },
+  "Pro 12": {
+   "url": "https://api.irht.cnrs.fr/ark:/63955/fm2ehhsm22uk/manifest.json",
+   "note": "The old URL was the '(décor)' manifest: 6 canvases. This is the full set (318 canvases)",
+   "replaces": [
+    "https://api.irht.cnrs.fr/ark:/63955/f6e4z87mubaf/manifest.json"
+   ]
+  },
+  "Lo 4": {
+   "url": "https://iiif.diamm.net/manifests/GB-Lbl-Royal-2B-IV/manifest.json",
+   "note": "The old manifest was BL Royal 4 E IX; Lo 4 is Royal 2 B IV",
+   "replaces": [
+    "https://bl.digirati.io/iiif/ark:/81055/vdc_100056063395.0x000001"
+   ]
+  }
+ },
+ "alignments": {
+  "Pa 14452": {
+   "dataType": "foliated",
+   "pins": {
+    "12": "139r"
+   },
+   "note": "Every Gallica label is 'NP'; scan 12 is 139r (checked by the test scenario)."
+  },
+  "Mü 29307(2": {
+   "dataType": "foliated",
+   "pins": {
+    "4": "2r"
+   },
+   "note": "Library scan (0005) is folio 2r (research assistant's report). The manifest has 9 scans: 4v has none."
+  },
+  "Mü 5539": {
+   "dataType": "foliated",
+   "pins": {
+    "141": "69r"
+   },
+   "note": "Library scan (0142) is folio 69r on manifest bsb00042722 (research assistant's report; confirm on the image). Drop this pin if the manifest is switched to bsb00079147."
+  },
+  "Nau I": {
+   "dataType": "foliated",
+   "pins": {
+    "32": "13r"
+   },
+   "note": "Printed volume f. 13 is scan phys_Chorbuch_0025 (research assistant's table, p. 280 of the volume)."
+  }
+ }
+}

@@ -1,5 +1,6 @@
 import { ref, shallowRef } from 'vue';
 import { useIiifStore } from '../stores/iiif';
+import { useSettingsStore } from '../stores/settings';
 import { loadOverviewMetadata } from '../services/metadata/metadataProvider';
 import { untracked } from '../services/persistence/changeTracker';
 
@@ -43,6 +44,7 @@ async function fetchAll() {
             }
         }
         sourceFolios.value = sFolios;
+        useSettingsStore().setDefaultAlignments(meta.alignments);
         loading.value = false;
 
         if (Object.keys(manifests.value).length > 0) {

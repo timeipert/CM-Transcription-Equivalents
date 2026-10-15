@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, onMounted } from 'vue';
 import { useImageManifest } from '../../composables/useImageManifest';
-import { useSettingsStore } from '../../stores/settings';
+import { useSettingsStore, effectiveAlignment } from '../../stores/settings';
 import { useIiifStore } from '../../stores/iiif';
 import { iiifPageUrl } from '../../services/iiif/imageUrl';
 
@@ -26,8 +26,8 @@ const report = computed(() => {
     return getAlignmentReport(props.source);
 });
 
-const dataType = computed(() => settings.alignmentFor(iiifKey.value)?.dataType || report.value?.dataType || 'foliated');
-const pinCount = computed(() => Object.keys(settings.alignmentFor(iiifKey.value)?.pins || {}).length);
+const dataType = computed(() => effectiveAlignment(settings.sourceAlignments[iiifKey.value], settings.defaultAlignments[iiifKey.value])?.dataType || report.value?.dataType || 'foliated');
+const pinCount = computed(() => Object.keys(effectiveAlignment(settings.sourceAlignments[iiifKey.value], settings.defaultAlignments[iiifKey.value])?.pins || {}).length);
 
 const rows = computed(() => {
     const entries = report.value?.entries || [];
@@ -48,7 +48,7 @@ function touch() {
 }
 
 function setDataType(type) {
-    settings.setSourceAlignment(iiifKey.value, { ...(settings.alignmentFor(iiifKey.value) || {}), dataType: type });
+    settings.setSourceAlignment(iiifKey.value, { ...(settings.sourceAlignments[iiifKey.value] || {}), dataType: type });
     touch();
 }
 

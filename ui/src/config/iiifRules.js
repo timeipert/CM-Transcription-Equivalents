@@ -47,3 +47,26 @@ export const iiifParseRules = {
     return label;
   }
 };
+
+/**
+ * Libraries that photograph an opening label the canvas with both pages:
+ * "f. 017v - 018r", "010v-011r", "f. 037v - 038" (a bare number is a recto).
+ * The canvas shows the verso of one leaf and the recto of the next, so it names
+ * two folios. Anything else with a dash — "001v-001r", "10r-10v" — is left alone
+ * for a source's own rule (see "Ben 34").
+ */
+const SPREAD = /^\s*(?:(?:f|fol)\.?\s*)?0*(\d+)\s*v\s*[-\u2013]\s*(?:(?:f|fol)\.?\s*)?0*(\d+)\s*r?\s*$/i;
+
+export function splitSpreadLabel(label) {
+    const m = SPREAD.exec(String(label));
+    if (!m) return label;
+    const verso = parseInt(m[1], 10);
+    const recto = parseInt(m[2], 10);
+    if (recto !== verso + 1) return label;
+    return [`${verso}v`, `${recto}r`];
+}
+
+/** The label rule for a source: its own, else the general opening rule. */
+export function labelRuleFor(source) {
+    return iiifParseRules[source] || splitSpreadLabel;
+}

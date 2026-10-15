@@ -20,7 +20,7 @@ const workspace = useManagerWorkspace(props);
 
 // Destructure some refs that we need to watch or mutate
 const { 
-    stdSource, stdFolio, highlightHint, allLinesOnPage, regions, existingRegionLines, 
+    stdSource, pageFolio, highlightHint, allLinesOnPage, regions, regionDrift, existingRegionLines, 
     linesToAnnotate, pagePatterns, otherPageAnnotations, patternSort, patternSearch,
     activeRegion, activeRegionRect, activeRegionItems, activePattern, activeVariant,
     linkCandidates, patternCustomIdMap, codeVariants, glyphs, getImageUrl, getIiifThumbnailUrl,
@@ -56,12 +56,12 @@ function deleteVariant({ base, id }) {
 }
 
 function handleAddManualLine(num) {
-    annotStore.addManualLine(stdSource.value, stdFolio.value, num);
+    annotStore.addManualLine(stdSource.value, pageFolio.value, num);
 }
 
 function handleRemoveManualLine(num) {
     if (confirm(`Remove manually added line ${num}?`)) {
-        annotStore.removeManualLine(stdSource.value, stdFolio.value, num);
+        annotStore.removeManualLine(stdSource.value, pageFolio.value, num);
     }
 }
 
@@ -136,7 +136,7 @@ const selectedSnippet = ref(null);
 
 function deleteRegion(r) {
     if (confirm(`Delete region "${r.name}" and all its contents?`)) {
-        annotStore.removeRegion(stdSource.value, stdFolio.value, r.id);
+        annotStore.removeRegion(stdSource.value, pageFolio.value, r.id);
         if (activeRegion.value && activeRegion.value.id === r.id) {
             activeRegion.value = null;
         }
@@ -186,7 +186,7 @@ function openSnippet(item) {
     selectedSnippet.value = {
         id: item.id,
         source: stdSource.value,
-        folio: stdFolio.value,
+        folio: pageFolio.value,
         points: item.points,
         pattern: item.pattern,
         linkData: item.linkData
@@ -241,8 +241,9 @@ function handleBackToOverview() {
                 :source="source"
                 :folio="folio"
                 :stdSource="stdSource"
-                :stdFolio="stdFolio"
+                :pageFolio="pageFolio"
                 :regions="regions"
+                :regionDrift="regionDrift"
                 :hasTranscriptionData="hasTranscriptionData"
                 :getIiifThumbnailUrl="getIiifThumbnailUrl"
                 @openRegionCreator="navigateToCreateRegion"

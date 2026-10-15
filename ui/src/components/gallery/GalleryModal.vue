@@ -21,7 +21,7 @@ const router = useRouter();
 const annotStore = useAnnotationsStore();
 const iiifStore = useIiifStore();
 const tableStore = usePersonalTablesStore();
-const { hasImage, getImageUrl, getStandardSource, getStandardFolio, loaded: manifestLoaded } = useImageManifest();
+const { hasImage, getImageUrl, getStandardSource, pageFolio, canvasFor, loaded: manifestLoaded } = useImageManifest();
 
 import { usePersonalTablesStore } from '../../stores/personalTables';
 
@@ -185,7 +185,9 @@ watch([() => props.visible, () => iiifStore.parsedData, () => props.pattern, () 
         for (const p of chunk) {
             if (hasImage(p.d, p.f)) {
                 const std = getStandardSource(p.d, p.f);
-                const stf = getStandardFolio(p.d, p.f);
+                // the page as stored, and where its scan sits in the manifest
+                const stf = pageFolio(std, p.f);
+                const canvasIndex = canvasFor(p.d, p.f)?.index ?? 9999;
                 
                 // Check if this page is in our snippets list or has defined line regions
                 const snippetMatch = currentGalleryItems.value.find(s => s.source === std && folioIdentity(s.folio) === folioIdentity(stf));
@@ -194,7 +196,7 @@ watch([() => props.visible, () => iiifStore.parsedData, () => props.pattern, () 
                 const regionsCount = pageRegions.length;
 
                 result.push({
-                    d: p.d, f: p.f, stf,
+                    d: p.d, f: p.f, stf, canvasIndex,
                     pat: p.pat,
                     label: String(p.f),
                     isAnnotated: hasAnnot,
@@ -210,22 +212,11 @@ watch([() => props.visible, () => iiifStore.parsedData, () => props.pattern, () 
         await new Promise(r => setTimeout(r, 0));
     }
 
-    // 5. Sort (90-100% progress)
-    const orderMap = {};
-    if (iiifStore.parsedData[props.sourceName]) {
-        iiifStore.parsedData[props.sourceName].forEach((item, idx) => {
-            orderMap[item.folio] = idx;
-        });
-    }
-
+    // 5. Sort (90-100% progress): annotated first, then in manifest order
     result.sort((a, b) => {
         if (a.isAnnotated && !b.isAnnotated) return -1;
         if (!a.isAnnotated && b.isAnnotated) return 1;
-        if (iiifStore.parsedData[props.sourceName]) {
-            const idxA = orderMap[a.stf] ?? 9999;
-            const idxB = orderMap[b.stf] ?? 9999;
-            if (idxA !== idxB) return idxA - idxB;
-        }
+        if (a.canvasIndex !== b.canvasIndex) return a.canvasIndex - b.canvasIndex;
         return compareFolios(a.label, b.label);
     });
     

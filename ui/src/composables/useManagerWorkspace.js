@@ -5,7 +5,7 @@ import { usePersonalTablesStore } from '../stores/personalTables';
 import { useSettingsStore } from '../stores/settings';
 import { useImageManifest } from './useImageManifest';
 import { stripSignKeys, signMarker } from '../utils/signs';
-import { parsePageKey } from '../utils/keys';
+import { parsePageKey, folioIdentity } from '../utils/keys';
 import { parsePoints, pointsToRect } from '../utils/geometry';
 
 function parseLineNumber(name) {
@@ -24,10 +24,13 @@ export function useManagerWorkspace(props) {
     const tableStore = usePersonalTablesStore();
     const settings = useSettingsStore();
     const { pagePatternsIndex, folioLinesIndex, glyphs, rawData, patStats, loadSource } = useTranscriptionData();
-    const { getImageUrl, getStandardSource, getStandardFolio, getIiifThumbnailUrl, hasTranscriptionData } = useImageManifest();
+    const { getImageUrl, getStandardSource, pageFolio: toPageFolio, canvasFor, canvasLabel, getIiifThumbnailUrl, hasTranscriptionData } = useImageManifest();
 
+    // The page as stored: its source and the transcription's folio. Never the IIIF
+    // label — that only decides which image is shown (see services/alignment).
     const stdSource = computed(() => getStandardSource(props.source, props.folio));
-    const stdFolio = computed(() => getStandardFolio(props.source, props.folio));
+    const pageFolio = computed(() => toPageFolio(stdSource.value, props.folio));
+    const samePage = folio => folioIdentity(folio) === folioIdentity(props.folio);
 
     const resolvedSrcKey = computed(() => {
         if (!props.source || !rawData.value) return props.source;
@@ -60,9 +63,7 @@ export function useManagerWorkspace(props) {
         if (!srcKey || !rawData.value[srcKey]) return null;
         
         const patData = rawData.value[srcKey][props.highlightPattern] || [];
-        const targetFolio = stdFolio.value;
-        
-        const onThisPage = patData.filter(o => getStandardFolio(srcKey, o[1]) === targetFolio);
+        const onThisPage = patData.filter(o => samePage(o[1]));
         if (onThisPage.length === 0) return null;
         
         const lines = Array.from(new Set(onThisPage.map(o => Number(o[2])))).sort((a,b) => a-b);
@@ -78,24 +79,40 @@ export function useManagerWorkspace(props) {
         
         let lines = folioLinesIndex.value[srcKey][props.folio] || [];
         if (lines.length === 0) {
-            const targetFolio = stdFolio.value;
             for (const [idxFolio, fLines] of Object.entries(folioLinesIndex.value[srcKey])) {
-                if (getStandardFolio(srcKey, idxFolio) === targetFolio) {
-                    lines = lines.concat(fLines);
-                }
+                if (samePage(idxFolio)) lines = lines.concat(fLines);
             }
         }
-        
+
         // Merge with manually added lines
-        const manual = annotStore.getManualLines(stdSource.value, stdFolio.value) || [];
+        const manual = annotStore.getManualLines(stdSource.value, pageFolio.value) || [];
         lines = Array.from(new Set([...lines, ...manual]));
         
         return lines.map(Number).sort((a,b) => a-b);
     });
 
     const regions = computed(() => {
-        if (!stdSource.value || !stdFolio.value) return [];
-        return annotStore.getRegions(stdSource.value, stdFolio.value);
+        if (!stdSource.value || !pageFolio.value) return [];
+        return annotStore.getRegions(stdSource.value, pageFolio.value);
+    });
+
+    /**
+     * Lines drawn on a different scan than the one this folio shows now — the
+     * alignment changed after they were drawn (a pin, a corrected label rule, a
+     * new manifest). Their outlines belong to that other image, so they are
+     * flagged rather than silently drawn over the wrong page.
+     * { [regionId]: { drawnOn: label, shownNow: label } }
+     */
+    const regionDrift = computed(() => {
+        const now = canvasFor(stdSource.value, props.folio);
+        const drift = {};
+        if (!now) return drift;
+        const nowLabel = String(now.page.originalFolio ?? now.page.folio);
+        for (const r of regions.value) {
+            if (!r.canvas || !r.canvas.label) continue;
+            if (r.canvas.label !== nowLabel) drift[r.id] = { drawnOn: r.canvas.label, shownNow: nowLabel };
+        }
+        return drift;
     });
 
     const existingRegionLines = computed(() => new Set(regions.value.map(r => parseLineNumber(r.name)).filter(n => n !== null)));
@@ -125,11 +142,8 @@ export function useManagerWorkspace(props) {
 
         let pats = sourceData[props.folio] || [];
         if (pats.length === 0) {
-            const targetFolio = stdFolio.value;
             for (const [idxFolio, fPats] of Object.entries(sourceData)) {
-                if (getStandardFolio(srcKey, idxFolio) === targetFolio) {
-                    pats = pats.concat(fPats);
-                }
+                if (samePage(idxFolio)) pats = pats.concat(fPats);
             }
             pats = Array.from(new Set(pats));
         }
@@ -173,14 +187,13 @@ export function useManagerWorkspace(props) {
     const otherPageAnnotations = computed(() => {
         const res = {};
         const currentSrc = stdSource.value;
-        const currentFol = stdFolio.value;
-        
+
         const regionToLoc = {};
         for (const key in annotStore.regions) {
             const k = parsePageKey(key);
             if (k) {
                 const { source: src, folio: fol } = k;
-                if (src === currentSrc && fol === currentFol) continue;
+                if (src === currentSrc && folioIdentity(fol) === folioIdentity(pageFolio.value)) continue;
                 for (const r of annotStore.regions[key]) {
                      regionToLoc[r.id] = { folio: fol, name: r.name };
                 }
@@ -257,7 +270,7 @@ export function useManagerWorkspace(props) {
         const allOccs = srcData[baseCode] || srcData[activePattern.value] || [];
         
         const target = String(props.folio).toLowerCase();
-        const stdTarget = String(getStandardFolio(props.source, props.folio)).toLowerCase();
+        const stdTarget = String(canvasLabel(props.source, props.folio) || '').toLowerCase();
         
         const candidates = allOccs.map(o => {
             const dFolio = String(o[1]).toLowerCase();
@@ -281,10 +294,10 @@ export function useManagerWorkspace(props) {
     }, { immediate: true });
 
     return {
-        stdSource, stdFolio, resolvedSrcKey, highlightHint,
-        allLinesOnPage, regions,
+        stdSource, pageFolio, resolvedSrcKey, highlightHint,
+        allLinesOnPage, regions, regionDrift,
         existingRegionLines,
-        manualLines: computed(() => annotStore.getManualLines(stdSource.value, stdFolio.value)), linesToAnnotate,
+        manualLines: computed(() => annotStore.getManualLines(stdSource.value, pageFolio.value)), linesToAnnotate,
         pagePatterns, otherPageAnnotations, patternSort, patternSearch,
         activeRegion, activeRegionRect, activeRegionItems,
         activePattern, activeVariant, linkCandidates, patternCustomIdMap,

@@ -34,12 +34,14 @@ export function renderSvg(pattern, glyphs, isGroup, customSigns = {}) {
     const tokens = [];
     let i = 0;
     let inGroup = false;
+    let groupId = 0; // which bracketed group a note belongs to; 0 = none
     const p = pattern;
 
     while (i < p.length) {
         const char = p[i];
         if (char === '[' || char === '{') {
             inGroup = true;
+            groupId++;
             i++;
             continue;
         }
@@ -66,10 +68,10 @@ export function renderSvg(pattern, glyphs, isGroup, customSigns = {}) {
         }
 
         if (['*', 'u', 'd', 'e'].includes(main)) {
-            tokens.push({ type: main, special: suffix, group: inGroup });
+            tokens.push({ type: main, special: suffix, group: inGroup ? groupId : 0 });
         } else if (/[a-zA-Z]/.test(main) && isGroup) {
             if (['u', 'd', 'e'].includes(main)) {
-                tokens.push({ type: main, special: suffix, group: inGroup });
+                tokens.push({ type: main, special: suffix, group: inGroup ? groupId : 0 });
             }
         }
     }
@@ -102,7 +104,12 @@ export function renderSvg(pattern, glyphs, isGroup, customSigns = {}) {
         points.push({ x: px, y: py, token: t });
 
         if (t.group) {
-            if (!curGroup) curGroup = { startX: px, y: py };
+            // Two groups written next to each other ("[*u][udL]") get a bracket each.
+            if (curGroup && curGroup.id !== t.group) {
+                groupBrackets.push(curGroup);
+                curGroup = null;
+            }
+            if (!curGroup) curGroup = { id: t.group, startX: px, y: py };
             curGroup.endX = px;
             curGroup.y = Math.min(curGroup.y, py);
         } else {

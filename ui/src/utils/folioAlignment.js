@@ -39,6 +39,19 @@ const PAGE_MARKER = /(?:^|[\s(_.-])(?:seite|page|pg|p)\.?\s*(0*\d+)\b/;
 // foliation cue, regardless of surrounding words.
 const FUSED_SIDE = /(0*\d+)\s*([rv])\b/;
 
+// Roman numerals fused to a side: "CVIIv", "Ir", "f. XIIv". Capital letters only.
+const ROMAN_FOLIO = /^\s*(?:f\.?\s*)?(M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3}))\s*([rv])\b/;
+
+function romanToInt(roman) {
+    const value = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 };
+    let total = 0;
+    for (let i = 0; i < roman.length; i++) {
+        const v = value[roman[i]];
+        total += v < (value[roman[i + 1]] || 0) ? -v : v;
+    }
+    return total;
+}
+
 // Sub-image counters that are not the folio/page number, e.g. "vue 3",
 // "view 2", "img 04", "scan 1", "plate 7".
 const VIEW_COUNTER = /\b(?:vue|view|views|img|image|scan|tafel|plate|pl|no|nr)\.?\s*\d+/g;
@@ -104,6 +117,14 @@ export function parseFolioLabel(raw) {
         };
     }
 
+    // Roman folio numbers with a side — "CVIIv", "Ir [5]" — as old Latin foliations
+    // are written. Capital numerals only: "mr" or "dv" are not folios.
+    const romanMatch = String(raw).match(ROMAN_FOLIO);
+    if (romanMatch) {
+        const num = romanToInt(romanMatch[1]);
+        if (num) return { raw, num, side: romanMatch[2], padded: false, markerKind: 'fused', confident: true };
+    }
+
     const page = s.match(PAGE_MARKER);
     if (page) {
         return {
@@ -127,9 +148,18 @@ export function parseFolioLabel(raw) {
     };
 }
 
-/** A label with no digits at all is a structural divider, not a page. */
+// A page the library says has no number: Gallica's "NP" (non paginé), "n.p.",
+// "s.n.". Unlike a section title it is a page, just an unnumbered one.
+const UNNUMBERED = /^\s*(np|n\.\s*p\.?|s\.\s*n\.?|non\s+pagin[ée]e?)\s*$/i;
+
+/** Whether a label marks an unnumbered page ("NP"). */
+export function isUnnumberedLabel(raw) {
+    return UNNUMBERED.test(String(raw ?? ''));
+}
+
+/** A label with no digits at all is a structural divider, not a page — unless it says it is an unnumbered page. */
 export function isDividerLabel(raw) {
-    return parseFolioLabel(raw).num === null;
+    return parseFolioLabel(raw).num === null && !isUnnumberedLabel(raw);
 }
 
 /**
@@ -186,6 +216,32 @@ function entry(canvasIndex, originalLabel, resolvedFolio, via, confidence, isDiv
 }
 
 /**
+ * The first canvas that tells where the count is (a pin, or a label that names its
+ * page), as a folio index, and how many uncertain canvases come before it.
+ * @returns {{ index: number, before: number }|null}
+ */
+function leadIn(canvasLabels, dataType, pins) {
+    let before = 0;
+    for (let i = 0; i < canvasLabels.length; i++) {
+        if (Object.prototype.hasOwnProperty.call(pins, i)) {
+            const idx = pins[i] ? folioToIndex(pins[i], dataType) : null;
+            if (idx !== null) return { index: idx, before };
+            continue; // "not a page", or a name the data does not use: not counted
+        }
+        const label = canvasLabels[i];
+        if (isUnnumberedLabel(label)) continue;
+        const parsed = parseFolioLabel(label);
+        if (parsed.num === null) continue;
+        if (parsed.confident && identityAllowed(parsed.markerKind, dataType)) {
+            const idx = parsedToIndex(parsed, dataType);
+            if (idx !== null) return { index: idx, before };
+        }
+        before++;
+    }
+    return null;
+}
+
+/**
  * Build the canvas → folio mapping as one running count over the manifest.
  *
  * The count walks the *folio index space* (1r, 1v, 2r, 2v, … or 1, 2, 3, … for
@@ -210,7 +266,12 @@ function entry(canvasIndex, originalLabel, resolvedFolio, via, confidence, isDiv
 export function inferAlignment(args) {
     const { canvasLabels = [], dataType = 'foliated', pins = {} } = args;
 
-    let runningIndex = 1; // the folio index the next uncertain canvas will count as
+    // Before the first pin or label says where the count is, the canvases are counted
+    // *back* from it. Counting forward from 1 would give them folios the later
+    // anchor contradicts, and those early claims would then compete with the real ones.
+    const lead = leadIn(canvasLabels, dataType, pins);
+    let runningIndex = lead ? lead.index - lead.before : 1; // the folio index the next uncertain canvas will count as
+    let anchored = false; // whether a pin or a page's own label has said where the count is
     let matched = 0;
     let dividerCount = 0;
 
@@ -223,8 +284,19 @@ export function inferAlignment(args) {
             }
             matched++;
             const idx = folioToIndex(pinned, dataType);
-            if (idx !== null) runningIndex = idx + 1;
+            if (idx !== null) { runningIndex = idx + 1; anchored = true; }
             return entry(canvasIndex, label, pinned, 'pinned', 1);
+        }
+
+        // An unnumbered page ("NP"): counted once something has said where the count
+        // is — so one pin aligns a manifest that numbers none of its pages — and left
+        // unresolved before that rather than guessed from the first scan.
+        if (isUnnumberedLabel(label)) {
+            if (!anchored) return entry(canvasIndex, label, null, 'none', 0);
+            const resolved = indexToFolio(runningIndex, dataType);
+            runningIndex++;
+            if (resolved) { matched++; return entry(canvasIndex, label, resolved, 'position', 0.6); }
+            return entry(canvasIndex, label, null, 'none', 0);
         }
 
         const parsed = parseFolioLabel(label);
@@ -239,6 +311,7 @@ export function inferAlignment(args) {
             if (idx !== null) {
                 matched++;
                 runningIndex = idx + 1;
+                anchored = true;
                 return entry(canvasIndex, label, indexToFolio(idx, dataType), 'label', 0.95);
             }
         }

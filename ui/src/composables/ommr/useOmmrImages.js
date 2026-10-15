@@ -22,7 +22,7 @@ export function useOmmrImages({ preferIiif }) {
     const ommrStore = useOmmrStore();
     const ommrSettings = useOmmrSettingsStore();
     const iiifStore = useIiifStore();
-    const { getIiifRegionUrl, getStandardSource, getStandardFolio, getIiifCanvasByIndex, getIiifCanvasCount } = useImageManifest();
+    const { getIiifRegionUrl, getStandardSource, pageFolio, canvasLabel, folioOfCanvas, getIiifCanvasByIndex, getIiifCanvasCount } = useImageManifest();
 
     const activeSource = () => ommrStore.activeSource;
 
@@ -64,15 +64,23 @@ export function useOmmrImages({ preferIiif }) {
         return getIiifCanvasByIndex(snip.source, idx)?.serviceUrl || '';
     };
 
-    /** OMMR folio -> the folio label a manuscript annotation should carry (honours offset and index mode). */
+    /**
+     * OMMR page -> the folio the imported lines are stored under (honours offset and
+     * index mode). Always the transcription's folio; in index mode the folio the page
+     * map says that canvas shows. Only a canvas that shows no folio (a binding, an
+     * unaligned scan) keeps its label, until the alignment can name it.
+     */
     function manuscriptFolio(folio, source) {
         if (indexMode.value) {
             const idx = canvasIndexFor(folio);
-            const canvas = idx !== null ? getIiifCanvasByIndex(source, idx) : null;
-            if (canvas?.label) return canvas.label;
+            if (idx !== null) {
+                const shown = folioOfCanvas(source, idx);
+                if (shown) return shown;
+                const canvas = getIiifCanvasByIndex(source, idx);
+                if (canvas?.label) return canvas.label;
+            }
         }
-        const eff = effFolio(folio);
-        return getStandardFolio(source, eff) || eff;
+        return pageFolio(source, effFolio(folio));
     }
 
     // --- IIIF manifest binding for the active source ---
@@ -146,7 +154,7 @@ export function useOmmrImages({ preferIiif }) {
             } else {
                 eff = effFolio(s.folio);
                 matched = !!getIiifRegionUrl(s.source, eff, 'pct:0,0,5,5', 80);
-                label = getStandardFolio(s.source, eff);
+                label = canvasLabel(s.source, eff) || '';
             }
             out.push({ folio: s.folio, eff, matched, label });
             if (out.length >= 8) break;

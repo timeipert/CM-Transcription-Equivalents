@@ -297,6 +297,49 @@ describe('annotations store: one page, two spellings of its folio', () => {
     });
 });
 
+describe('annotations store: rekeyPages', () => {
+    let ann;
+    beforeEach(() => {
+        ann = useAnnotationsStore();
+        ann.hydrate({
+            regions: {
+                'Ox 340_fol. 18v': [
+                    { id: 'r1', name: 'Line 2', points: 'a' },
+                    { id: 'u1', name: 'Unassigned', points: 'p', unassigned: true }
+                ],
+                'Ox 340_18v': [
+                    { id: 'r2', name: 'Line 5', points: 'b' },
+                    { id: 'u2', name: 'Unassigned', points: 'p', unassigned: true }
+                ]
+            },
+            regionItems: { r1: [{ id: 'i1' }], r2: [{ id: 'i2' }], u1: [{ id: 'i3' }], u2: [{ id: 'i4' }] },
+            manualLines: { 'Ox 340_fol. 18v': [2, 7], 'Ox 340_18v': [5, 7] }
+        });
+    });
+
+    it('merges a page into another key without losing a line, a snippet or a manual line', () => {
+        const moved = ann.rekeyPages([{ from: 'Ox 340_fol. 18v', to: 'Ox 340_18v', canvas: { index: 3, label: 'fol. 18v' } }]);
+        expect(moved).toBe(1);
+        expect(Object.keys(ann.regions)).toEqual(['Ox 340_18v']);
+        const ids = ann.regions['Ox 340_18v'].map(r => r.id).sort();
+        expect(ids).toEqual(['r1', 'r2', 'u2']);
+        // the two "Unassigned" holders became one, keeping both snippets
+        expect(ann.regionItems.u2.map(i => i.id).sort()).toEqual(['i3', 'i4']);
+        expect(ann.regionItems.u1).toBeUndefined();
+        expect(ann.regionItems.r1).toEqual([{ id: 'i1' }]);
+        expect(ann.manualLines).toEqual({ 'Ox 340_18v': [2, 5, 7] });
+        // the moved lines remember the scan they were drawn on; the others are untouched
+        expect(ann.regions['Ox 340_18v'].find(r => r.id === 'r1').canvas).toEqual({ index: 3, label: 'fol. 18v' });
+        expect(ann.regions['Ox 340_18v'].find(r => r.id === 'r2').canvas).toBeUndefined();
+        expect(ann.pageKeyByRegionId.r1).toBe('Ox 340_18v');
+    });
+
+    it('ignores moves that change nothing or whose page is gone', () => {
+        expect(ann.rekeyPages([{ from: 'Ox 340_18v', to: 'Ox 340_18v' }, { from: 'Ox 340_99r', to: 'Ox 340_98r' }])).toBe(0);
+        expect(Object.keys(ann.regions).sort()).toEqual(['Ox 340_18v', 'Ox 340_fol. 18v']);
+    });
+});
+
 describe('personal tables store', () => {
     it('round-trips tables and starred items', () => {
         const t = usePersonalTablesStore();
@@ -355,6 +398,43 @@ describe('iiif store', () => {
         expect(i.links).toEqual({});
         i.hydrate('nope');
         expect(i.links).toEqual({});
+    });
+});
+
+describe('iiif store: manifests that ship with the app', () => {
+    it('registers a missing link, keeps the user\'s own, and replaces a link the data lists as wrong', async () => {
+        const i = useIiifStore();
+        i.hydrate({ Own: 'https://mine', Wrong: 'https://old/manifest ' });
+        await i.importFromDataManifests({
+            New: { url: 'https://new' },
+            Own: { url: 'https://shipped' },
+            Wrong: { url: 'https://right', replaces: ['https://old/manifest'] },
+            Other: { url: 'https://right2', replaces: ['https://not-the-stored-one'] }
+        });
+        expect(i.links).toEqual({ New: 'https://new', Own: 'https://mine', Wrong: 'https://right', Other: 'https://right2' });
+        // a link the user chose themselves is not touched, even when it differs from the shipped one
+        i.hydrate({ Wrong: 'https://custom' });
+        await i.importFromDataManifests({ Wrong: { url: 'https://right', replaces: ['https://old/manifest'] } });
+        expect(i.links.Wrong).toBe('https://custom');
+    });
+});
+
+describe('settings store: alignments that ship with the app', () => {
+    it('uses the shipped pins, lets the user\'s pin win on the same scan, and never saves the shipped ones', () => {
+        const s = useSettingsStore();
+        s.setDefaultAlignments({ A: { dataType: 'foliated', pins: { 4: '2r', 9: '5r' } } });
+        expect(s.alignmentFor('A').pins).toEqual({ 4: '2r', 9: '5r' });
+        expect(s.alignmentFor('B')).toBeNull();
+
+        s.setAlignmentPin('A', 4, '3r');
+        expect(s.alignmentFor('A').pins).toEqual({ 4: '3r', 9: '5r' });
+        expect(s.userAlignmentFor('A').pins).toEqual({ 4: '3r' });
+        expect(s.serialize().sourceAlignments).toEqual({ A: { pins: { 4: '3r' } } });
+
+        s.reset();
+        expect(s.alignmentFor('A').pins).toEqual({ 4: '2r', 9: '5r' }); // shipped, not workspace state
+        s.setDefaultAlignments('garbage');
+        expect(s.alignmentFor('A')).toBeNull();
     });
 });
 

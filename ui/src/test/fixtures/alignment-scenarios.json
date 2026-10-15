@@ -1,0 +1,491 @@
+{
+  "about": "Situations in which a manuscript's lines must show on the right page. Each scenario is run by src/test/alignment/scenarios.test.js against the real stores, the real import, the key migration and the Manuscripts view's own composable. 'manuscript' takes the canvas labels and transcription folios of that manuscript from fixtures/iiif/corpus-manifests.json (the real manifest); 'labels' gives them by hand. 'stored' is what an earlier version left in browser storage; 'importFile' is imported through Settings → Import. Under 'expect': 'canvas' = folio -> the IIIF label of the scan shown; 'lines' = folio -> the line regions the Manuscripts view lists; 'keys' = the stored page keys afterwards; 'kept' = how many keys were left for a person to look at; 'drift' = folio -> { line name: the scan it was drawn on }.",
+  "scenarios": [
+    {
+      "name": "Ox 340: export from 2 September (pages stored by transcription folio, Bodleian labels \"fol. 18v\")",
+      "manuscript": "Ox 340",
+      "importFile": "workspaces/cm-manuscripts-Ox-340-2026-09-02.json",
+      "expect": {
+        "canvas": {
+          "18r": "fol. 18r",
+          "18v": "fol. 18v",
+          "19v": "fol. 19v",
+          "20r": "fol. 20r",
+          "23r": "fol. 23r"
+        },
+        "lines": {
+          "18r": [
+            "Line 3"
+          ],
+          "18v": [
+            "Line 2",
+            "Line 5",
+            "Line 7"
+          ],
+          "19v": [
+            "Line 6"
+          ],
+          "20r": [
+            "Line 3"
+          ],
+          "23r": [
+            "Line 3"
+          ]
+        },
+        "keys": [
+          "Ox 340_18r",
+          "Ox 340_18v",
+          "Ox 340_19v",
+          "Ox 340_20r",
+          "Ox 340_23r"
+        ],
+        "kept": 0
+      }
+    },
+    {
+      "name": "Ox 340: the same lines stored under the scan label (as the version of 4 October wrote them)",
+      "manuscript": "Ox 340",
+      "stored": {
+        "regions": {
+          "Ox 340_fol. 18v": [
+            {
+              "id": "r1",
+              "name": "Line 2",
+              "points": "35.27,10.84 92.90,10.84 92.90,15.48 35.27,15.48"
+            }
+          ],
+          "Ox 340_fol. 20r": [
+            {
+              "id": "r2",
+              "name": "Line 3",
+              "points": "7.11,15.75 67.59,15.75 67.59,20.11 7.11,20.11"
+            }
+          ]
+        },
+        "regionItems": {
+          "r1": [
+            {
+              "id": "i1",
+              "pattern": "*ddu",
+              "points": "46.78,11.47 50.10,11.47 50.10,13.93 46.78,13.93",
+              "linkData": {
+                "sysId": "Ox 340-18-14|18v|2|to-|G4-F4-E4-F4"
+              }
+            }
+          ],
+          "r2": [
+            {
+              "id": "i2",
+              "pattern": "*e",
+              "points": "42.43,16.38 44.77,16.38 44.77,17.91 42.43,17.91"
+            }
+          ]
+        },
+        "manualLines": {
+          "Ox 340_fol. 18v": [
+            2
+          ]
+        }
+      },
+      "expect": {
+        "lines": {
+          "18v": [
+            "Line 2"
+          ],
+          "20r": [
+            "Line 3"
+          ]
+        },
+        "manualLines": {
+          "18v": [
+            2
+          ]
+        },
+        "keys": [
+          "Ox 340_18v",
+          "Ox 340_20r"
+        ],
+        "kept": 0,
+        "drift": {
+          "18v": {}
+        }
+      }
+    },
+    {
+      "name": "One page stored under two spellings of its folio becomes one page",
+      "manuscript": "Ox 340",
+      "stored": {
+        "regions": {
+          "Ox 340_18v": [
+            {
+              "id": "r1",
+              "name": "Line 2",
+              "points": "0,10 100,10 100,15 0,15"
+            }
+          ],
+          "Ox 340_fol. 18v": [
+            {
+              "id": "r2",
+              "name": "Line 5",
+              "points": "0,22 100,22 100,27 0,27"
+            }
+          ]
+        },
+        "regionItems": {}
+      },
+      "expect": {
+        "lines": {
+          "18v": [
+            "Line 2",
+            "Line 5"
+          ]
+        },
+        "keys": [
+          "Ox 340_18v"
+        ],
+        "kept": 0
+      }
+    },
+    {
+      "name": "Munich: scan counters \"(0339)\" are not folios; 170r is the scan of a running count",
+      "manuscript": "Mü 4101",
+      "stored": {
+        "regions": {
+          "Mü 4101_(0339)": [
+            {
+              "id": "r1",
+              "name": "Line 1",
+              "points": "0,10 100,10 100,15 0,15"
+            }
+          ]
+        },
+        "regionItems": {}
+      },
+      "expect": {
+        "canvas": {
+          "170r": "(0339)",
+          "170v": "(0340)"
+        },
+        "lines": {
+          "170r": [
+            "Line 1"
+          ],
+          "170v": []
+        },
+        "keys": [
+          "Mü 4101_170r"
+        ],
+        "kept": 0
+      }
+    },
+    {
+      "name": "Munich: a key whose snippets are linked to another folio than its scan shows is left for a person, not guessed",
+      "manuscript": "Mü 4101",
+      "stored": {
+        "regions": {
+          "Mü 4101_(0170)": [
+            {
+              "id": "r1",
+              "name": "Line 1",
+              "points": "0,10 100,10 100,15 0,15"
+            }
+          ]
+        },
+        "regionItems": {
+          "r1": [
+            {
+              "id": "i1",
+              "pattern": "*",
+              "points": "1,1 2,1 2,2 1,2",
+              "linkData": {
+                "sysId": "Mü 4101-170-1|170r|1|al-|G4"
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "keys": [
+          "Mü 4101_(0170)"
+        ],
+        "kept": 1
+      }
+    },
+    {
+      "name": "Ben 34: the label rule for spreads (\"122v-122r\" shows 121v and 122r)",
+      "manuscript": "Ben 34",
+      "stored": {
+        "regions": {
+          "Ben 34_121v": [
+            {
+              "id": "r1",
+              "name": "Line 1",
+              "points": "0,10 50,10 50,15 0,15"
+            }
+          ]
+        },
+        "regionItems": {}
+      },
+      "expect": {
+        "canvas": {
+          "121v": "122v-122r",
+          "122r": "122v-122r",
+          "122v": "123v-123r"
+        },
+        "lines": {
+          "121v": [
+            "Line 1"
+          ]
+        },
+        "keys": [
+          "Ben 34_121v"
+        ]
+      }
+    },
+    {
+      "name": "Ei 366: flyleaves \"V10\" and page \"10\" — page 10 is the one labelled exactly 10",
+      "manuscript": "Ei 366",
+      "expect": {
+        "canvas": {
+          "1r": "1",
+          "10r": "10",
+          "58r": "58"
+        }
+      }
+    },
+    {
+      "name": "Tri 2254: label rule (the library jumps from 331 to 334: its 335 is page 333) on a paginated transcription written 271r, 272r, …",
+      "manuscript": "Tri 2254",
+      "expect": {
+        "canvas": {
+          "271r": "271",
+          "331r": "331",
+          "332r": "334",
+          "333r": "335",
+          "334r": "336"
+        }
+      }
+    },
+    {
+      "name": "Pa 14452: Gallica labels every scan \"NP\"; nothing is guessed until one pin anchors the count",
+      "manuscript": "Pa 14452",
+      "expect": {
+        "canvas": {
+          "139r": null,
+          "140r": null
+        }
+      }
+    },
+    {
+      "name": "Pa 14452: one pin (scan 12 is 139r) aligns every unnumbered page after it",
+      "manuscript": "Pa 14452",
+      "alignment": {
+        "pins": {
+          "12": "139r"
+        }
+      },
+      "expect": {
+        "canvas": {
+          "139r": "NP",
+          "139v": "NP",
+          "140r": "NP"
+        },
+        "canvasIndex": {
+          "139r": 12,
+          "139v": 13,
+          "140r": 14,
+          "145v": 25
+        }
+      }
+    },
+    {
+      "name": "A pin after the lines were drawn: the lines are flagged as drawn on another scan, not silently moved",
+      "manuscript": "Ox 340",
+      "alignment": {
+        "pins": {
+          "40": "18v"
+        }
+      },
+      "stored": {
+        "regions": {
+          "Ox 340_18v": [
+            {
+              "id": "r1",
+              "name": "Line 2",
+              "points": "0,10 100,10 100,15 0,15",
+              "canvas": {
+                "index": 39,
+                "label": "fol. 18v"
+              }
+            }
+          ]
+        },
+        "regionItems": {}
+      },
+      "expect": {
+        "canvas": {
+          "18v": "fol. 19r"
+        },
+        "lines": {
+          "18v": [
+            "Line 2"
+          ]
+        },
+        "drift": {
+          "18v": {
+            "Line 2": "fol. 18v"
+          }
+        }
+      }
+    },
+    {
+      "name": "Manifest not loaded (yet): nothing is moved, and the lines are still found under the other spelling",
+      "manuscript": "Ox 340",
+      "manifestLoaded": false,
+      "stored": {
+        "regions": {
+          "Ox 340_fol. 18v": [
+            {
+              "id": "r1",
+              "name": "Line 2",
+              "points": "0,10 100,10 100,15 0,15"
+            }
+          ]
+        },
+        "regionItems": {}
+      },
+      "expect": {
+        "lines": {
+          "18v": [
+            "Line 2"
+          ]
+        },
+        "keys": [
+          "Ox 340_fol. 18v"
+        ],
+        "kept": 0
+      }
+    },
+    {
+      "name": "A manuscript without manifest or transcription: a person's page names are never renamed",
+      "source": "My notes",
+      "labels": null,
+      "dataFolios": [],
+      "stored": {
+        "regions": {
+          "My notes_Front cover": [
+            {
+              "id": "r1",
+              "name": "Line 1",
+              "points": "0,0 1,1"
+            }
+          ],
+          "My notes_0012": [
+            {
+              "id": "r2",
+              "name": "Line 1",
+              "points": "0,0 1,1"
+            }
+          ]
+        },
+        "regionItems": {}
+      },
+      "expect": {
+        "keys": [
+          "My notes_0012",
+          "My notes_Front cover"
+        ],
+        "kept": 0
+      }
+    },
+    {
+      "name": "Labels given by hand: a paginated manifest with an offset rule from older settings",
+      "source": "Test offset",
+      "labels": [
+        "Front cover",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10"
+      ],
+      "dataFolios": [
+        "1r",
+        "1v",
+        "2r",
+        "2v"
+      ],
+      "alignment": {
+        "dataType": "foliated",
+        "iiifType": "paginated",
+        "offset": 2
+      },
+      "expect": {
+        "canvas": {
+          "1r": "3",
+          "1v": "4",
+          "2r": "5"
+        }
+      }
+    },
+    {
+      "name": "Mü 29307(2: the library's (0005) is folio 2 — one built-in pin fixes the count (the research assistant's report)",
+      "manuscript": "Mü 29307(2",
+      "expect": {
+        "canvas": {
+          "2r": "(0005)",
+          "2v": "(0006)",
+          "3r": "(0007)",
+          "3v": "(0008)",
+          "4r": "(0009)"
+        }
+      },
+      "defaultAlignment": {
+        "dataType": "foliated",
+        "pins": {
+          "4": "2r"
+        }
+      }
+    },
+    {
+      "name": "Mü 5539: the library's (0142) is folio 69 — one built-in pin (the research assistant's report)",
+      "manuscript": "Mü 5539",
+      "expect": {
+        "canvas": {
+          "69r": "(0142)",
+          "69v": "(0143)"
+        }
+      },
+      "defaultAlignment": {
+        "dataType": "foliated",
+        "pins": {
+          "141": "69r"
+        }
+      }
+    },
+    {
+      "name": "Nau I: the printed volume's f. 13 is scan phys_Chorbuch_0025 — one built-in pin (the research assistant's table)",
+      "manuscript": "Nau I",
+      "expect": {
+        "canvas": {
+          "13r": "phys_Chorbuch_0025",
+          "13v": "phys_Chorbuch_0026",
+          "14v": "phys_Chorbuch_0028",
+          "18v": "phys_Chorbuch_0036",
+          "77v": "phys_Chorbuch_0154"
+        }
+      },
+      "defaultAlignment": {
+        "dataType": "foliated",
+        "pins": {
+          "32": "13r"
+        }
+      }
+    }
+  ]
+}

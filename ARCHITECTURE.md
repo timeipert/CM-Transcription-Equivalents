@@ -102,7 +102,8 @@ through it.
 
 ### Keys, ids
 
-Annotation data is keyed by strings — `"Source_Folio"` (regions, manual lines).
+Annotation data is keyed by strings — `"Source_Folio"` (regions, manual lines), where
+Folio is the transcription's folio (see "Pages, folios and canvases").
 A source's name can contain an underscore (`WiSch 4_5`), so keys are only ever
 built and taken apart with `utils/keys.js`, which splits from the right. Never
 `key.split('_')` or `key.startsWith(source + '_')`. New record ids come from
@@ -120,6 +121,67 @@ A snippet always belongs to a line region. Whole-page snippets from older builds
 are folded into regions on load (`migrations/legacyAnnotations.js`); those that fit
 no line sit in a per-page region flagged `unassigned`, which the public line
 galleries ignore.
+
+## Pages, folios and canvases (alignment)
+
+A page has two names, and mixing them up was the source of a whole class of bugs
+(lines "found" in one view but missing in another, joins with the transcription
+failing, OMMR imports landing on unlisted pages):
+
+* its **folio** — what the transcription calls it (`18v`, `271r`, `A1r`). This is the
+  page's identity. Every stored key (`Source_Folio` for regions and manual lines),
+  every export and the monodi bridge use it.
+* its **canvas label** — what a library's IIIF manifest calls the image (`fol. 18v`,
+  `(0339)`, `1r [3]`, `NP`). Display text only. It is never stored as a page's name.
+
+`services/alignment/` owns the mapping, as pure functions:
+
+| module | does |
+|---|---|
+| `folios.js` | the names: `canonicalFolio` (the transcription's spelling of a folio — depends on the transcription only, never on a manifest), `folioIdentity` (two spellings, one page), `matchName` (loose matching for *finding* a canvas), `guessDataType` |
+| `pageMap.js` | `buildPageMap({ pages, dataFolios, alignment })` → `canvasFor(folio)`, `folioOf(canvasIndex)`, `folioForLabel(label)`. Precedence: pin › older offset rules › the one canvas whose label names the folio › the running count (`utils/folioAlignment.js`) › fuzzy. The two directions always agree. A scan counter never names a folio. |
+| `pageKeys.js` | plans moving keys that older versions wrote with a canvas label onto folios; conservative (a key whose snippets' transcription links disagree is left for a person, and reported) |
+
+`composables/useImageManifest.js` is a thin reactive wrapper (one `computed` page map
+per manuscript): `pageFolio()` for anything stored, `canvasFor()` / `canvasLabel()` /
+`getImageUrl()` for anything shown. There is deliberately no function that returns
+"some folio-ish name" any more. `composables/usePageKeyMigration.js` applies the key
+plan whenever a manuscript's page map becomes available and tells the user.
+
+Regions remember the scan they were drawn on (`region.canvas = { index, label }`). If
+a pin or a corrected label rule later shows that folio on a different scan, the
+Manuscripts view flags the line ("drawn on another scan") instead of drawing its
+outline over the wrong image.
+
+### Where a manuscript's manifest comes from
+
+`ui/public/index.json` (`manifests`) is built by `scripts/analyze_transcriptions.py` from the Manifest column of
+`data/raw/Quellendaten.xlsx` (untracked) and then **`scripts/manifest_overrides.json`** (tracked, with a note per
+entry), which wins. Change a manifest there; `python3 scripts/apply_manifest_overrides.py` re-applies the file to
+`index.json` without re-running the analysis. Canvas labels that name two folios (openings such as
+"f. 017v - 018r") are split by `splitSpreadLabel` in `config/iiifRules.js`; a source with its own rule there keeps it.
+The same file carries `alignments` (default pins for a source, shipped as `index.json` → `alignments` and merged under the user's
+own settings by `effectiveAlignment` in `stores/settings.js`; read alignment as plain state through that function, not through a
+store action, so reactive code stays free of action side effects) and `replaces` (wrong URLs an earlier load may have saved in a
+browser, which a correction then replaces in `importFromDataManifests`).
+`node ui/scripts/coverage-report.mjs` lists the transcribed folios that have no scan.
+
+### Testing alignment
+
+* `src/test/fixtures/iiif/corpus-manifests.json` — the canvas labels of the corpus's
+  real manifests (77 manuscripts from 16 libraries) plus the transcription's folios.
+  Refresh with `node scripts/fetch-iiif-fixtures.mjs` (`--delay=8000` for Gallica).
+* `src/test/alignment/corpus.test.js` — on every one of them: both directions agree;
+  a folio shows on the canvas whose label names it; stored keys do not depend on the
+  manifest; a key written with any canvas label migrates to exactly the folio that
+  canvas shows, and only once. Plus a golden file (`alignment-golden.json`) of which
+  scan each transcribed folio resolves to: a change that moves any page fails and
+  shows which (regenerate deliberately with `UPDATE_GOLDEN=1`).
+* `src/test/fixtures/alignment-scenarios.json` + `scenarios.test.js` — situations
+  described as data (your Ox 340 export, keys under scan labels, two spellings of one
+  page, Munich scan counters, spreads, flyleaves, `NP`, pins and drift, no manifest,
+  hand-written labels with offsets), run through the real stores, import, migration
+  and the Manuscripts view's composable. Add a scenario to the JSON to cover a new case.
 
 ## Screens that were split
 

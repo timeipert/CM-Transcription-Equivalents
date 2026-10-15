@@ -39,6 +39,14 @@ describe('renderSvg (pure logic)', () => {
         expect(res.content).toContain('stroke="var(--color-text-muted)"');
     });
 
+    it('draws one bracket per group, also for groups written next to each other', () => {
+        const brackets = code => (renderSvg(code, dummyGlyphs, false).content.match(/stroke="var\(--color-text-muted\)"/g) || []).length;
+        expect(brackets('[*u]')).toBe(1);
+        expect(brackets('[*u][udL]')).toBe(2);   // 46+ in the pattern library
+        expect(brackets('[*u]d[udL]')).toBe(2);
+        expect(brackets('[*u][udL][*d]')).toBe(3);
+    });
+
     it('applies ascending/descending special LA/LD', () => {
         // "uLA" or "dLD"
         const res1 = renderSvg('uLA', dummyGlyphs, false);

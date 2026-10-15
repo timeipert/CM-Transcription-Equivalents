@@ -452,11 +452,15 @@ def export_json(data, output_file):
                     sigle = row["Quellensigle"]
                     manifest = row["Manifest"]
                     if pd.notna(manifest):
-                        manifest_map[sigle] = {"url": manifest}
+                        manifest_map[sigle] = {"url": str(manifest).strip()}
         else:
             print(f"Warning: {excel_path} not found.")
     except Exception as e:
         print(f"Warning: Could not load Quellendaten.xlsx: {e}")
+
+    # Manifest decisions made since the spreadsheet were last updated (tracked file).
+    from apply_manifest_overrides import apply_overrides, load_alignments, load_overrides
+    manifest_map = apply_overrides(manifest_map, load_overrides())
 
     # Construct Final Export Object (Index without large data payload)
     export_obj = {
@@ -464,6 +468,7 @@ def export_json(data, output_file):
         "overallMax": overall_max,
         "glyphs": glyphs,
         "manifests": manifest_map,
+        "alignments": load_alignments(),
         "sourceFolios": source_folios,
         "sources": sources
     }

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { iiifParseRules } from '../config/iiifRules';
+import { labelRuleFor } from '../config/iiifRules';
 import { fetchManifestJson } from '../services/iiif/manifestFetch';
 import { parseManifest } from '../services/iiif/manifestParser';
 import { getCachedItem, setCachedItem, deleteCachedItem, clearStore } from '../utils/idb';
@@ -92,7 +92,7 @@ export const useIiifStore = defineStore('iiif', () => {
 
             try {
                 const data = await fetchManifestJson(url);
-                const folios = parseManifest(data, { labelRule: iiifParseRules[source] });
+                const folios = parseManifest(data, { labelRule: labelRuleFor(source) });
 
                 if (folios.length > 0) {
                     parsedData.value[source] = folios;
@@ -124,8 +124,21 @@ export const useIiifStore = defineStore('iiif', () => {
         for (const [source, info] of Object.entries(manifestMap)) {
             const url = (typeof info === 'string' ? info : info.url || '').trim();
             if (!url) continue;
+            // A link the user (or an older build) already has stays — unless the data
+            // lists it as one it replaces: a manifest that was wrong, saved in the
+            // browser by an earlier load, must not outlive its correction.
+            const current = (links.value[source] || '').trim();
+            const replaces = (typeof info === 'object' && Array.isArray(info.replaces) ? info.replaces : []).map(u => String(u).trim());
+            if (current && current !== url && replaces.includes(current)) {
+                links.value[source] = url;
+                delete parsedData.value[source];
+                delete manifestStatus.value[source];
+                await deleteCachedItem('manifests', source);
+                await clearStore('images'); // region crops were keyed to the old service URL
+                continue;
+            }
             // Just register the link, don't fetch yet (lazy loading)
-            if (!links.value[source]) {
+            if (!current) {
                 links.value[source] = url;
             }
         }

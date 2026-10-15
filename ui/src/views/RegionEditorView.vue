@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAnnotationsStore } from '../stores/annotations';
 import { useTranscriptionData } from '../composables/useTranscriptionData';
 import { useImageManifest } from '../composables/useImageManifest';
+import { folioIdentity } from '../utils/keys';
 import FolioAnnotator from '../components/FolioAnnotator.vue';
 import PatternDisplay from '../components/PatternDisplay.vue';
 
@@ -12,7 +13,16 @@ const router = useRouter();
 
 const annotStore = useAnnotationsStore();
 const { sourceFolios, rawData, glyphs } = useTranscriptionData();
-const { getImageUrl } = useImageManifest();
+const { getImageUrl, canvasFor } = useImageManifest();
+
+/** Whether a transcription folio is this page (any spelling of it). */
+const onThisPage = f => folioIdentity(f) === folioIdentity(folio.value);
+
+/** The scan the line is being drawn on, remembered so a later alignment change shows. */
+function currentCanvas() {
+    const hit = canvasFor(source.value, folio.value);
+    return hit ? { index: hit.index, label: String(hit.page.originalFolio ?? hit.page.folio) } : undefined;
+}
 
 // Query params
 const source = computed(() => route.query.source || '');
@@ -55,7 +65,7 @@ const allLinesOnPage = computed(() => {
 
     for (const pat in srcData) {
         for (const occ of srcData[pat]) {
-            if (String(occ[1]) === String(folio.value)) {
+            if (onThisPage(occ[1])) {
                 const l = parseInt(occ[2]);
                 if (!isNaN(l)) lines.add(l);
             }
@@ -138,7 +148,7 @@ const highlightHint = computed(() => {
     for (const p in srcData) {
         if (p === pat || p.startsWith(pat + ' ')) {
             for (const o of srcData[p]) {
-                if (String(o[1]) === String(folio.value)) {
+                if (onThisPage(o[1])) {
                     occs.push(o);
                 }
             }
@@ -163,10 +173,11 @@ function handleSave(points) {
     if (isEditing.value && targetRegionId) {
         annotStore.updateRegion(source.value, folio.value, targetRegionId, {
             name: finalName,
-            points
+            points,
+            canvas: currentCanvas()
         });
     } else {
-        targetRegionId = annotStore.addRegion(source.value, folio.value, finalName, points);
+        targetRegionId = annotStore.addRegion(source.value, folio.value, finalName, points, { canvas: currentCanvas() });
     }
 
     // Return to workspace detail with this region selected
