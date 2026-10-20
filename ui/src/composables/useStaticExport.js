@@ -538,11 +538,21 @@ function neumentabelleMarkdown({ publishedSources, allPatterns, matrixSnippets }
 // ---- main entry point ------------------------------------------------------
 
 /**
- * Build and download the static site ZIP.
+ * Build the static site ZIP and, by default, download it.
+ *
+ * `options` (all optional; the defaults are what the Settings button has always done):
+ *   only          array of source names - export just these (still only published ones)
+ *   itemSnippets  false = skip the per-item citation crops (the line photos are still saved).
+ *                 Much faster; the Neume Table then has no snippets.
+ *   neumeTable    false = leave neumentabelle.html/.md out
+ *   download      false = do not trigger a download, return the ZIP as `blob` instead
+ *
  * @param {(p: {phase:string, message:string, done?:number, total?:number}) => void} [onProgress]
- * @returns {Promise<{sources:number, snippets:number, failures:number}>}
+ * @param {{only?: string[], itemSnippets?: boolean, neumeTable?: boolean, download?: boolean}} [options]
+ * @returns {Promise<{sources:number, snippets:number, failures:number, blob?: Blob}>}
  */
-export async function exportStaticSite(onProgress = () => {}) {
+export async function exportStaticSite(onProgress = () => {}, options = {}) {
+    const { only = null, itemSnippets = true, neumeTable = true, download = true } = options;
     const tablesStore = usePersonalTablesStore();
     const annotStore = useAnnotationsStore();
     const iiifStore = useIiifStore();
@@ -563,6 +573,7 @@ export async function exportStaticSite(onProgress = () => {}) {
     // 2. Published sources: same predicate as PublicManuscriptsView
     const published = tablesStore.tables.filter(t => {
         if (!t.isPublished) return false;
+        if (Array.isArray(only) && !only.includes(t.source)) return false;
         return Object.keys(annotStore.regions).some(k => isPageKeyOf(k, t.source) && annotStore.regions[k].length > 0);
     });
 
@@ -633,7 +644,7 @@ export async function exportStaticSite(onProgress = () => {}) {
             totalSnippets++;
 
             // Also save exact per-item citation crops (tight bbox, higher res)
-            for (const item of line.items || []) {
+            for (const item of (itemSnippets ? line.items || [] : [])) {
                 if (!item.points) continue;
                 const ib = pointsBoundingBox(item.points, 0.02);
                 if (!ib) continue;
@@ -678,30 +689,32 @@ export async function exportStaticSite(onProgress = () => {}) {
         });
     }
 
-    // 3. Build Neume Table (Comparison Matrix)
-    report('neumentabelle', 'Building Neume Table comparative matrix…');
-    const allMatrixPatterns = Array.from(patternCountMap.keys()).sort((a, b) => compareChantPatterns(a, b, 'freq', patternCountMap));
-    const glyphs = useTranscriptionData().glyphs.value;
-    const ntSignGlyphs = resolveSignGlyphs(settings.customSigns, glyphs);
+    if (neumeTable) {
+        // 3. Build Neume Table (Comparison Matrix)
+        report('neumentabelle', 'Building Neume Table comparative matrix…');
+        const allMatrixPatterns = Array.from(patternCountMap.keys()).sort((a, b) => compareChantPatterns(a, b, 'freq', patternCountMap));
+        const glyphs = useTranscriptionData().glyphs.value;
+        const ntSignGlyphs = resolveSignGlyphs(settings.customSigns, glyphs);
 
-    const ntHtml = neumentabelleHtml({
-        publishedSources: publishedSourcesForMatrix,
-        allPatterns: allMatrixPatterns,
-        matrixSnippets,
-        glyphs,
-        displayMode,
-        signGlyphs: ntSignGlyphs,
-        signKeys: settings.customSigns.map(s => s.key)
-    });
+        const ntHtml = neumentabelleHtml({
+            publishedSources: publishedSourcesForMatrix,
+            allPatterns: allMatrixPatterns,
+            matrixSnippets,
+            glyphs,
+            displayMode,
+            signGlyphs: ntSignGlyphs,
+            signKeys: settings.customSigns.map(s => s.key)
+        });
 
-    const ntMd = neumentabelleMarkdown({
-        publishedSources: publishedSourcesForMatrix,
-        allPatterns: allMatrixPatterns,
-        matrixSnippets,
-    });
+        const ntMd = neumentabelleMarkdown({
+            publishedSources: publishedSourcesForMatrix,
+            allPatterns: allMatrixPatterns,
+            matrixSnippets,
+        });
 
-    zip.file('neumentabelle.html', ntHtml);
-    zip.file('neumentabelle.md', ntMd);
+        zip.file('neumentabelle.html', ntHtml);
+        zip.file('neumentabelle.md', ntMd);
+    }
 
     // 4. Root directory + README
     report('bundle', 'Building directory and packaging ZIP…');
@@ -711,6 +724,10 @@ export async function exportStaticSite(onProgress = () => {}) {
 
     // 5. Generate + download
     const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+    if (!download) {
+        report('done', `Done — ${published.length} source(s), ${totalSnippets} snippet(s)` + (totalFailures ? `, ${totalFailures} failed` : ''));
+        return { sources: published.length, snippets: totalSnippets, failures: totalFailures, blob };
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
