@@ -6,6 +6,7 @@ import router from './router'
 import { initPersistence } from './services/persistence/storeRegistry'
 import { initPageKeyMigration } from './composables/usePageKeyMigration'
 import { useWorkspaceStorage } from './composables/useWorkspaceStorage'
+import { registerExportApi } from './api/exportApi'
 
 const app = createApp(App)
 
@@ -24,3 +25,6 @@ initPageKeyMigration({
 })
 
 app.mount('#app')
+
+// window.cmExportApi: the export for automated use (see src/api/exportApi.js)
+registerExportApi()
