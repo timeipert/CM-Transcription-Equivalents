@@ -16,6 +16,9 @@ const emit = defineEmits(['confirm', 'cancel']);
 
 const choices = reactive({});
 for (const item of props.analysis.overlapSources || []) choices[item.source] = 'skip';
+// Custom manuscripts (pasted images) have no folios; they are told apart by id and siglum.
+const collectionChoices = reactive({});
+for (const item of props.analysis.overlapCollections || []) collectionChoices[item.id] = 'skip';
 const importSettings = ref(!!props.analysis.hasSettings);
 
 function setAllMergeChoices(choice) {
@@ -24,10 +27,14 @@ function setAllMergeChoices(choice) {
         if (choice !== 'skip' && !item.incomingStats.hasData) continue;
         choices[item.source] = choice;
     }
+    for (const item of props.analysis.overlapCollections || []) {
+        if (choice !== 'skip' && !item.incomingStats.hasData) continue;
+        collectionChoices[item.id] = choice;
+    }
 }
 
 function confirm() {
-    emit('confirm', { choices: { ...choices }, importSettings: importSettings.value });
+    emit('confirm', { choices: { ...choices }, collectionChoices: { ...collectionChoices }, importSettings: importSettings.value });
 }
 </script>
 
@@ -50,10 +57,58 @@ function confirm() {
                     </div>
                 </div>
 
-                <div class="merge-section">
+                <div v-if="analysis.newCollections && analysis.newCollections.length > 0" class="merge-section">
+                    <h4>New Custom Manuscripts (Will be imported safely)</h4>
+                    <div class="new-sources-list">
+                        <span v-for="item in analysis.newCollections" :key="item.id" class="badge">
+                            {{ item.source }} ({{ item.incomingStats.snippets }} snippets, {{ item.incomingStats.patterns }} patterns)
+                        </span>
+                    </div>
+                </div>
+
+                <div v-if="analysis.overlapCollections && analysis.overlapCollections.length > 0" class="merge-section">
+                    <h4>Overlapping Custom Manuscripts</h4>
+                    <p class="desc">
+                        A custom manuscript with the same siglum (or the same internal id) is already here.
+                        <em>Overwrite</em> replaces your version with the one from the file; <em>Import as Copy</em> keeps both.
+                    </p>
+                    <div class="conflict-list">
+                        <div v-for="item in analysis.overlapCollections" :key="item.id" class="conflict-card">
+                            <div class="conflict-header-row">
+                                <span class="src-name">{{ item.source }}</span>
+                                <div class="conflict-stats-row">
+                                    <div class="stat-pill incoming">
+                                        <strong>Incoming File:</strong>
+                                        {{ item.incomingStats.snippets }} snippets, {{ item.incomingStats.patterns }} patterns
+                                    </div>
+                                    <div class="stat-pill local">
+                                        <strong>Local Workspace:</strong>
+                                        {{ item.localStats.snippets }} snippets, {{ item.localStats.patterns }} patterns
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="conflict-actions mt-10">
+                                <label class="radio-label" :class="{ selected: collectionChoices[item.id] === 'skip' }">
+                                    <input type="radio" :name="'cm_merge_' + item.id" value="skip" v-model="collectionChoices[item.id]">
+                                    Skip
+                                </label>
+                                <label :class="['radio-label', { selected: collectionChoices[item.id] === 'copy', disabled: !item.incomingStats.hasData }]">
+                                    <input type="radio" :name="'cm_merge_' + item.id" value="copy" v-model="collectionChoices[item.id]" :disabled="!item.incomingStats.hasData">
+                                    Import as Copy
+                                </label>
+                                <label :class="['radio-label overwrite', { selected: collectionChoices[item.id] === 'overwrite', disabled: !item.incomingStats.hasData }]">
+                                    <input type="radio" :name="'cm_merge_' + item.id" value="overwrite" v-model="collectionChoices[item.id]" :disabled="!item.incomingStats.hasData">
+                                    Overwrite Local
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="analysis.overlapSources && analysis.overlapSources.length > 0" class="merge-section">
                     <div class="merge-section-header">
                         <h4>Overlapping Manuscripts</h4>
-                        <div v-if="analysis.overlapSources && analysis.overlapSources.length > 0" class="bulk-select-bar">
+                        <div class="bulk-select-bar">
                             <span class="bulk-label">Select all:</span>
                             <button type="button" class="btn-bulk" @click="setAllMergeChoices('skip')">Skip All</button>
                             <button type="button" class="btn-bulk" @click="setAllMergeChoices('copy')">Import All as Copy</button>

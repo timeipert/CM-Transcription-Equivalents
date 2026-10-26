@@ -4,12 +4,17 @@ import { useDirectSnippetsStore } from '../stores/directSnippets';
 import { useSettingsStore } from '../stores/settings';
 import { useTranscriptionData } from '../composables/useTranscriptionData';
 import { fileToSnippet, imageFromPaste, imagesFromDrop, formatBytes } from '../utils/snippetImages';
+import { useDataManagement } from '../composables/useDataManagement';
+import { useCustomManuscriptPdf } from '../composables/useCustomManuscriptPdf';
 import PatternDisplay from '../components/PatternDisplay.vue';
 import PatternCode from '../components/PatternCode.vue';
 
 const store = useDirectSnippetsStore();
 const settings = useSettingsStore();
 const { glyphs } = useTranscriptionData();
+
+const { exportCustomManuscript } = useDataManagement();
+const { generateCustomManuscriptPdf } = useCustomManuscriptPdf();
 
 const activeId = ref('');
 const active = computed(() => store.getCollection(activeId.value));
@@ -192,6 +197,41 @@ onBeforeUnmount(() => {
     store.flush();
 });
 
+// --- Sharing for proofreading ---
+// A JSON file carries the whole manuscript (images included) and is read back by
+// Settings → Share / Backup → Import; the PDF is for printing and marking up.
+const shareBusy = ref('');   // '' | 'json' | 'pdf'
+const shareMsg = ref('');
+const shareError = ref(false);
+
+async function runShare(kind, job) {
+    if (!active.value || shareBusy.value) return;
+    shareBusy.value = kind;
+    shareMsg.value = '';
+    shareError.value = false;
+    try {
+        shareMsg.value = await job(active.value);
+    } catch (e) {
+        shareError.value = true;
+        shareMsg.value = e?.message || 'The export failed.';
+    } finally {
+        shareBusy.value = '';
+    }
+}
+
+const saveJson = () => runShare('json', async c => {
+    const fileName = await exportCustomManuscript(c.id);
+    return `Saved ${fileName}.`;
+});
+
+const savePdf = () => runShare('pdf', async c => {
+    const { fileName, skipped } = await generateCustomManuscriptPdf(c, glyphs.value);
+    return `Saved ${fileName}.` + (skipped ? ` ${skipped} image${skipped === 1 ? '' : 's'} could not be read and ${skipped === 1 ? 'is' : 'are'} missing from it.` : '');
+});
+
+// A message about one manuscript must not follow the user to the next.
+watch(activeId, () => { shareMsg.value = ''; });
+
 // Patterns already known to the project, offered as suggestions so codes stay
 // consistent with the transcription data instead of being retyped from memory.
 const { patStats } = useTranscriptionData();
@@ -363,6 +403,30 @@ const grouped = computed(() => {
                         </datalist>
                     </label>
                 </div>
+            </div>
+
+            <div class="share-block">
+                <div class="meta-block-head">
+                    Proofreading
+                    <span class="meta-hint">hand this manuscript to someone else to check</span>
+                </div>
+                <div class="share-actions">
+                    <button @click="savePdf" :disabled="!!shareBusy || !active.snippets.length"
+                            title="A printable copy: every pattern with its snippets, Ref IDs and a tick box">
+                        {{ shareBusy === 'pdf' ? 'Preparing PDF…' : 'Save as PDF' }}
+                    </button>
+                    <button @click="saveJson" :disabled="!!shareBusy"
+                            title="One file with this manuscript and its images, for a colleague to import">
+                        {{ shareBusy === 'json' ? 'Saving…' : 'Save as JSON file' }}
+                    </button>
+                </div>
+                <p class="share-hint">
+                    The JSON file holds only this manuscript. A colleague opens it with
+                    <router-link to="/settings">Settings → Share / Backup → Import Backup / Manuscript File</router-link>,
+                    corrects it, saves it again the same way, and you import it back and choose whether it replaces
+                    your version or is added as a copy.
+                </p>
+                <div v-if="shareMsg" :class="shareError ? 'err' : 'share-ok'">{{ shareMsg }}</div>
             </div>
 
             <div class="size-note">
@@ -563,6 +627,10 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .meta-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .meta-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: var(--color-text-muted); }
 .meta-field input { padding: 7px 10px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 13px; font-weight: 400; color: var(--color-text); }
+.share-block { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--color-border); }
+.share-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.share-hint { margin: 10px 0 0; font-size: 12px; line-height: 1.5; color: var(--color-text-muted); }
+.share-ok { margin-top: 8px; font-size: 12px; color: var(--color-primary-hover); font-weight: 600; }
 .size-note { margin-top: 10px; font-size: 11px; color: var(--color-text-muted); }
 .size-total { opacity: .8; }
 .size-warn { margin-top: 8px; font-size: 12px; padding: 8px 10px; background: var(--color-warning-light); color: var(--color-warning-dark); border-radius: 6px; }

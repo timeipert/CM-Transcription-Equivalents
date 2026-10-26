@@ -9,7 +9,7 @@ vi.mock('../../utils/directSnippetsDb', () => ({
 import {
     SCHEMA_VERSION, SchemaError, ENVELOPE_TYPES, migrate, sanitizeData, isConfigFile,
     buildCoreData, buildSettingsData, applyCoreData, applySettingsData, applyDirectData,
-    workspaceFile, backupEnvelope, manuscriptsEnvelope, configEnvelope
+    workspaceFile, backupEnvelope, manuscriptsEnvelope, configEnvelope, customManuscriptEnvelope
 } from './workspaceSchema';
 import { collectStores } from './storeRegistry';
 
@@ -241,5 +241,38 @@ describe('store state <-> payload', () => {
         expect(stores.direct.serialize()).toHaveLength(1);
         await applyDirectData(stores, undefined);
         expect(stores.direct.serialize()).toHaveLength(1);
+    });
+});
+
+describe('custom manuscripts in files', () => {
+    const png = 'data:image/png;base64,AA==';
+
+    it('customManuscriptEnvelope is a manuscript export carrying just that collection', () => {
+        const c = { id: 'dc_1', source: 'Cod. 1', patterns: [], snippets: [] };
+        const env = customManuscriptEnvelope(c);
+        expect(env).toMatchObject({ schemaVersion: SCHEMA_VERSION, type: ENVELOPE_TYPES.manuscripts, exportedManuscripts: ['Cod. 1'] });
+        expect(env.data).toEqual({ directSnippets: [c] });
+        // and it is readable as an ordinary file
+        expect(migrate(env).json.data.directSnippets).toEqual([c]);
+    });
+
+    it('sanitizeData keeps good collections untouched, fields it does not know included', () => {
+        const c = { id: 'dc_1', source: 'S', future: 1, patterns: [{ code: '*uu', label: '' }], snippets: [{ id: 's', pattern: '*uu', image: png, extra: true }] };
+        const { data, warnings } = sanitizeData({ directSnippets: [c] });
+        expect(data.directSnippets).toEqual([c]);
+        expect(warnings).toEqual([]);
+    });
+
+    it('sanitizeData gives every collection its lists and drops what is unusable, saying so', () => {
+        const { data, warnings } = sanitizeData({
+            directSnippets: [
+                { id: 'a', source: 'A', patterns: 'x', snippets: [{ id: 's1', image: png }, { id: 's2' }, 7] },
+                { source: 'no id' },
+                'junk'
+            ]
+        });
+        expect(data.directSnippets).toEqual([{ id: 'a', source: 'A', patterns: [], snippets: [{ id: 's1', image: png }] }]);
+        expect(warnings.join(' ')).toMatch(/Dropped 2 custom manuscripts without an id/);
+        expect(warnings.join(' ')).toMatch(/Dropped 2 custom-manuscript snippets without an image/);
     });
 });

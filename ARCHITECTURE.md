@@ -100,6 +100,19 @@ through it.
    get a new key (see `annotations_v3`) and a `legacy` reader in the registry; the
    old key is left in place as a snapshot.
 
+### Custom manuscripts in files
+
+Custom manuscripts (`stores/directSnippets.js`, collections of pasted images) have no folios or regions, so
+`listSources` and `extractManuscripts` do not see them. They travel as `data.directSnippets` in every file, and one
+can be exported alone (`customManuscriptEnvelope` in `workspaceSchema.js`, `exportCustomManuscript` in
+`useDataManagement.js`; the envelope type is the same as for manuscript exports). On import, `sanitizeData` cleans the
+collections, `analyzeCustomCollections` sorts them into new and colliding (same id **or** same siglum), and
+`mergeCustomCollections` applies the user's per-manuscript choice (overwrite, copy, skip; all pure, in
+`utils/workspaceSharing.js`). `analyzeImportFiles` returns them as `newCollections` / `overlapCollections` next to the
+IIIF-based `newSources` / `overlapSources`; `executeImport` takes `options.collectionChoices`, keyed by the collection's
+id in the file. The printable proofreading copy is `composables/useCustomManuscriptPdf.js`: `layoutCustomManuscriptPdf`
+draws a prepared model on a jsPDF document and is tested with a recording stand-in, so layout needs no browser.
+
 ### Keys, ids
 
 Annotation data is keyed by strings — `"Source_Folio"` (regions, manual lines), where

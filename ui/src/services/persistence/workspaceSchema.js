@@ -179,6 +179,7 @@ export function sanitizeData(data) {
         warnings.push('Ignored "directSnippets": expected a list.');
         delete out.directSnippets;
     }
+    if (out.directSnippets) out.directSnippets = cleanCustomManuscripts(out.directSnippets, warnings);
 
     // Per-page region lists and per-region item lists: every value a list of objects.
     for (const key of ['regions', 'regionItems']) {
@@ -215,6 +216,27 @@ export function sanitizeData(data) {
     }
 
     return { data: out, warnings };
+}
+
+/**
+ * Custom manuscripts (direct-snippet collections) from a file: keep those with an
+ * id, give each the lists a view expects, and drop snippets without an image.
+ * Nothing else is touched, so unknown fields survive a round trip.
+ */
+function cleanCustomManuscripts(list, warnings) {
+    const out = [];
+    let droppedCollections = 0;
+    let droppedSnippets = 0;
+    for (const c of list) {
+        if (!isPlainObject(c) || typeof c.id !== 'string' || !c.id) { droppedCollections++; continue; }
+        const patterns = Array.isArray(c.patterns) ? c.patterns.filter(p => isPlainObject(p) && typeof p.code === 'string' && p.code) : [];
+        const snippets = Array.isArray(c.snippets) ? c.snippets.filter(s => isPlainObject(s) && typeof s.image === 'string' && s.image) : [];
+        droppedSnippets += (Array.isArray(c.snippets) ? c.snippets.length : 0) - snippets.length;
+        out.push({ ...c, source: typeof c.source === 'string' ? c.source : '', patterns, snippets });
+    }
+    if (droppedCollections) warnings.push(`Dropped ${plural(droppedCollections, 'custom manuscript', 'custom manuscripts')} without an id.`);
+    if (droppedSnippets) warnings.push(`Dropped ${plural(droppedSnippets, 'custom-manuscript snippet', 'custom-manuscript snippets')} without an image.`);
+    return out;
 }
 
 // --- Store state <-> payload -------------------------------------------------
@@ -307,6 +329,18 @@ export function manuscriptsEnvelope({ exportedManuscripts, data }) {
         exportedManuscripts,
         data
     };
+}
+
+/**
+ * One custom manuscript as a file of its own, for handing to a proofreader.
+ * Same envelope type as a manuscript export, so Settings → Import reads it; the
+ * images are inline, so the file needs nothing else.
+ */
+export function customManuscriptEnvelope(collection) {
+    return manuscriptsEnvelope({
+        exportedManuscripts: [collection.source],
+        data: { directSnippets: [collection] }
+    });
 }
 
 /** A standalone configuration file. */

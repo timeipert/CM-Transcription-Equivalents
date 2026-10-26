@@ -427,3 +427,88 @@ describe('deleting', () => {
     });
 });
 
+
+describe('custom manuscripts: share for proofreading and take back', () => {
+    const png = 'data:image/png;base64,AA==';
+    const collection = (over = {}) => ({
+        id: 'dc_a', source: 'Cod. Sang. 359', name: 'Cantatorium', notes: 'n', isPublished: true,
+        patterns: [{ code: '*uudd', label: 'Scandicus' }],
+        snippets: [{ id: 's1', pattern: '*uudd', image: png, caption: 'f. 12r', refId: '7', variant: '', width: 10, height: 10 }],
+        ...over
+    });
+
+    it('exports one custom manuscript as a file of its own, images inline', async () => {
+        await stores.direct.hydrate([collection(), collection({ id: 'dc_b', source: 'Other' })]);
+        const name = await dm.exportCustomManuscript('dc_a');
+
+        expect(name).toMatch(/^cm-custom-manuscript-Cod--Sang--359-\d{4}-\d{2}-\d{2}\.json$/);
+        const { filename, data: file } = downloads[0];
+        expect(filename).toBe(name);
+        expect(file).toMatchObject({ schemaVersion: SCHEMA_VERSION, type: ENVELOPE_TYPES.manuscripts, exportedManuscripts: ['Cod. Sang. 359'] });
+        expect(file.data.directSnippets).toEqual([collection()]);
+        expect(Object.keys(file.data)).toEqual(['directSnippets']);
+    });
+
+    it('says so when the manuscript is gone', async () => {
+        await expect(dm.exportCustomManuscript('nope')).rejects.toThrow(/no longer exists/);
+        expect(downloads).toHaveLength(0);
+    });
+
+    it('reads the file back on another workspace as a new custom manuscript', async () => {
+        await stores.direct.hydrate([collection()]);
+        await dm.exportCustomManuscript('dc_a');
+        const file = downloads[0].data;
+
+        freshApp(); // the proofreader's workspace, empty
+        await vi.advanceTimersByTimeAsync(5);
+        const [analysis] = await dm.analyzeImportFiles([fileOf(file)]);
+        expect(analysis.success).toBe(true);
+        expect(analysis.newSources).toEqual([]);
+        expect(analysis.overlapCollections).toEqual([]);
+        expect(analysis.newCollections).toMatchObject([{ id: 'dc_a', source: 'Cod. Sang. 359', incomingStats: { snippets: 1, patterns: 1 } }]);
+
+        dm.executeImport(analysis.parsed, {});
+        expect(stores.direct.serialize()).toEqual([collection()]);
+    });
+
+    it('a corrected file coming back asks before replacing, and overwrite replaces', async () => {
+        await stores.direct.hydrate([collection()]);
+        const corrected = collection({ snippets: [{ ...collection().snippets[0], caption: 'f. 12v (corrected)' }] });
+        const file = { schemaVersion: SCHEMA_VERSION, type: ENVELOPE_TYPES.manuscripts, exportedManuscripts: ['Cod. Sang. 359'], data: { directSnippets: [corrected] } };
+
+        const [analysis] = await dm.analyzeImportFiles([fileOf(file)]);
+        expect(analysis.newCollections).toEqual([]);
+        expect(analysis.overlapCollections).toMatchObject([{ id: 'dc_a', sameId: true, localStats: { snippets: 1 } }]);
+
+        dm.executeImport(analysis.parsed, {}, { collectionChoices: { dc_a: 'overwrite' } });
+        expect(stores.direct.serialize()[0].snippets[0].caption).toBe('f. 12v (corrected)');
+    });
+
+    it('skip leaves the local version, copy keeps both', async () => {
+        await stores.direct.hydrate([collection()]);
+        const corrected = collection({ snippets: [] });
+        const file = { schemaVersion: SCHEMA_VERSION, data: { directSnippets: [corrected] } };
+        const [analysis] = await dm.analyzeImportFiles([fileOf(file)]);
+
+        dm.executeImport(analysis.parsed, {}, { collectionChoices: { dc_a: 'skip' } });
+        expect(stores.direct.serialize()).toEqual([collection()]);
+
+        dm.executeImport(analysis.parsed, {}, { collectionChoices: { dc_a: 'copy' } });
+        const list = stores.direct.serialize();
+        expect(list).toHaveLength(2);
+        expect(list[1]).toMatchObject({ source: 'Cod. Sang. 359 (copy)', isPublished: false });
+        expect(list[1].id).not.toBe('dc_a');
+    });
+
+    it('a full backup still restores its custom manuscripts', async () => {
+        await stores.direct.hydrate([collection()]);
+        await dm.exportData();
+        const backup = downloads[0].data;
+
+        freshApp();
+        await vi.advanceTimersByTimeAsync(5);
+        const [analysis] = await dm.analyzeImportFiles([fileOf(backup)]);
+        dm.executeImport(analysis.parsed, {});
+        expect(stores.direct.serialize()).toEqual([collection()]);
+    });
+});

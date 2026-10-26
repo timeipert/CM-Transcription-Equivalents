@@ -2,11 +2,15 @@ import { collectStores } from '../services/persistence/storeRegistry';
 import {
     migrate, sanitizeData, isConfigFile, SchemaError,
     buildCoreData, buildSettingsData, applyCoreData, applySettingsData,
-    backupEnvelope, manuscriptsEnvelope, configEnvelope
+    backupEnvelope, manuscriptsEnvelope, configEnvelope, customManuscriptEnvelope
 } from '../services/persistence/workspaceSchema';
 import { useSaveReminderStore } from '../stores/saveReminder';
 import { useOmmrStore } from '../stores/ommr';
-import { extractManuscripts, mergeManuscript, getManuscriptStats, listSources } from '../utils/workspaceSharing';
+import {
+    extractManuscripts, mergeManuscript, getManuscriptStats, listSources,
+    analyzeCustomCollections, mergeCustomCollections
+} from '../utils/workspaceSharing';
+import { newId } from '../utils/id';
 import { downloadJson } from '../utils/download';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -72,6 +76,21 @@ export function useDataManagement() {
         );
     }
 
+    /**
+     * Export one custom manuscript (images included) as a file of its own, to pass
+     * to a proofreader. Settings → Import reads it back.
+     * @returns {string} the file name
+     */
+    async function exportCustomManuscript(collectionId) {
+        // Pending edits sit in a debounce timer; the file must hold what is on screen.
+        if (!stores.direct.loaded) await stores.direct.load();
+        const collection = stores.direct.getCollection(collectionId);
+        if (!collection) throw new Error('That custom manuscript no longer exists.');
+        const filename = `cm-custom-manuscript-${slug(collection.source || 'manuscript')}-${today()}.json`;
+        downloadJson(filename, customManuscriptEnvelope(JSON.parse(JSON.stringify(collection))));
+        return filename;
+    }
+
     /** Export the standalone configuration (settings and pattern library, no manuscript data). */
     function exportConfiguration() {
         const { settings, patternLibrary } = buildSettingsData(stores, { shared: true });
@@ -122,6 +141,7 @@ export function useDataManagement() {
         const results = [];
         const localState = getLocalFullState();
         const localSources = new Set(listSources(localState));
+        if (!stores.direct.loaded) await stores.direct.load();
 
         for (const file of list) {
             try {
@@ -161,6 +181,10 @@ export function useDataManagement() {
                     }
                 }
 
+                // Custom manuscripts are matched by id and siglum, not by folio data.
+                const { newCollections, overlapCollections } =
+                    analyzeCustomCollections(data.directSnippets, stores.direct.collections);
+
                 results.push({
                     success: true,
                     isConfigOnly: false,
@@ -169,6 +193,8 @@ export function useDataManagement() {
                     hasSettings: !!data.settings,
                     newSources,
                     overlapSources,
+                    newCollections,
+                    overlapCollections,
                     notes: [...notes, ...warnings]
                 });
             } catch (err) {
@@ -182,9 +208,11 @@ export function useDataManagement() {
      * Merge an analyzed backup into the workspace.
      * @param parsedJson a file as returned in `analyzeImportFiles(...)[i].parsed`
      * @param choices    per source: 'overwrite' | 'copy' | 'skip'
+     * @param options    `importSettings`; `collectionChoices`: the same choices for custom
+     *                   manuscripts, keyed by the id they have in the file (default 'overwrite')
      */
     function executeImport(parsedJson, choices, options = {}) {
-        const { importSettings = true } = options;
+        const { importSettings = true, collectionChoices = {} } = options;
         const { json } = migrate(parsedJson);
         const data = json.data;
 
@@ -202,10 +230,12 @@ export function useDataManagement() {
         // so they travel with the settings rather than through the merge strategies.
         if (importSettings) applySettingsData(stores, data, { shared: true });
 
-        // Direct snippet collections are keyed by their own ids, independent of the
-        // manuscript merge strategies above, so merge them by id.
+        // Custom manuscripts are independent of the manuscript merge strategies above:
+        // they collide by id or siglum and have their own choices.
         if (Array.isArray(data.directSnippets)) {
-            stores.direct.mergeCollections(data.directSnippets);
+            stores.direct.replaceAll(
+                mergeCustomCollections(stores.direct.collections, data.directSnippets, collectionChoices, () => newId('dc'))
+            );
         }
     }
 
@@ -251,6 +281,7 @@ export function useDataManagement() {
     return {
         exportData,
         exportManuscripts,
+        exportCustomManuscript,
         exportConfiguration,
         importConfiguration,
         analyzeImportFiles,

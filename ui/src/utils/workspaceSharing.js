@@ -287,3 +287,100 @@ export function mergeManuscript(currentState, incomingState, sourceId, strategy)
 
     return newState;
 }
+
+// --- Custom manuscripts (direct-snippet collections) ------------------------
+//
+// A custom manuscript is a collection of pasted images filed under pattern codes
+// (stores/directSnippets.js). It has no folios or line regions, so the functions
+// above do not see it; these work on the same plain-data footing:
+//
+//   { id, source, name, notes, isPublished, patterns: [...], snippets: [...] }
+
+const sameSiglum = (a, b) => String(a?.source || '').trim().toLowerCase() === String(b?.source || '').trim().toLowerCase();
+
+/** Figures shown when a file's custom manuscript meets one already in the workspace. */
+export function customManuscriptStats(collection) {
+    const snippets = (collection?.snippets || []).length;
+    const patterns = (collection?.patterns || []).length;
+    return { snippets, patterns, hasData: snippets > 0 || patterns > 0 };
+}
+
+/** The local custom manuscripts an incoming one would collide with: the same id, or the same siglum. */
+function collisions(local, incoming) {
+    return (local || []).filter(l => l.id === incoming.id || sameSiglum(l, incoming));
+}
+
+/**
+ * Sort the custom manuscripts of an incoming file into those that are new here and
+ * those that collide with local ones.
+ * @returns {{ newCollections: Object[], overlapCollections: Object[] }} each item is
+ *   `{ id, source, name, incomingStats, localStats?, sameId? }`
+ */
+export function analyzeCustomCollections(incoming, local) {
+    const newCollections = [];
+    const overlapCollections = [];
+    for (const c of incoming || []) {
+        if (!c?.id) continue;
+        const item = { id: c.id, source: c.source || '', name: c.name || '', incomingStats: customManuscriptStats(c) };
+        const hits = collisions(local, c);
+        if (!hits.length) {
+            newCollections.push(item);
+            continue;
+        }
+        const snippets = hits.reduce((n, h) => n + customManuscriptStats(h).snippets, 0);
+        const patterns = hits.reduce((n, h) => n + customManuscriptStats(h).patterns, 0);
+        overlapCollections.push({
+            ...item,
+            localStats: { snippets, patterns, hasData: snippets > 0 || patterns > 0 },
+            sameId: hits.some(h => h.id === c.id)
+        });
+    }
+    return { newCollections, overlapCollections };
+}
+
+/** A siglum not yet used by any custom manuscript in `taken`: "S (copy)", "S (copy 2)", … */
+function copySiglum(source, taken) {
+    const used = new Set(taken.map(c => String(c.source || '').trim().toLowerCase()));
+    const base = String(source || '').trim();
+    let candidate = `${base} (copy)`;
+    for (let n = 2; used.has(candidate.toLowerCase()); n++) candidate = `${base} (copy ${n})`;
+    return candidate;
+}
+
+/**
+ * Merge incoming custom manuscripts into the local list; returns a new list and
+ * leaves both inputs untouched.
+ *
+ * Those that collide with a local one follow `choices[incoming.id]`:
+ *   'overwrite' (the default) replaces the local one(s), in the local one's place,
+ *   'copy'      keeps both: the incoming one gets a new id and a siglum "… (copy)"
+ *               and is not published,
+ *   'skip'      keeps only the local one.
+ * Those without a collision are always added.
+ *
+ * @param {Object[]} local
+ * @param {Object[]} incoming
+ * @param {Object<string,'overwrite'|'copy'|'skip'>} [choices]
+ * @param {() => string} [makeId] id source for copies
+ */
+export function mergeCustomCollections(local, incoming, choices = {}, makeId = () => `dc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`) {
+    let result = [...(local || [])];
+    for (const c of incoming || []) {
+        if (!c?.id) continue;
+        const hits = collisions(result, c);
+        if (!hits.length) {
+            result.push(c);
+            continue;
+        }
+        const strategy = choices[c.id] || 'overwrite';
+        if (strategy === 'skip') continue;
+        if (strategy === 'copy') {
+            result.push({ ...c, id: makeId(), source: copySiglum(c.source, result), isPublished: false });
+            continue;
+        }
+        // Replace the first local match in place, drop any further ones.
+        result = result.filter(r => !hits.includes(r) || r === hits[0]);
+        result[result.indexOf(hits[0])] = c;
+    }
+    return result;
+}
