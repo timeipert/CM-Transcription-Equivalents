@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderSvg } from './svgRenderer';
+import { renderSvg, pathInkBounds } from './svgRenderer';
 
 describe('renderSvg (pure logic)', () => {
     const dummyGlyphs = {
@@ -56,6 +56,37 @@ describe('renderSvg (pure logic)', () => {
         expect(res2.content).toContain('M3'); // descending glyph
     });
 
+    it('keeps the tall LA/LD glyphs inside the picture (nothing cropped)', () => {
+        // Same shape as the shipped glyphs: a 12x60 viewBox, ink only between y=25 and y=43
+        // (descending) or y=17 and y=35 (ascending); the note head sits at the viewBox centre.
+        const tall = {
+            ...dummyGlyphs,
+            ascending: { viewBox: '24 0 12 60', d: 'M24 35 L36 35 L36 17 Z' },
+            descending: { viewBox: '24 0 12 60', d: 'M24 25 L36 25 L36 43 Z' },
+        };
+        for (const code of ['*LD', '*LA', '*uLD', '*dLA', '[*dLD]', '[*uLA]d']) {
+            const r = renderSvg(code, tall, false);
+            const [, , w, h] = r.viewBox.split(' ').map(Number);
+            expect(w).toBe(r.width);
+            expect(h).toBe(r.height);
+            // Every glyph is drawn as translate(x,y) scale(s) with its ink inside the picture.
+            const drawn = [...r.content.matchAll(/translate\(([-\d.]+),([-\d.]+)\) scale\(([\d.]+)\)"><path d="M24 (\d+)/g)];
+            expect(drawn.length).toBeGreaterThan(0);
+            for (const m of drawn) {
+                const [ty, scale, startY] = [Number(m[2]), Number(m[3]), Number(m[4])];
+                const inkTop = ty + Math.min(startY, startY === 35 ? 17 : 25) * scale;
+                const inkBottom = ty + (startY === 35 ? 35 : 43) * scale;
+                expect(inkTop).toBeGreaterThanOrEqual(0);
+                expect(inkBottom).toBeLessThanOrEqual(r.height);
+            }
+        }
+    });
+
+    it('does not enlarge the picture for ordinary notes', () => {
+        expect(renderSvg('*', dummyGlyphs, false).height).toBe(32);
+        expect(renderSvg('*u', dummyGlyphs, false).height).toBe(40);
+    });
+
     it('applies other special note suffixes (O, Q, S)', () => {
         const res1 = renderSvg('uO', dummyGlyphs, false);
         expect(res1.content).toContain('M4'); // oriscus
@@ -82,5 +113,23 @@ describe('renderSvg (pure logic)', () => {
         const res = renderSvg('*uuVdd', dummyGlyphs, false);
         expect(res.content).toContain('M1');
         expect(res.content).not.toContain('M99');
+    });
+});
+
+describe('pathInkBounds', () => {
+    it('reads absolute and relative commands', () => {
+        expect(pathInkBounds('M1 2 L5 8')).toEqual({ minX: 1, maxX: 5, minY: 2, maxY: 8 });
+        expect(pathInkBounds('m 1,2 l 4,6 h -2 v 3 z')).toEqual({ minX: 1, maxX: 5, minY: 2, maxY: 11 });
+    });
+
+    it('reads the shipped ascending glyph', () => {
+        const d = 'm 28.846225,35.094337 c -2.306802,0 -4.382925,-1.557091 -4.382925,-4.123409 l 0,-13.6 z';
+        const b = pathInkBounds(d);
+        expect(b.maxY).toBeCloseTo(35.094337);
+        expect(b.minY).toBeLessThan(18);
+    });
+
+    it('returns null for a path it cannot read', () => {
+        expect(pathInkBounds('M1 2 X 3 4')).toBeNull();
     });
 });

@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { getManuscriptStats, extractManuscripts, mergeManuscript, listSources } from './workspaceSharing';
+import {
+    getManuscriptStats, extractManuscripts, mergeManuscript, listSources,
+    customManuscriptStats, analyzeCustomCollections, mergeCustomCollections
+} from './workspaceSharing';
 
 // Two sources where one siglum extends the other across an underscore.
 function state() {
@@ -176,5 +179,90 @@ describe('mergeManuscript strategies', () => {
         const before = JSON.stringify(cur);
         mergeManuscript(cur, incoming(), 'X', 'overwrite');
         expect(JSON.stringify(cur)).toBe(before);
+    });
+});
+
+describe('custom manuscripts (direct-snippet collections)', () => {
+    const snip = id => ({ id, pattern: '*', image: 'data:image/png;base64,AA==' });
+    const coll = (id, source, snippets = 1, extra = {}) => ({
+        id, source, name: '', notes: '', isPublished: false,
+        patterns: [{ code: '*', label: '' }],
+        snippets: Array.from({ length: snippets }, (_, i) => snip(`${id}-s${i}`)),
+        ...extra
+    });
+
+    it('counts snippets and patterns', () => {
+        expect(customManuscriptStats(coll('a', 'A', 3))).toEqual({ snippets: 3, patterns: 1, hasData: true });
+        expect(customManuscriptStats({ id: 'e', source: 'E', patterns: [], snippets: [] }).hasData).toBe(false);
+        expect(customManuscriptStats(undefined).hasData).toBe(false);
+    });
+
+    describe('analyzeCustomCollections', () => {
+        it('reports a manuscript the workspace does not have as new', () => {
+            const { newCollections, overlapCollections } = analyzeCustomCollections([coll('a', 'A', 2)], [coll('b', 'B')]);
+            expect(overlapCollections).toEqual([]);
+            expect(newCollections).toMatchObject([{ id: 'a', source: 'A', incomingStats: { snippets: 2 } }]);
+        });
+
+        it('reports the same id as an overlap, with both sides\' figures', () => {
+            const { overlapCollections } = analyzeCustomCollections([coll('a', 'A', 5)], [coll('a', 'A', 2)]);
+            expect(overlapCollections).toMatchObject([{ id: 'a', sameId: true, incomingStats: { snippets: 5 }, localStats: { snippets: 2 } }]);
+        });
+
+        it('reports the same siglum under another id as an overlap, ignoring case and spaces', () => {
+            const { overlapCollections } = analyzeCustomCollections([coll('x', ' cod. sang. 359 ')], [coll('a', 'Cod. Sang. 359', 4)]);
+            expect(overlapCollections).toMatchObject([{ id: 'x', sameId: false, localStats: { snippets: 4 } }]);
+        });
+
+        it('copes with a missing list', () => {
+            expect(analyzeCustomCollections(undefined, undefined)).toEqual({ newCollections: [], overlapCollections: [] });
+        });
+    });
+
+    describe('mergeCustomCollections', () => {
+        const local = () => [coll('a', 'A', 2), coll('b', 'B', 1)];
+
+        it('adds new manuscripts and keeps the rest', () => {
+            const merged = mergeCustomCollections(local(), [coll('c', 'C')]);
+            expect(merged.map(c => c.id)).toEqual(['a', 'b', 'c']);
+        });
+
+        it('overwrites in place by default (the file wins)', () => {
+            const merged = mergeCustomCollections(local(), [coll('a', 'A', 7)]);
+            expect(merged.map(c => c.id)).toEqual(['a', 'b']);
+            expect(merged[0].snippets).toHaveLength(7);
+        });
+
+        it('overwrites the local manuscript that has the same siglum under another id', () => {
+            const merged = mergeCustomCollections(local(), [coll('z', 'A', 9)], { z: 'overwrite' });
+            expect(merged.map(c => c.id)).toEqual(['z', 'b']);
+        });
+
+        it('skips when told to', () => {
+            const merged = mergeCustomCollections(local(), [coll('a', 'A', 7)], { a: 'skip' });
+            expect(merged).toEqual(local());
+        });
+
+        it('keeps both as a copy: new id, "(copy)" siglum, not published', () => {
+            const merged = mergeCustomCollections(local(), [coll('a', 'A', 7, { isPublished: true })], { a: 'copy' }, () => 'dc_new');
+            expect(merged.map(c => [c.id, c.source])).toEqual([['a', 'A'], ['b', 'B'], ['dc_new', 'A (copy)']]);
+            expect(merged[2].isPublished).toBe(false);
+            expect(merged[2].snippets).toHaveLength(7);
+        });
+
+        it('numbers further copies', () => {
+            let merged = mergeCustomCollections(local(), [coll('a', 'A')], { a: 'copy' }, () => 'c1');
+            merged = mergeCustomCollections(merged, [coll('a', 'A')], { a: 'copy' }, () => 'c2');
+            expect(merged.map(c => c.source)).toEqual(['A', 'B', 'A (copy)', 'A (copy 2)']);
+        });
+
+        it('does not mutate its inputs', () => {
+            const l = local();
+            const inc = [coll('a', 'A', 7)];
+            const before = JSON.stringify([l, inc]);
+            mergeCustomCollections(l, inc, { a: 'overwrite' });
+            mergeCustomCollections(l, inc, { a: 'copy' });
+            expect(JSON.stringify([l, inc])).toBe(before);
+        });
     });
 });

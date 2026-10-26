@@ -167,7 +167,7 @@ async function doImport(event) {
             return;
         }
 
-        if (result.overlapSources.length > 0) {
+        if (result.overlapSources.length > 0 || result.overlapCollections.length > 0) {
             // Need conflict resolution
             pendingAnalysis.value = result;
             showMergeModal.value = true;
@@ -175,7 +175,7 @@ async function doImport(event) {
         } else {
             // No overlaps, execute immediately
             executeImport(result.parsed, {}, { importSettings: true });
-            say(`Success! Imported ${result.newSources.length} manuscript(s).${notesOf(result)}`, "success", notesOf(result) ? 12000 : 4000);
+            say(`Success! Imported ${result.newSources.length + result.newCollections.length} manuscript(s).${notesOf(result)}`, "success", notesOf(result) ? 12000 : 4000);
         }
     } catch (e) {
         say(`Critical Error: ${e.message}`, "error");
@@ -184,9 +184,9 @@ async function doImport(event) {
     }
 }
 
-function confirmMerge({ choices, importSettings }) {
+function confirmMerge({ choices, collectionChoices, importSettings }) {
     try {
-        executeImport(pendingAnalysis.value.parsed, choices, { importSettings });
+        executeImport(pendingAnalysis.value.parsed, choices, { importSettings, collectionChoices });
         const notes = notesOf(pendingAnalysis.value);
         showMergeModal.value = false;
         say(`Success! Data imported and merged.${notes}`, "success", notes ? 12000 : 4000);

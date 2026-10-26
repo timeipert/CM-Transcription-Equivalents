@@ -35,9 +35,9 @@ Do not open the same folder in two browser tabs or two computers at once; the se
 Under **Share / Backup**:
 
 - **Export Manuscripts** downloads all manuscripts that have data as one JSON file. Tick *Include Settings* to add your configuration, pattern library and OMMR settings.
-- **Specific Manuscript(s)** exports only the ones you pick.
+- **Specific Manuscript(s)** exports only the annotated (IIIF) manuscripts you pick. A [custom manuscript](./custom-manuscripts#proofreading-pdf-and-json-for-one-manuscript) is exported from its own page, as a JSON file or a printable PDF.
 - **Export Config / Import Config** move only the configuration (display mode, preferred IDs, custom signs, alignments, …), without any annotations.
-- **Import Backup / Manuscript File** reads any file the app has exported — also from older versions of the app. If a manuscript in the file already exists in your workspace you choose, per manuscript, to **overwrite** it, keep both (**copy**) or **skip** it. A file written by a *newer* version is refused instead of being guessed at.
+- **Import Backup / Manuscript File** reads any file the app has exported — also from older versions of the app. If a manuscript in the file (annotated or custom) already exists in your workspace you choose, per manuscript, to **overwrite** it, keep both (**copy**) or **skip** it. A file written by a *newer* version is refused instead of being guessed at.
 - **Remove All Data** wipes the manuscript data from this workspace. Export a backup first; it cannot be undone.
 
 ### Backup reminder

@@ -37,6 +37,7 @@ A research tool for mapping notation patterns in chant transcriptions to their p
   * `workspace.backup-external.json` — the version of `workspace.json` that was replaced after it had been changed outside the app (another tab, another computer),
   * `workspace.pre-v1.json` — your file as it was before the app upgraded it to a newer format,
   * `workspace.replaced-<time>.json` — what was in the app when you chose a folder that already held a workspace.
+* **Custom manuscripts** (pasted images, no IIIF) can be exported one at a time from their own page (Custom Manuscripts → Proofreading): a JSON file with the images inline, and a printable PDF for proofreading. The JSON file is read back by Settings → Share / Backup → Import, which asks whether to skip, copy or overwrite when the manuscript already exists. See `user-manual/docs/custom-manuscripts.md`.
 * **Backups and exports** (Settings → Share / Backup) are versioned JSON; files from older versions of the app import fine, and a file from a *newer* version is refused rather than guessed at.
 
 ## Installation & Setup
