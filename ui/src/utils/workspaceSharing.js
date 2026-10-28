@@ -5,6 +5,7 @@
  *   { personalTables, regions, regionItems, manualLines, iiifLinks }
  */
 import { parsePageKey, isPageKeyOf, renamePageKeySource } from './keys';
+import { newId } from './id';
 
 /**
  * The manuscripts a piece of state or a file mentions: those with an equivalents
@@ -74,8 +75,33 @@ export function getManuscriptStats(state, sourceId) {
     };
 }
 
+/**
+ * The kinds of manuscript data a file can carry. An export may leave some out;
+ * the file then says which it holds (`contents.parts`), and an "overwrite" on
+ * import replaces only those, so a file without tables never wipes a table.
+ *
+ *   annotations  line regions, the snippets in them, manual line numbers
+ *   tables       the equivalents table (Ref IDs and notes per pattern)
+ *   iiifLinks    the IIIF manifest URL
+ */
+export const DATA_PARTS = ['annotations', 'tables', 'iiifLinks'];
+
+/** `{ annotations, tables, iiifLinks }` from a list of part names; absent or invalid means all. */
+export function normalizeParts(parts) {
+    const list = Array.isArray(parts) ? parts : DATA_PARTS;
+    return Object.fromEntries(DATA_PARTS.map(p => [p, list.includes(p)]));
+}
+
+/**
+ * The data of the given manuscripts.
+ * @param {Object} fullState
+ * @param {string[]} sourceIds
+ * @param {{ onlyWithData?: boolean, parts?: string[] }} [options] `parts` limits
+ *   the result to some of DATA_PARTS (default: all)
+ */
 export function extractManuscripts(fullState, sourceIds, options = {}) {
     const { onlyWithData = false } = options;
+    const parts = normalizeParts(options.parts);
     const filtered = {
         personalTables: [],
         regions: {},
@@ -89,15 +115,17 @@ export function extractManuscripts(fullState, sourceIds, options = {}) {
         : sourceIds;
     const allowed = new Set(targetSources);
 
-    if (fullState.personalTables) {
+    if (parts.tables && fullState.personalTables) {
         filtered.personalTables = fullState.personalTables.filter(t => allowed.has(t.source));
     }
 
-    if (fullState.iiifLinks) {
+    if (parts.iiifLinks && fullState.iiifLinks) {
         for (const src in fullState.iiifLinks) {
             if (allowed.has(src)) filtered.iiifLinks[src] = fullState.iiifLinks[src];
         }
     }
+
+    if (!parts.annotations) return filtered;
 
     const keptRegionIds = new Set();
 
@@ -202,8 +230,28 @@ function mergeSourceIn(currentState, incomingState, sourceId) {
     return next;
 }
 
-export function mergeManuscript(currentState, incomingState, sourceId, strategy) {
-    // strategy: 'overwrite' | 'copy' | 'skip' | 'merge'
+/** A source name not yet used in `state`: "S (copy)", "S (copy 2)", … */
+function copySourceName(state, sourceId) {
+    const taken = new Set(listSources(state));
+    let candidate = `${sourceId} (copy)`;
+    for (let n = 2; taken.has(candidate); n++) candidate = `${sourceId} (copy ${n})`;
+    return candidate;
+}
+
+/**
+ * Bring one manuscript of `incomingState` into `currentState`; returns a new state.
+ *
+ *   'skip'       change nothing
+ *   'merge'      add and update by id, remove nothing (see mergeSourceIn)
+ *   'overwrite'  replace the local data of this manuscript with the incoming one
+ *   'copy'       keep the local one and add the incoming one as "… (copy)"
+ *
+ * @param {{ parts?: string[] }} [options] the kinds of data the incoming file
+ *   carries (DATA_PARTS); 'overwrite' clears only those, so a file exported
+ *   without tables leaves the local table in place
+ */
+export function mergeManuscript(currentState, incomingState, sourceId, strategy, options = {}) {
+    const parts = normalizeParts(options.parts);
     if (strategy === 'skip') {
         return currentState;
     }
@@ -220,32 +268,38 @@ export function mergeManuscript(currentState, incomingState, sourceId, strategy)
     };
 
     const isCopy = strategy === 'copy';
-    const targetSourceId = isCopy ? `${sourceId} (copy)` : sourceId;
-    // Copies need ids of their own so they never collide with the originals.
-    const copyTag = `-copy-${Date.now()}`;
+    // Two copies of the same manuscript (from two files) must not land on one name.
+    const targetSourceId = isCopy ? copySourceName(currentState, sourceId) : sourceId;
+    // Copies need ids of their own so they never collide with the originals, nor
+    // with another copy made in the same import (Date.now() repeats within a millisecond).
+    const copyTag = `-copy-${newId().slice(0, 8)}`;
 
     // Overwrite strategy: first remove existing data for this source
     if (strategy === 'overwrite') {
-        newState.personalTables = newState.personalTables.filter(t => t.source !== targetSourceId);
+        if (parts.tables) {
+            newState.personalTables = newState.personalTables.filter(t => t.source !== targetSourceId);
+        }
         // The link is replaced below if the incoming file has one; if it has none,
         // the manuscript keeps the one it has (an IIIF link is not work to overwrite).
 
-        for (const key in newState.regions) {
-            if (isPageKeyOf(key, targetSourceId)) {
-                for (const r of newState.regions[key]) {
-                    delete newState.regionItems[r.id];
+        if (parts.annotations) {
+            for (const key in newState.regions) {
+                if (isPageKeyOf(key, targetSourceId)) {
+                    for (const r of newState.regions[key]) {
+                        delete newState.regionItems[r.id];
+                    }
+                    delete newState.regions[key];
                 }
-                delete newState.regions[key];
             }
-        }
 
-        for (const key in newState.manualLines) {
-            if (isPageKeyOf(key, targetSourceId)) delete newState.manualLines[key];
+            for (const key in newState.manualLines) {
+                if (isPageKeyOf(key, targetSourceId)) delete newState.manualLines[key];
+            }
         }
     }
 
     // Filter incoming state to just this sourceId
-    const sourceData = extractManuscripts(incomingState, [sourceId]);
+    const sourceData = extractManuscripts(incomingState, [sourceId], { parts: DATA_PARTS.filter(p => parts[p]) });
 
     // Add personalTables
     const newTables = sourceData.personalTables.map(t => {
@@ -351,12 +405,12 @@ function copySiglum(source, taken) {
  * Merge incoming custom manuscripts into the local list; returns a new list and
  * leaves both inputs untouched.
  *
- * Those that collide with a local one follow `choices[incoming.id]`:
- *   'overwrite' (the default) replaces the local one(s), in the local one's place,
+ * Each follows `choices[incoming.id]`:
+ *   'overwrite' (the default) replaces the local one(s) it collides with, in the
+ *               local one's place; without a collision it is added,
  *   'copy'      keeps both: the incoming one gets a new id and a siglum "… (copy)"
- *               and is not published,
- *   'skip'      keeps only the local one.
- * Those without a collision are always added.
+ *               and is not published (without a collision it is simply added),
+ *   'skip'      leaves it out, colliding or not.
  *
  * @param {Object[]} local
  * @param {Object[]} incoming
@@ -367,13 +421,13 @@ export function mergeCustomCollections(local, incoming, choices = {}, makeId = (
     let result = [...(local || [])];
     for (const c of incoming || []) {
         if (!c?.id) continue;
+        const strategy = choices[c.id] || 'overwrite';
+        if (strategy === 'skip') continue;
         const hits = collisions(result, c);
         if (!hits.length) {
             result.push(c);
             continue;
         }
-        const strategy = choices[c.id] || 'overwrite';
-        if (strategy === 'skip') continue;
         if (strategy === 'copy') {
             result.push({ ...c, id: makeId(), source: copySiglum(c.source, result), isPublished: false });
             continue;
@@ -383,4 +437,37 @@ export function mergeCustomCollections(local, incoming, choices = {}, makeId = (
         result[result.indexOf(hits[0])] = c;
     }
     return result;
+}
+
+// --- Several files in one import ----------------------------------------------
+
+/**
+ * Where the files of one import overlap each other. Files are applied in order,
+ * so a manuscript that an earlier file already brings in is a conflict for a
+ * later file even when the workspace does not have it yet.
+ *
+ * @param {{ sources: string[], collections: { id: string, source?: string }[] }[]} files
+ *   per file, in import order: its manuscripts and custom manuscripts; `null`
+ *   for a file that is left out (it overlaps nothing)
+ * @returns {{ sources: Object<string, number>, collections: Object<string, number> }[]}
+ *   per file: for each manuscript (by name) and custom manuscript (by its id in
+ *   the file) that an earlier file also holds, the index of the latest such file
+ */
+export function findBatchOverlaps(files) {
+    const seenSources = new Map();
+    const seenCollections = [];
+    return (files || []).map((file, index) => {
+        const result = { sources: {}, collections: {} };
+        if (!file) return result;
+        for (const src of file.sources || []) {
+            if (seenSources.has(src)) result.sources[src] = seenSources.get(src);
+        }
+        for (const c of file.collections || []) {
+            const hit = [...seenCollections].reverse().find(s => s.id === c.id || sameSiglum(s, c));
+            if (hit) result.collections[c.id] = hit.index;
+        }
+        for (const src of file.sources || []) seenSources.set(src, index);
+        for (const c of file.collections || []) seenCollections.push({ id: c.id, source: c.source, index });
+        return result;
+    });
 }

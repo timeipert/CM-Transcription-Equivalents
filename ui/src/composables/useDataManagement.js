@@ -2,8 +2,10 @@ import { collectStores } from '../services/persistence/storeRegistry';
 import {
     migrate, sanitizeData, isConfigFile, SchemaError,
     buildCoreData, buildSettingsData, applyCoreData, applySettingsData,
-    backupEnvelope, manuscriptsEnvelope, configEnvelope, customManuscriptEnvelope
+    backupEnvelope, manuscriptsEnvelope, configEnvelope, customManuscriptEnvelope, fileParts, ENVELOPE_TYPES
 } from '../services/persistence/workspaceSchema';
+import { buildExport } from '../services/persistence/exportBuilder';
+import { SETTINGS_GROUPS, settingsInGroups } from '../stores/settings';
 import { useSaveReminderStore } from '../stores/saveReminder';
 import { useOmmrStore } from '../stores/ommr';
 import {
@@ -11,10 +13,26 @@ import {
     analyzeCustomCollections, mergeCustomCollections
 } from '../utils/workspaceSharing';
 import { newId } from '../utils/id';
-import { downloadJson } from '../utils/download';
+import { downloadJson, downloadBlob } from '../utils/download';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const slug = text => String(text).replace(/[^a-z0-9]/gi, '-');
+
+/**
+ * What a file is, for display: 'backup' (the whole workspace), 'manuscripts'
+ * (a selection), 'custom' (custom manuscripts only) or 'workspace' (a
+ * workspace-folder file or one without a type).
+ */
+function fileKind(json) {
+    if (json.type === ENVELOPE_TYPES.backup) return 'backup';
+    if (json.type === ENVELOPE_TYPES.manuscripts) {
+        const d = json.data || {};
+        const onlyCustom = Array.isArray(d.directSnippets) && d.directSnippets.length
+            && !listSources(d).length && !d.settings;
+        return onlyCustom ? 'custom' : 'manuscripts';
+    }
+    return 'workspace';
+}
 
 /**
  * Backups, exports and imports of the workspace.
@@ -91,6 +109,53 @@ export function useDataManagement() {
         return filename;
     }
 
+    /**
+     * The workspace as the export builder reads it (plain data; live references,
+     * copy before mutating). Waits for the custom manuscripts to load.
+     */
+    async function exportWorkspace() {
+        if (!stores.direct.loaded) await stores.direct.load();
+        const { settings, patternLibrary, ommrSettings } = buildSettingsData(stores, { shared: true });
+        return { state: getLocalFullState(), collections: stores.direct.collections, settings, patternLibrary, ommrSettings };
+    }
+
+    /**
+     * Export a selection of the workspace (see services/persistence/exportBuilder.js
+     * for its shape): one JSON file, or with `perItem` a ZIP with one file per
+     * manuscript, per custom manuscript and one for the settings.
+     * A selection of everything counts as a backup for the backup reminder.
+     * @returns {Promise<{ filename: string, files: number, complete: boolean, manuscripts: string[], customManuscripts: string[] }>}
+     */
+    async function exportSelection(selection, options = {}) {
+        const { perItem = false } = options;
+        const label = options.label || stores.settings.backupLabel || 'Export';
+        const workspace = await exportWorkspace();
+        const built = buildExport({
+            workspace: JSON.parse(JSON.stringify(workspace)),
+            selection,
+            pickSettings: settingsInGroups,
+            allSettingsGroups: Object.keys(SETTINGS_GROUPS),
+            label,
+            perItem,
+            date: today()
+        });
+
+        let filename;
+        if (perItem) {
+            const { default: JSZip } = await import('jszip');
+            const zip = new JSZip();
+            for (const f of built.files) zip.file(f.filename, JSON.stringify(f.envelope, null, 2));
+            const bytes = await zip.generateAsync({ type: 'uint8array' });
+            filename = `cm-transkript-${built.complete ? 'backup' : 'export'}-${slug(label)}-${today()}.zip`;
+            downloadBlob(filename, new Blob([bytes], { type: 'application/zip' }));
+        } else {
+            filename = built.files[0].filename;
+            downloadJson(filename, built.files[0].envelope);
+        }
+        if (built.complete) reminder.markExported();
+        return { filename, files: built.files.length, complete: built.complete, manuscripts: built.manuscripts, customManuscripts: built.customManuscripts };
+    }
+
     /** Export the standalone configuration (settings and pattern library, no manuscript data). */
     function exportConfiguration() {
         const { settings, patternLibrary } = buildSettingsData(stores, { shared: true });
@@ -154,6 +219,9 @@ export function useDataManagement() {
                         success: true,
                         isConfigOnly: true,
                         fileName: file.name,
+                        kind: 'config',
+                        label: typeof json.label === 'string' ? json.label : '',
+                        hasSettings: true,
                         parsed: json,
                         exportedAt: json.exportedAt,
                         notes: []
@@ -189,8 +257,12 @@ export function useDataManagement() {
                     success: true,
                     isConfigOnly: false,
                     fileName: file.name,
+                    kind: fileKind(json),
+                    label: typeof json.label === 'string' ? json.label : '',
+                    exportedAt: json.exportedAt || json.savedAt || '',
+                    parts: fileParts(json),
                     parsed: json,
-                    hasSettings: !!data.settings,
+                    hasSettings: !!(data.settings || data.patternLibrary || data.ommrSettings),
                     newSources,
                     overlapSources,
                     newCollections,
@@ -215,12 +287,15 @@ export function useDataManagement() {
         const { importSettings = true, collectionChoices = {} } = options;
         const { json } = migrate(parsedJson);
         const data = json.data;
+        // A file from the export builder may carry only some kinds of data; an
+        // overwrite then replaces only those.
+        const parts = fileParts(json);
 
         let state = getLocalFullState();
         for (const src of listSources(data)) {
             const strategy = choices[src] || 'overwrite';
             if (strategy === 'skip') continue;
-            state = mergeManuscript(state, data, src, strategy);
+            state = mergeManuscript(state, data, src, strategy, { parts });
         }
 
         // Commit to the stores (which triggers the autosave if a folder is bound)
@@ -237,6 +312,56 @@ export function useDataManagement() {
                 mergeCustomCollections(stores.direct.collections, data.directSnippets, collectionChoices, () => newId('dc'))
             );
         }
+    }
+
+    /**
+     * Everything an import or a "remove all" can change, as a deep copy, so it
+     * can be put back (`restoreSnapshot`). Includes the settings that never leave
+     * the browser and the custom manuscripts with their images.
+     */
+    async function takeSnapshot() {
+        if (!stores.direct.loaded) await stores.direct.load();
+        return JSON.parse(JSON.stringify({
+            core: getLocalFullState(),
+            settings: buildSettingsData(stores),
+            direct: stores.direct.serialize()
+        }));
+    }
+
+    /** Put the workspace back as `takeSnapshot` found it. */
+    function restoreSnapshot(snapshot) {
+        if (!snapshot) return;
+        applyCoreData(stores, snapshot.core);
+        applySettingsData(stores, snapshot.settings);
+        if (Array.isArray(snapshot.direct)) stores.direct.replaceAll(snapshot.direct);
+    }
+
+    /**
+     * Import several analyzed files in order, each with its own choices. Later
+     * files see what earlier ones brought in. A snapshot is taken first and
+     * returned, so the whole import can be undone in one step.
+     *
+     * @param {{ analysis: Object, choices?: Object, collectionChoices?: Object, importSettings?: boolean }[]} items
+     *   `analysis` is one successful result of `analyzeImportFiles`
+     * @returns {Promise<{ snapshot: Object, files: number, errors: { fileName: string, error: string }[] }>}
+     */
+    async function importBatch(items) {
+        const snapshot = await takeSnapshot();
+        const errors = [];
+        let files = 0;
+        for (const { analysis, choices = {}, collectionChoices = {}, importSettings = false } of items) {
+            try {
+                if (analysis.isConfigOnly) {
+                    if (importSettings) importConfiguration(analysis.parsed);
+                } else {
+                    executeImport(analysis.parsed, choices, { importSettings, collectionChoices });
+                }
+                files++;
+            } catch (e) {
+                errors.push({ fileName: analysis.fileName, error: e.message });
+            }
+        }
+        return { snapshot, files, errors };
     }
 
     function deleteManuscriptData(source, options = {}) {
@@ -280,12 +405,17 @@ export function useDataManagement() {
 
     return {
         exportData,
+        exportWorkspace,
+        exportSelection,
         exportManuscripts,
         exportCustomManuscript,
         exportConfiguration,
         importConfiguration,
         analyzeImportFiles,
         executeImport,
+        importBatch,
+        takeSnapshot,
+        restoreSnapshot,
         deleteManuscriptData,
         clearAllData,
         getLocalFullState

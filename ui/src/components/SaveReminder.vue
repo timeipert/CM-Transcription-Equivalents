@@ -65,7 +65,7 @@ function doExport() {
 }
 
 function goToBackup() {
-    router.push('/settings');
+    router.push({ path: '/settings', query: { section: 'storage' } });
 }
 </script>
 

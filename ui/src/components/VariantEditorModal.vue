@@ -107,7 +107,7 @@ function save() {
             <div v-if="settings.customSigns.length === 0" class="no-signs">
                 <p class="m-0">No custom signs defined yet. A code variant marks a note with a
                     project-defined sign (e.g. a <em>virga</em>), so you need at least one sign first.</p>
-                <router-link to="/settings" class="btn-primary go-settings" @click="$emit('close')">
+                <router-link :to="{ path: '/settings', query: { section: 'signs' } }" class="btn-primary go-settings" @click="$emit('close')">
                     Define signs in Settings →
                 </router-link>
             </div>

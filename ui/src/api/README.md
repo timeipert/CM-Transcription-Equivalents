@@ -12,7 +12,7 @@ const result = await window.cmExportApi.exportSite({
 // result = { apiVersion, summary: { sources, snippets, failures }, imported: ['Aa 13'], zipBase64, bytes }
 ```
 
-* It imports the files like Settings → "Import Backup / Manuscript File" (overwriting what is there).
+* It imports the files like Settings → Import (overwriting what is there).
 * `options.publish`: `'file'` (default) publishes what the files mark as published, `'all'` every imported manuscript.
 * `options.only`: array of source names. `itemSnippets: false` skips the per-item crops (fast, line photos stay),
   `neumeTable: false` leaves `neumentabelle.*` out.

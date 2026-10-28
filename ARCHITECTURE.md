@@ -100,6 +100,25 @@ through it.
    get a new key (see `annotations_v3`) and a `legacy` reader in the registry; the
    old key is left in place as a snapshot.
 
+### Export builder and multi-file import
+
+Settings → Export (`views/settings/ExportSection.vue`) is a front end for `buildExport` in
+`services/persistence/exportBuilder.js`, a pure function from a *selection* (manuscripts, kinds of data from
+`DATA_PARTS` in `utils/workspaceSharing.js`, custom-manuscript ids, groups of settings, pattern library, OMMR
+settings) to file envelopes (`exportEnvelope` in `workspaceSchema.js`). Every such file carries `contents`, the list of
+what it holds. `contents.parts` matters on import: `mergeManuscript(..., 'overwrite', { parts })` clears only those
+kinds of data, so a file exported without tables never wipes a table. Settings are picked by the `group` of each
+entry in `PERSISTED_SETTINGS` (`SETTINGS_GROUPS`, `settingsInGroups` in `stores/settings.js`); a new setting needs its
+`group`, and a test fails without one. `exportSelection` in `useDataManagement.js` downloads the result (a ZIP via
+JSZip for one file per item) and resets the backup reminder only when the selection is complete.
+
+Settings → Import (`views/settings/ImportSection.vue`) expands ZIPs (`utils/importFiles.js`), analyses every file
+with `analyzeImportFiles`, and marks conflicts between files with `findBatchOverlaps` (files apply in order, so a
+manuscript an earlier file brings is a conflict for a later one). `importBatch` takes a snapshot
+(`takeSnapshot`), applies the files one after another with their own choices, and returns the snapshot so the UI can
+undo the whole import (`restoreSnapshot`). `executeImport` stays the single-file entry that the shared sync and
+`window.cmExportApi` use.
+
 ### Custom manuscripts in files
 
 Custom manuscripts (`stores/directSnippets.js`, collections of pasted images) have no folios or regions, so
@@ -200,7 +219,8 @@ browser, which a correction then replaces in `importFromDataManifests`).
 
 `SettingsView` and `OmmrExplorerView` were each one very large component. Both are
 now a thin shell over section/screen components in `views/settings/` and
-`views/ommr/`.
+`views/ommr/`. `SettingsView` shows one topic at a time (`SECTIONS` in the view; the
+topic is the `section` query parameter, which other views use to link to it).
 
 The OMMR explorer's screens share one state object created by
 `composables/ommr/useOmmrExplorer.js` and provided to them
