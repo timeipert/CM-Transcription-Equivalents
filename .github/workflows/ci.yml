@@ -5,6 +5,11 @@ on:
     branches:
       - master
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
   python-tests:
@@ -33,6 +38,8 @@ jobs:
         run: pytest tests/
 
   node-tests:
+    # On master, pages.yml runs the same lint, type-check, tests and build before it deploys: only pull requests need them here.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
