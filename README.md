@@ -32,13 +32,14 @@ A research tool for mapping notation patterns in chant transcriptions to their p
 * **Scripts**: Includes Python utilities (`scripts/`) for pre-processing transcription data and calculating pattern statistics.
 
 ### Where your work is kept, and how it is protected
-* **Browser storage** is the working copy. Browsers may clear it, so bind a workspace folder (Settings → Project Folder) or export a backup regularly; the status pill in the toolbar shows where your work stands.
+* **Browser storage** is the working copy. Browsers may clear it, so bind a workspace folder (Settings → Storage) or export a backup regularly (Settings → Export); the status pill in the toolbar shows where your work stands.
 * **Workspace folder** — `workspace.json` (settings, annotations, tables, pattern library) and `direct-snippets.json` (image snippets). Besides those, the app may leave:
   * `workspace.backup-external.json` — the version of `workspace.json` that was replaced after it had been changed outside the app (another tab, another computer),
   * `workspace.pre-v1.json` — your file as it was before the app upgraded it to a newer format,
   * `workspace.replaced-<time>.json` — what was in the app when you chose a folder that already held a workspace.
-* **Custom manuscripts** (pasted images, no IIIF) can be exported one at a time from their own page (Custom Manuscripts → Proofreading): a JSON file with the images inline, and a printable PDF for proofreading. The JSON file is read back by Settings → Share / Backup → Import, which asks whether to skip, copy or overwrite when the manuscript already exists. See `user-manual/docs/custom-manuscripts.md`.
-* **Backups and exports** (Settings → Share / Backup) are versioned JSON; files from older versions of the app import fine, and a file from a *newer* version is refused rather than guessed at.
+* **Custom manuscripts** (pasted images, no IIIF) can be exported one at a time from their own page (Custom Manuscripts → Proofreading): a JSON file with the images inline, and a printable PDF for proofreading. The JSON file is read back by Settings → Import, which asks whether to skip, copy or overwrite when the manuscript already exists. See `user-manual/docs/custom-manuscripts.md`.
+* **Backups and exports** (Settings → Export) are versioned JSON. The export can hold everything (a backup) or a selection: single manuscripts, kinds of data (annotations, tables, IIIF links), custom manuscripts, groups of settings; as one file or as a ZIP with one file per manuscript.
+* **Import** (Settings → Import) takes any number of files and ZIPs at once, lists what each holds and where it conflicts with the workspace or with another file, applies them in order, and can be undone. Files from older versions of the app import fine, and a file from a *newer* version is refused rather than guessed at.
 
 ## Installation & Setup
 
@@ -82,7 +83,7 @@ python scripts/analyze_transcriptions.py
 ```
 
 ### Static Public Site Export (HTML, Markdown & IIIF Cropping)
-The static export runs **in the app** (Settings → Share / Backup → *Download static site*).
+The static export runs **in the app** (Settings → Export → *Download static site*).
 It produces a ZIP that mirrors the public viewer offline: a directory page plus one
 `index.html` + `index.md` per published manuscript, and cropped IIIF image snippets saved as
 files (usable as citation "quotes"). Because it reuses the app's own IIIF resolution and gallery

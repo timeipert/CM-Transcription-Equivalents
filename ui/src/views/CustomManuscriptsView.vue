@@ -199,7 +199,7 @@ onBeforeUnmount(() => {
 
 // --- Sharing for proofreading ---
 // A JSON file carries the whole manuscript (images included) and is read back by
-// Settings → Share / Backup → Import; the PDF is for printing and marking up.
+// Settings → Import; the PDF is for printing and marking up.
 const shareBusy = ref('');   // '' | 'json' | 'pdf'
 const shareMsg = ref('');
 const shareError = ref(false);
@@ -422,7 +422,7 @@ const grouped = computed(() => {
                 </div>
                 <p class="share-hint">
                     The JSON file holds only this manuscript. A colleague opens it with
-                    <router-link to="/settings">Settings → Share / Backup → Import Backup / Manuscript File</router-link>,
+                    <router-link :to="{ path: '/settings', query: { section: 'import' } }">Settings → Import</router-link>,
                     corrects it, saves it again the same way, and you import it back and choose whether it replaces
                     your version or is added as a copy.
                 </p>

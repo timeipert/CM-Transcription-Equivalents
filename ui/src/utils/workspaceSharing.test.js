@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
     getManuscriptStats, extractManuscripts, mergeManuscript, listSources,
-    customManuscriptStats, analyzeCustomCollections, mergeCustomCollections
+    customManuscriptStats, analyzeCustomCollections, mergeCustomCollections,
+    DATA_PARTS, normalizeParts, findBatchOverlaps
 } from './workspaceSharing';
 
 // Two sources where one siglum extends the other across an underscore.
@@ -264,5 +265,97 @@ describe('custom manuscripts (direct-snippet collections)', () => {
             mergeCustomCollections(l, inc, { a: 'copy' });
             expect(JSON.stringify([l, inc])).toBe(before);
         });
+    });
+});
+
+describe('kinds of data (parts)', () => {
+    const full = () => ({
+        personalTables: [{ id: 't', source: 'X', name: 'X', rows: [{ pattern: '*' }] }],
+        regions: { 'X_1r': [{ id: 'rx', name: 'Line 1', points: '' }] },
+        regionItems: { rx: [{ id: 'ix', pattern: '*', points: '1,1' }] },
+        manualLines: { 'X_1r': [1] },
+        iiifLinks: { X: 'u' }
+    });
+
+    it('normalizeParts reads a list of names; nothing or garbage means all', () => {
+        expect(normalizeParts(['tables'])).toEqual({ annotations: false, tables: true, iiifLinks: false });
+        expect(normalizeParts(undefined)).toEqual({ annotations: true, tables: true, iiifLinks: true });
+        expect(normalizeParts('tables')).toEqual({ annotations: true, tables: true, iiifLinks: true });
+        expect(DATA_PARTS).toEqual(['annotations', 'tables', 'iiifLinks']);
+    });
+
+    it('extractManuscripts keeps only the requested parts', () => {
+        const onlyTables = extractManuscripts(full(), ['X'], { parts: ['tables'] });
+        expect(onlyTables.personalTables).toHaveLength(1);
+        expect(onlyTables.regions).toEqual({});
+        expect(onlyTables.regionItems).toEqual({});
+        expect(onlyTables.manualLines).toEqual({});
+        expect(onlyTables.iiifLinks).toEqual({});
+
+        const noTables = extractManuscripts(full(), ['X'], { parts: ['annotations', 'iiifLinks'] });
+        expect(noTables.personalTables).toEqual([]);
+        expect(Object.keys(noTables.regions)).toEqual(['X_1r']);
+        expect(noTables.iiifLinks).toEqual({ X: 'u' });
+    });
+
+    it('an overwrite from a file without tables leaves the local table in place', () => {
+        const incoming = extractManuscripts(full(), ['X'], { parts: ['annotations'] });
+        const local = {
+            personalTables: [{ id: 'mine', source: 'X', name: 'X', rows: [{ pattern: '*dd', customId: '7' }] }],
+            regions: { 'X_2r': [{ id: 'ry', name: 'Line 1', points: '' }] },
+            regionItems: { ry: [{ id: 'iy' }] },
+            manualLines: {},
+            iiifLinks: {}
+        };
+        const merged = mergeManuscript(local, incoming, 'X', 'overwrite', { parts: ['annotations'] });
+        expect(merged.personalTables.map(t => t.id)).toEqual(['mine']);
+        expect(Object.keys(merged.regions)).toEqual(['X_1r']);
+        expect(merged.regionItems.ry).toBeUndefined();
+    });
+
+    it('an overwrite from a file with only tables leaves the local regions in place', () => {
+        const incoming = extractManuscripts(full(), ['X'], { parts: ['tables'] });
+        const local = { ...full(), personalTables: [{ id: 'mine', source: 'X', rows: [] }] };
+        const merged = mergeManuscript(local, incoming, 'X', 'overwrite', { parts: ['tables'] });
+        expect(merged.personalTables.map(t => t.id)).toEqual(['t']);
+        expect(merged.regions).toEqual(local.regions);
+        expect(merged.regionItems).toEqual(local.regionItems);
+    });
+
+    it('two copies of one manuscript get two names and distinct ids', () => {
+        let state = full();
+        state = mergeManuscript(state, full(), 'X', 'copy');
+        state = mergeManuscript(state, full(), 'X', 'copy');
+        expect(listSources(state).sort()).toEqual(['X', 'X (copy 2)', 'X (copy)']);
+        const ids = Object.values(state.regions).flat().map(r => r.id);
+        expect(new Set(ids).size).toBe(ids.length);
+    });
+});
+
+describe('findBatchOverlaps', () => {
+    it('marks what an earlier file already brings, by manuscript name and by custom-manuscript id or siglum', () => {
+        const result = findBatchOverlaps([
+            { sources: ['A', 'B'], collections: [{ id: 'c1', source: 'S1' }] },
+            { sources: ['B', 'C'], collections: [{ id: 'c9', source: 's1' }] },
+            { sources: ['A', 'B'], collections: [{ id: 'c1', source: 'Other' }] }
+        ]);
+        expect(result[0]).toEqual({ sources: {}, collections: {} });
+        expect(result[1]).toEqual({ sources: { B: 0 }, collections: { c9: 0 } });
+        // The latest earlier file is named.
+        expect(result[2]).toEqual({ sources: { A: 0, B: 1 }, collections: { c1: 0 } });
+    });
+
+    it('a file that is left out overlaps nothing and hides nothing', () => {
+        const result = findBatchOverlaps([{ sources: ['A'], collections: [] }, null, { sources: ['A'], collections: [] }]);
+        expect(result[1]).toEqual({ sources: {}, collections: {} });
+        expect(result[2].sources).toEqual({ A: 0 });
+    });
+});
+
+describe('mergeCustomCollections and new custom manuscripts', () => {
+    it('a skip choice leaves out a custom manuscript that collides with nothing', () => {
+        const merged = mergeCustomCollections([], [{ id: 'n', source: 'New', snippets: [], patterns: [] }], { n: 'skip' });
+        expect(merged).toEqual([]);
+        expect(mergeCustomCollections([], [{ id: 'n', source: 'New' }]).map(c => c.id)).toEqual(['n']);
     });
 });

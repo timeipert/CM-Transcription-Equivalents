@@ -8,7 +8,8 @@ vi.mock('../utils/directSnippetsDb', () => ({
 
 const downloads = [];
 vi.mock('../utils/download', () => ({
-    downloadJson: (filename, data) => { downloads.push({ filename, data: JSON.parse(JSON.stringify(data)) }); }
+    downloadJson: (filename, data) => { downloads.push({ filename, data: JSON.parse(JSON.stringify(data)) }); },
+    downloadBlob: (filename, blob) => { downloads.push({ filename, blob }); }
 }));
 
 import { useDataManagement } from './useDataManagement';
@@ -510,5 +511,111 @@ describe('custom manuscripts: share for proofreading and take back', () => {
         const [analysis] = await dm.analyzeImportFiles([fileOf(backup)]);
         dm.executeImport(analysis.parsed, {});
         expect(stores.direct.serialize()).toEqual([collection()]);
+    });
+});
+
+describe('export builder and several files at once', () => {
+    const everything = () => ({
+        sources: ['Lo 4', 'Pa 1'], parts: ['annotations', 'tables', 'iiifLinks'], collections: [],
+        settingsGroups: ['display', 'ids', 'signs', 'metadata', 'alignment'], patternLibrary: true, ommrSettings: true
+    });
+
+    it('a selection of everything is a backup and resets the reminder; a partial one does not', async () => {
+        fillWorkspace();
+        const reminder = useSaveReminderStore();
+        reminder.changeCount = 5;
+        await dm.exportSelection({ ...everything(), parts: ['tables'] });
+        expect(downloads[0].data.type).toBe(ENVELOPE_TYPES.manuscripts);
+        expect(reminder.changeCount).toBe(5);
+        const res = await dm.exportSelection(everything());
+        expect(res.complete).toBe(true);
+        expect(downloads[1].data.type).toBe(ENVELOPE_TYPES.backup);
+        expect(reminder.changeCount).toBe(0);
+    });
+
+    it('one file per item is a ZIP that the import opens again', async () => {
+        // The ZIP library schedules its work on real timers.
+        vi.useRealTimers();
+        fillWorkspace();
+        const res = await dm.exportSelection(everything(), { perItem: true });
+        expect(res.files).toBe(3);
+        expect(downloads[0].filename).toMatch(/\.zip$/);
+        const { expandImportFiles } = await import('../utils/importFiles');
+        const bytes = new Uint8Array(await downloads[0].blob.arrayBuffer());
+        const { files } = await expandImportFiles([{ name: 'x.zip', type: 'application/zip', arrayBuffer: async () => bytes.buffer }]);
+        expect(files.map(f => f.name)).toEqual(['x.zip › manuscripts/Lo-4.json', 'x.zip › manuscripts/Pa-1.json', 'x.zip › settings.json']);
+
+        freshApp();
+        await new Promise(r => setTimeout(r, 5));
+        const analyses = await dm.analyzeImportFiles(files);
+        expect(analyses.every(a => a.success)).toBe(true);
+        await dm.importBatch(analyses.map(analysis => ({ analysis, importSettings: true })));
+        expect(Object.keys(stores.annotations.regions).sort()).toEqual(['Lo 4_2v', 'Pa 1_1r']);
+        expect(stores.settings.snippetSize).toBe(80);
+        expect(stores.library.serialize().patterns['*dd'].label).toBe('clivis');
+    });
+
+    it('an overwrite from a file with only tables keeps the local line regions', async () => {
+        fillWorkspace();
+        await dm.exportSelection({ ...everything(), sources: ['Pa 1'], parts: ['tables'], settingsGroups: [], patternLibrary: false, ommrSettings: false });
+        const file = downloads[0].data;
+        file.data.personalTables[0].rows = [{ pattern: '*', customId: 'changed' }];
+
+        const [analysis] = await dm.analyzeImportFiles([fileOf(file)]);
+        expect(analysis.parts).toEqual(['tables']);
+        expect(analysis.overlapSources.map(o => o.source)).toEqual(['Pa 1']);
+        dm.executeImport(analysis.parsed, { 'Pa 1': 'overwrite' });
+        expect(stores.tables.tables.find(t => t.source === 'Pa 1').rows[0].customId).toBe('changed');
+        expect(stores.annotations.regions['Pa 1_1r']).toHaveLength(1);
+        expect(stores.annotations.regionItems.r1).toHaveLength(1);
+    });
+
+    it('imports several files in order, each with its own choices, and can undo all of it', async () => {
+        const a = { schemaVersion: SCHEMA_VERSION, data: {
+            regions: { 'A_1r': [{ id: 'ra', name: 'Line 1', points: '' }] }, regionItems: { ra: [{ id: 'ia', pattern: '*', points: box(1, 1) }] }
+        } };
+        const b = { schemaVersion: SCHEMA_VERSION, data: {
+            regions: { 'A_1r': [{ id: 'rb', name: 'Line 2', points: '' }], 'B_2r': [{ id: 'rc', name: 'Line 1', points: '' }] },
+            regionItems: { rb: [{ id: 'ib', pattern: '*', points: box(1, 1) }], rc: [{ id: 'ic', pattern: '*', points: box(1, 1) }] }
+        } };
+        const config = { type: ENVELOPE_TYPES.config, schemaVersion: SCHEMA_VERSION, settings: { snippetSize: 99 } };
+        const analyses = await dm.analyzeImportFiles([fileOf(a, 'a.json'), fileOf(b, 'b.json'), fileOf(config, 'c.json')]);
+        expect(analyses.map(x => x.kind)).toEqual(['workspace', 'workspace', 'config']);
+
+        const before = JSON.stringify(buildCoreData(stores));
+        const { snapshot, files, errors } = await dm.importBatch([
+            { analysis: analyses[0] },
+            { analysis: analyses[1], choices: { A: 'merge' } },
+            { analysis: analyses[2], importSettings: true }
+        ]);
+        expect(files).toBe(3);
+        expect(errors).toEqual([]);
+        expect(stores.annotations.regions['A_1r'].map(r => r.id)).toEqual(['ra', 'rb']);
+        expect(stores.annotations.regions['B_2r']).toHaveLength(1);
+        expect(stores.settings.snippetSize).toBe(99);
+
+        dm.restoreSnapshot(snapshot);
+        expect(JSON.stringify(buildCoreData(stores))).toBe(before);
+        expect(stores.settings.snippetSize).toBe(60);
+    });
+
+    it('a config file left unticked is not applied', async () => {
+        const config = { type: ENVELOPE_TYPES.config, schemaVersion: SCHEMA_VERSION, settings: { snippetSize: 99 } };
+        const [analysis] = await dm.analyzeImportFiles([fileOf(config)]);
+        await dm.importBatch([{ analysis, importSettings: false }]);
+        expect(stores.settings.snippetSize).toBe(60);
+    });
+
+    it('undo also brings back the custom manuscripts and the settings that stay local', async () => {
+        fillWorkspace();
+        await stores.direct.hydrate([{ id: 'dc_1', source: 'S', snippets: [], patterns: [] }]);
+        const snapshot = await dm.takeSnapshot();
+        stores.direct.replaceAll([]);
+        stores.settings.backupLabel = 'changed';
+        dm.clearAllData();
+        dm.restoreSnapshot(snapshot);
+        expect(stores.direct.serialize().map(c => c.id)).toEqual(['dc_1']);
+        expect(stores.settings.backupLabel).toBe('Mine');
+        expect(Object.keys(stores.annotations.regions).sort()).toEqual(['Lo 4_2v', 'Pa 1_1r']);
     });
 });

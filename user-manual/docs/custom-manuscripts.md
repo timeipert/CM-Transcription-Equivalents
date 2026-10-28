@@ -20,12 +20,12 @@ Each custom manuscript can be handed to someone else to check. Open the manuscri
 ### Round trip with a proofreader
 
 1. **You** save the JSON file (and the PDF, if the proofreader prefers paper) and send it.
-2. **The proofreader** opens **Settings → Share / Backup → Import Backup / Manuscript File** and chooses the file. The manuscript appears under **Custom Manuscripts**, where captions, Ref IDs, patterns and the pattern of each snippet can be corrected.
+2. **The proofreader** opens **Settings → Import** and drops the file there (several files can be dropped at once). The manuscript appears under **Custom Manuscripts**, where captions, Ref IDs, patterns and the pattern of each snippet can be corrected.
 3. **The proofreader** opens the manuscript and saves it again with **Save as JSON file**, then sends that file back.
-4. **You** import the returned file the same way. Because the manuscript already exists, the app asks per manuscript what to do, showing the number of snippets and patterns on both sides:
-   - **Skip**: keep your version.
-   - **Import as Copy**: keep both; the returned one gets the siglum "… (copy)" and is not published, so the two can be compared.
-   - **Overwrite Local**: replace your version with the returned one.
+4. **You** import the returned file the same way. Because the manuscript already exists, the import list marks it as a conflict and shows the number of images and patterns on both sides; choose:
+   - **Skip (keep mine)**: keep your version.
+   - **Import as copy**: keep both; the returned one gets the siglum "… (copy)" and is not published, so the two can be compared.
+   - **Overwrite mine**: replace your version with the returned one.
 
 A manuscript counts as the same one when it has the same internal id **or** the same siglum (upper and lower case and surrounding spaces are ignored).
 
@@ -37,4 +37,4 @@ The app does not require it: **Publish** is a separate switch and does not depen
 
 - The PDF needs at least one snippet; a manuscript without images has nothing to print.
 - The JSON file carries the manuscript's own data only. Source metadata (the fields under Settings) and app settings stay in each person's workspace.
-- The full backup (**Settings → Share / Backup**) still includes every custom manuscript.
+- The full backup (**Settings → Export → Everything**) still includes every custom manuscript; **Settings → Export** can also save several custom manuscripts at once, in one file or as a ZIP with one file each.

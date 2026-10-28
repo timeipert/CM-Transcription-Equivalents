@@ -9,7 +9,7 @@
  *     })
  *     // result.zipBase64 = the same ZIP as Settings -> "Download static site"
  *
- * It imports the files exactly like Settings -> "Import Backup / Manuscript File" (overwriting), optionally marks the
+ * It imports the files exactly like Settings -> Import (overwriting), optionally marks the
  * imported manuscripts as published, runs the static-site export and returns the ZIP instead of downloading it.
  * No buttons, no dialogs: the contract below does not change when the UI does. Bump API_VERSION for breaking changes.
  *
