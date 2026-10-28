@@ -342,13 +342,13 @@ watch([() => route.query.gallery, dataLoading], ([gallery, isLoading]) => {
                         <h3>Metadata</h3>
                         <p class="card-desc">
                             Attributes shown publicly and used to filter the manuscript directory.
-                            <router-link to="/settings">Define which attributes exist</router-link> in Settings.
+                            <router-link :to="{ path: '/settings', query: { section: 'metadata' } }">Define which attributes exist</router-link> in Settings.
                         </p>
                     </div>
                     <div class="card-body">
                         <div v-if="settings.sourceMetaFields.length === 0" class="meta-empty-hint">
                             No attributes defined yet.
-                            <router-link to="/settings">Add some in Settings</router-link>
+                            <router-link :to="{ path: '/settings', query: { section: 'metadata' } }">Add some in Settings</router-link>
                             (e.g. Century, Region, Notation type).
                         </div>
                         <div v-else class="meta-grid">

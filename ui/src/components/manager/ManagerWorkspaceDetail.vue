@@ -93,7 +93,7 @@ const isVariantCode = computed(() => {
                     </template>
                     <template v-else>
                         No custom signs yet — define them in
-                        <router-link to="/settings">Settings → Custom Signs</router-link>
+                        <router-link :to="{ path: '/settings', query: { section: 'signs' } }">Settings → Signs &amp; variants</router-link>
                         to create code variants.
                     </template>
                 </div>

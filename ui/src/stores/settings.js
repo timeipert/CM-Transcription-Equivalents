@@ -14,36 +14,63 @@ import { isPlainObject } from '../utils/shape'
  *            store instance gets its own copy)
  *   share    false keeps it out of exported backups and configuration files
  *            (it is still kept in browser storage and the workspace file)
+ *   group    which entry of SETTINGS_GROUPS it belongs to; the export builder
+ *            (Settings → Export) lets a person pick settings by group
  *
  * The comments describe each value's shape.
  */
 export const PERSISTED_SETTINGS = {
     // 'svg' | 'arrow' | 'text'
-    displayMode: { default: 'svg' },
-    autoFillIds: { default: true },
+    displayMode: { default: 'svg', group: 'display' },
+    autoFillIds: { default: true, group: 'display' },
     // { [pattern]: "customId" }
-    globalDisplayIds: { default: () => ({}) },
-    snippetSize: { default: 60 },
-    snippetPadding: { default: 0.3 },
-    backupLabel: { default: 'My Backup', share: false },
+    globalDisplayIds: { default: () => ({}), group: 'ids' },
+    snippetSize: { default: 60, group: 'display' },
+    snippetPadding: { default: 0.3, group: 'display' },
+    backupLabel: { default: 'My Backup', share: false, group: 'local' },
     // { [source]: { iiifType, dataType, offset, pins, … } }
-    sourceAlignments: { default: () => ({}) },
+    sourceAlignments: { default: () => ({}), group: 'alignment' },
     // The reusable sign vocabulary: [{ key, label, abbrev, description, glyph, glyphSvg }]
-    customSigns: { default: () => [] },
+    customSigns: { default: () => [], group: 'signs' },
     // Per base pattern, its derived variant codes: { [baseCode]: [{ id, code, label, description }] }
-    codeVariants: { default: () => ({}) },
+    codeVariants: { default: () => ({}), group: 'signs' },
     // When true, overviews/IDs treat a code variant as distinct; when false they
     // are merged back into their base pattern ("all in one").
-    discriminateSigns: { default: true },
+    discriminateSigns: { default: true, group: 'signs' },
     // Project-defined free-text attributes of a source (century, region, …) used
     // for filtering in the public views: [{ key, label, description, type }]
-    sourceMetaFields: { default: () => [] },
+    sourceMetaFields: { default: () => [], group: 'metadata' },
     // { [source]: { [fieldKey]: "value" } }
-    sourceMeta: { default: () => ({}) },
+    sourceMeta: { default: () => ({}), group: 'metadata' },
     // The classifier letters offered when annotating a snippet (same code,
     // different graphical realisation); empty = the built-in a–g: [{ key, label }]
-    snippetVariants: { default: () => [] }
+    snippetVariants: { default: () => [], group: 'signs' }
 };
+
+/**
+ * The groups the shared settings are exported and imported by. `local` holds
+ * the settings that never leave this browser (share: false) and is not offered.
+ */
+export const SETTINGS_GROUPS = {
+    display: { label: 'Display defaults', description: 'pattern view, snippet size and padding, auto-fill of IDs' },
+    ids: { label: 'Preferred IDs', description: 'the default Ref ID per pattern' },
+    signs: { label: 'Signs and variants', description: 'custom signs, code variants, snippet variant letters' },
+    metadata: { label: 'Source metadata', description: 'the attributes defined for manuscripts and their values' },
+    alignment: { label: 'Folio alignments', description: 'how transcription folios map onto IIIF pages' }
+};
+
+/**
+ * The part of a settings object whose keys belong to one of `groups`.
+ * Unknown keys are dropped, so the result only ever holds persisted settings.
+ */
+export function settingsInGroups(values, groups) {
+    const wanted = new Set(groups);
+    const out = {};
+    for (const [key, value] of Object.entries(values || {})) {
+        if (wanted.has(PERSISTED_SETTINGS[key]?.group)) out[key] = value;
+    }
+    return out;
+}
 
 /**
  * The alignment in force for a source: the built-in default with the user's own

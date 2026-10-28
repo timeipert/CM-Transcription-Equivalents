@@ -264,7 +264,7 @@ const stats = computed(() => ({
                 </span>
                 <span v-if="!hasSigns" class="no-signs">No signs defined yet</span>
             </div>
-            <router-link class="btn-link" to="/settings">Manage in Settings →</router-link>
+            <router-link class="btn-link" :to="{ path: '/settings', query: { section: 'signs' } }">Manage in Settings →</router-link>
         </div>
         <label class="discriminate">
             <input type="checkbox" v-model="settings.discriminateSigns" />

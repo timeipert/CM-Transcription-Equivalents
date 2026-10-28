@@ -332,6 +332,40 @@ export function manuscriptsEnvelope({ exportedManuscripts, data }) {
 }
 
 /**
+ * A file made by the export builder (Settings → Export): any selection of the
+ * workspace. `contents` lists what it holds, so an import can show it and an
+ * "overwrite" replaces only the kinds of data the file carries:
+ *
+ *   { manuscripts: string[], customManuscripts: string[], parts: string[],
+ *     settingsGroups: string[], patternLibrary: boolean, ommrSettings: boolean }
+ *
+ * `complete` (everything in the workspace was selected) marks it as a backup;
+ * otherwise it is a manuscript export. Older builds ignore `contents` and read
+ * the data as before.
+ */
+export function exportEnvelope({ label, data, contents, complete = false }) {
+    return {
+        schemaVersion: SCHEMA_VERSION,
+        type: complete ? ENVELOPE_TYPES.backup : ENVELOPE_TYPES.manuscripts,
+        exportedAt: new Date().toISOString(),
+        label,
+        exportedManuscripts: contents.manuscripts,
+        contents,
+        data
+    };
+}
+
+/**
+ * The kinds of manuscript data a file carries (names from DATA_PARTS in
+ * utils/workspaceSharing.js), or `undefined` for a file that does not say, which
+ * means all of them.
+ */
+export function fileParts(json) {
+    const parts = json?.contents?.parts;
+    return Array.isArray(parts) ? parts.filter(p => typeof p === 'string') : undefined;
+}
+
+/**
  * One custom manuscript as a file of its own, for handing to a proofreader.
  * Same envelope type as a manuscript export, so Settings → Import reads it; the
  * images are inline, so the file needs nothing else.
