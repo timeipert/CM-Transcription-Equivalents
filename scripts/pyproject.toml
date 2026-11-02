@@ -2,6 +2,7 @@
 name = "cm-transkriptionseq-scripts"
 version = "0.1.0"
 description = "Scripts for preprocessing chant transcription data"
+requires-python = ">=3.11"
 dependencies = [
     "monodikit==0.0.10",
     "pandas==3.1.0",
