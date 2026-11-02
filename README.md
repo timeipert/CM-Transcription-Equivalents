@@ -1,3 +1,5 @@
+> **Where this code is edited.** The source of this app is the folder `apps/transcription-equivalents` of [timeipert/monodi-platform](https://github.com/timeipert/monodi-platform/tree/main/apps/transcription-equivalents). The repository [timeipert/CM-Transcription-Equivalents](https://github.com/timeipert/CM-Transcription-Equivalents) receives a copy of that folder and deploys it; it is not edited directly (a commit there stops the copy). How the copy works: `docs/sync.md` in monodi-platform.
+
 # CM-Transcription-Equivalents
 
 A research tool for mapping notation patterns in chant transcriptions to their physical graphical realizations in medieval manuscripts. The application provides an interface to manage transcription equivalents, annotate manuscript scans using IIIF, and generate public documentation for notation systems.

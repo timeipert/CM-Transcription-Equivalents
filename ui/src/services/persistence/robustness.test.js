@@ -129,7 +129,9 @@ describe('loading a corrupted workspace file', () => {
         }
         expect(loaded).toBeGreaterThan(1000); // most corruptions are survivable, not just refused
         expect(loaded + refused).toBe(3000);
-    });
+    // 3,000 cases take about 2 s on a laptop but over 5 s (vitest's default limit) on a busy
+    // GitHub runner; on 2026-10-28 that timeout alone failed a Pages deploy.
+    }, 30000);
 
     it('does not mutate the input it was given', () => {
         const random = rng(7);
