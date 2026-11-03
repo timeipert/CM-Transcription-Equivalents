@@ -73,7 +73,7 @@ was filled on 2026-11-03 from the earlier spreadsheet (74 links), the export (2 
 | 1 | A new manifest link has one place: `scripts/manifests.json`. The export's source records hold a manifest for only 2 sources; when the Manifest column of the table "Quellendaten" is uploaded to the editor (CM-hub, `cm sources upload`) or `QUELLENDATEN_URL` is set, the report shows new links to adopt. | maintainer of CM-hub |
 | 2 | Documents with `publish: none` (749 in the edition on 2026-11-03, among them the tropes of RoC 1741) are in the data, and the data of the site is public. Restrict `publish` in `analysis_rules.json` if they should not be. | project direction |
 | 3 | The double-bar rule is on for Vat 3797 only. The same rubric form occurs in about 270 rubrics of other sources; switching the rule on for them renumbers their lines and moves annotation links. | owner of the Neume Viewer with the research assistant |
-| 4 | `apps/monodi/src/app/transcription-analyzer-core.ts` counts bars in rubrics the same way (line numbers of Monodi-Zero's own analysis). | maintainer of Monodi-Zero |
+| 4 | `packages/core/src/document/pattern.ts` counts bars in rubrics the same way (line numbers of Monodi-Zero's own analysis). | maintainer of Monodi-Zero |
 
 ## Checks
 
