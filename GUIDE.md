@@ -74,14 +74,13 @@ A research tool for mapping notation patterns in chant transcriptions to their p
    *Note: The production build is written to `docs/` at the project root. It is gitignored: GitHub Actions builds and publishes it.*
 
 ### Analysis Scripts
-To run the transcription analysis scripts, ensure you have the required Python libraries installed:
+The data of the site (`ui/public/index.json`, `ui/public/sources/`) is **not in git**. It is built from the Corpus Monodicum export
+on every deploy; to get it locally (for `npm run dev`):
 ```bash
-pip install monodikit pandas
+pip install ./scripts/
+python3 scripts/refresh_data.py
 ```
-Run the analyzer:
-```bash
-python scripts/analyze_transcriptions.py
-```
+How it works, how to refresh it and what to check: [DATA.md](DATA.md).
 
 ### Static Public Site Export (HTML, Markdown & IIIF Cropping)
 The static export runs **in the app** (Settings → Export → *Download static site*).
@@ -97,14 +96,14 @@ servers, so keep the tab connected while it runs.
 * `/scripts`: Python utilities for transcription processing.
 * `/user-manual`: The VitePress user manual (`npm run build:manual` copies it into `ui/public/manual`).
 * `/glyphs`: Pattern rendering assets.
-* `/export`: (Excluded) Raw data exports from CM.
+* `/data`: (Ignored by git) the downloaded export and the reports of `scripts/refresh_data.py`.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit and how to change the data model safely.
 
 ## Publishing
 https://neume.monodi.app is built and deployed by `.github/workflows/pages.yml` on every push to `master`: lint, type-check and tests run first, then the build, and nothing is published if one of them fails. The build output in `docs/` is not committed.
 
-* Everything the site ships must live in `ui/public/` (scans, the manual, `index.json`, the `sources/` data, `CNAME`) or in the bundle. `npm run build` fails if something in `ui/public/` did not reach the output.
+* Everything the site ships must live in `ui/public/` (scans, the manual, `CNAME`; `index.json` and `sources/` are written there by `scripts/refresh_data.py`, see [DATA.md](DATA.md)) or in the bundle. `npm run build` fails if something in `ui/public/` did not reach the output.
 * The repository setting *Pages → Build and deployment → Source* must be **GitHub Actions**, with the custom domain `neume.monodi.app` (switching the source clears the domain; set it again).
 * **Rolling back:** revert the commit on `master` and push. The last build of the previous app (before the persistence rework) is the commit tagged `legacy-site-2026-10-04`; its saved data stays readable by the current app (see ARCHITECTURE.md, "Moving from the previous version").
 * To publish a change to the manual, run `npm run build:manual` at the repository root and commit `ui/public/manual` (it is checked in because the CI build does not run VitePress).

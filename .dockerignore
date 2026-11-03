@@ -7,3 +7,5 @@ user-manual/node_modules/
 export/
 docs/
 ui/dist/
+data/
+scripts/build/

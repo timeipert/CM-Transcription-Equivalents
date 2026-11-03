@@ -139,8 +139,11 @@ describe('the golden alignment', () => {
     });
 });
 
+// index.json is built at deploy time (scripts/refresh_data.py) and is not in git; its `alignments` are the entries of
+// scripts/alignments.json that carry pins (what scripts/apply_manifest_overrides.py `load_alignments` ships).
 describe('the alignments shipped in index.json', () => {
-    const shipped = JSON.parse(readFileSync(fileURLToPath(new URL('../../../public/index.json', import.meta.url)), 'utf8')).alignments || {};
+    const overrides = JSON.parse(readFileSync(fileURLToPath(new URL('../../../../scripts/alignments.json', import.meta.url)), 'utf8'));
+    const shipped = Object.fromEntries(Object.entries(overrides.alignments || {}).filter(([, a]) => a.pins && Object.keys(a.pins).length));
 
     it.each(Object.keys(shipped))('%s: every pin names a scan of its manifest and the folio is shown there', source => {
         expect(corpus[source], `${source} has no manifest fixture`).toBeTruthy();

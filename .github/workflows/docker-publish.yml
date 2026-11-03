@@ -2,7 +2,7 @@ name: Build and Push Docker Image
 
 # Storage rule: every push of `latest` leaves the previous image behind as an untagged version in the container
 # registry, and that counts against the plan's storage. So the image is rebuilt only when what goes into it changes
-# (see the Dockerfile: it copies ui/ only), and untagged versions are deleted after each push.
+# (see the Dockerfile: it copies ui/, scripts/ and glyphs/ only; the data is built from the export inside the image build), and untagged versions are deleted after each push.
 on:
   push:
     branches:
@@ -11,6 +11,8 @@ on:
       - Dockerfile
       - .dockerignore
       - ui/**
+      - scripts/**
+      - glyphs/**
       - .github/workflows/docker-publish.yml
   workflow_dispatch:
 

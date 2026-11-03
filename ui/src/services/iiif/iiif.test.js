@@ -248,3 +248,51 @@ describe('fetchManifestJson', () => {
         expect(fetchImpl).toHaveBeenCalledTimes(2);
     });
 });
+
+describe('servers that refuse some sizes (iiifServerLimits)', () => {
+    const luebeck = 'https://digital-stadtbibliothek.luebeck.de/viewer/api/v1/records/Mstheollat211/files/images/00000020.tif';
+
+    it('asks such a server for the best fit instead of `full` or `max`', () => {
+        expect(iiifImageUrl(luebeck)).toBe(`${luebeck}/full/!1800,1800/0/default.jpg`);
+        expect(iiifImageUrl(luebeck, { size: 'max' })).toBe(`${luebeck}/full/!1800,1800/0/default.jpg`);
+        expect(iiifRegionUrl(luebeck, 'pct:10,10,30,10', 'full')).toBe(`${luebeck}/pct:10,10,30,10/!1800,1800/0/default.jpg`);
+    });
+
+    it('lowers a width above the limit and keeps a smaller one', () => {
+        expect(iiifPageUrl(luebeck, 2400)).toBe(`${luebeck}/full/1800,/0/default.jpg`);
+        expect(iiifPageUrl(luebeck, 1000)).toBe(`${luebeck}/full/1000,/0/default.jpg`);
+    });
+
+    it('leaves every other server alone', () => {
+        expect(iiifImageUrl('https://x/iiif/abc')).toBe('https://x/iiif/abc/full/full/0/default.jpg');
+        expect(iiifPageUrl('https://x/s', 2400)).toBe('https://x/s/full/2400,/0/default.jpg');
+    });
+
+    it('gives a v2 manifest of such a server a usable page image', () => {
+        const pages = parseManifest(v2([canvasV2('1r', luebeck)]));
+        expect(pages[0].imgUrl).toBe(`${luebeck}/full/!1800,1800/0/default.jpg`);
+    });
+});
+
+describe('Dar 868: a manifest whose canvases are all labelled "-"', () => {
+    const labelled = n => parseManifest(v2(Array.from({ length: n }, () => canvasV2('-', 's'))), { labelRule: labelRuleFor('Dar 868') }).map(p => p.folio);
+
+    it('names the pages from the canvas position: canvas 6 is 2r, then each side in turn', () => {
+        const folios = labelled(352);
+        expect(folios.slice(0, 6)).toEqual(['-', '-', '-', '-', '-', '-']);   // cover, flyleaves
+        expect(folios.slice(6, 10)).toEqual(['2r', '2v', '3r', '3v']);
+        expect(folios[345]).toBe('171v');
+        expect(folios[346]).toBe('172r');
+        expect(folios[347]).toBe('172v');
+    });
+
+    it('leaves the back flyleaves and cover unnamed', () => {
+        expect(labelled(352).slice(348)).toEqual(['-', '-', '-', '-']);
+    });
+
+    it('hands a rule the canvas position, counting canvases that have no image', () => {
+        const seen = [];
+        parseManifest(v2([canvasV2('a', 's', { images: [] }), canvasV2('b', 's')]), { labelRule: (label, index) => { seen.push([label, index]); return label; } });
+        expect(seen).toEqual([['b', 1]]);
+    });
+});

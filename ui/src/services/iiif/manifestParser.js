@@ -93,11 +93,12 @@ function canvasesV3(data) {
 /**
  * A source's label rule maps the library's label for a canvas to the label(s) it
  * should have in the edition (see config/iiifRules.js): a string, a list (one
- * image showing several folios), or nothing (keep the label).
+ * image showing several folios), or nothing (keep the label). The rule is called
+ * with the label and the canvas position.
  */
-function applyLabelRule(rule, label) {
+function applyLabelRule(rule, label, index) {
     if (!rule) return [label];
-    const mapped = rule(label);
+    const mapped = rule(label, index);
     if (Array.isArray(mapped)) return mapped;
     if (mapped !== null && mapped !== undefined) return [mapped];
     return [label];
@@ -130,9 +131,11 @@ export function parseManifest(data, { labelRule = null } = {}) {
     }
 
     const pages = [];
-    for (const canvas of canvases) {
+    // A rule also gets the canvas's position in the manifest (counting canvases
+    // without an image), for manifests that label no page at all.
+    for (const [canvasIndex, canvas] of canvases.entries()) {
         if (!canvas.imgUrl) continue;
-        for (const mapped of applyLabelRule(labelRule, canvas.label)) {
+        for (const mapped of applyLabelRule(labelRule, canvas.label, canvasIndex)) {
             pages.push({
                 folio: cleanLabel(mapped),
                 imgUrl: canvas.imgUrl,

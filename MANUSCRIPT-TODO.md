@@ -7,7 +7,7 @@ spreadsheet (IIIF column) and a check of every manifest URL. Nothing here has be
 
 | What | Where |
 |---|---|
-| **26 manifests added**, 4 wrong ones corrected, one stray space removed | `scripts/manifest_overrides.json` → `ui/public/index.json` |
+| **26 manifests added**, 4 wrong ones corrected, one stray space removed | `scripts/manifests.json` → `ui/public/index.json` |
 | `Abb 7` and `Pro 12` pointed at the "(décor)" manifest (46 and 6 scans of decorated pages only). Now the full ones (235 / 318 scans): every folio the assistant listed as missing for them is there | same |
 | `Lo 4` pointed at BL Royal 4 E IX; the source is **Royal 2 B IV** (the "wrong manuscript" report) | same |
 | Pattern signs drawn with **one bracket instead of two** (46+, 23+, 44+, 42+: `[*u][udL]`): adjacent groups were merged into one bracket | `ui/src/utils/svgRenderer.js` + test |
@@ -15,10 +15,10 @@ spreadsheet (IIIF column) and a check of every manifest URL. Nothing here has be
 | **Roman folio numbers** ("CVIIv") are read as folios. Be 40608 was placed by counting and was off by 2–4 scans; now all 41 pages match by label | `ui/src/utils/folioAlignment.js` |
 | A **pin now re-anchors the scans before it** too (before, scans ahead of the pin kept claiming folios the pin contradicts, so "2v" stayed on the old scan) | same |
 | Report of folios without a scan, per manuscript | `node ui/scripts/coverage-report.mjs` |
-| **Built-in alignments**: pins for Pa 14452, Mü 29307(2, Mü 5539 and Nau I now ship with the app (`alignments` in `index.json`); a user's own pin on the same scan wins; listed read-only under Settings → Alignment. Tested by 3 scenarios and a check that every shipped pin hits a real scan | `scripts/manifest_overrides.json`, `ui/src/stores/settings.js` |
+| **Built-in alignments**: pins for Pa 14452, Mü 29307(2, Mü 5539 and Nau I now ship with the app (`alignments` in `index.json`); a user's own pin on the same scan wins; listed read-only under Settings → Alignment. Tested by 3 scenarios and a check that every shipped pin hits a real scan | `scripts/manifests.json`, `ui/src/stores/settings.js` |
 | **Corrected manifests reach existing users**: a link saved in someone's browser stays (it may be their own), unless the data lists it under `replaces` (done for Abb 7, Pro 12, Lo 4) | `ui/src/stores/iiif.js` |
 
-All 1141 tests pass and the app builds. `scripts/manifest_overrides.json` is the place for manifest and default-pin decisions from now on; the
+All 1141 tests pass and the app builds. `scripts/manifests.json` is the place for manifest and default-pin decisions from now on; the
 spreadsheet `data/raw/Quellendaten.xlsx` is untracked, so the pipeline (`analyze_transcriptions.py`) applies the
 overrides on top of it, and `python3 scripts/apply_manifest_overrides.py` re-applies them to `index.json` alone.
 
@@ -147,3 +147,18 @@ The rest need a pin of your own (Manuscripts view → alignment review), or an e
 *47 transcribed manuscripts have no manifest at all; the biggest are Apt 17 (263 pages), SCan 7 (203), MüU 156 (189), Ut 417 (105), Ma 19421 (93), Pad 16 (82), La 263 (78), Ass 695 (77), Tsa 135 (77), Or 201 (68). The script prints the full list.*
 
 *Note:* if monodi.app's shared metadata lists a manifest for a source, it overrides the one in `index.json` (`metadataProvider.js`). Check that Abb 7, Pro 12 and Lo 4 are not still wrong there.
+
+## 6. Report of the research assistant, state 2026-11-03
+
+| Manuscript | Problem | State 2026-11-03 |
+|---|---|---|
+| Be 664 | a page break wrongly marked in the edition (corrected in the editor) | fixed by the build from the export: 38 rows moved from 155r to 155v |
+| Dar 868 | images missing | manifest replaced by the colour digitisation 00006738; pages named from the canvas position (`iiifRules.js`) |
+| Lü 11 | images missing | the image server refuses `full`: sizes limited (`iiifServerLimits`) |
+| Mel 109 | images missing | the manifest server sends no CORS header: a copy of the manifest ships in `ui/public/manifests/` |
+| Mü 4101 | pages shifted | pin: canvas 346, scan (0347), is 170r (checked on the images) |
+| Pia 65 | pages shifted | pin: canvas 117, scan 118, is 151v (from the report; not checked on the image) |
+| Pst 121, RoC 1741 | only sequences in the notation documentation | the export holds 31 tropes each; the build includes them |
+| Vat 3797 | line numbers shifted by 4 | rule `rubric_page_break` for this source (`scripts/analysis_rules.json`) |
+| To 18 | pages shifted | **open**: the manifest labels run without a gap; one known page (scan label and folio) is needed |
+| Vce 56 | pages shifted | **open**: the manifest labels jump at 2r → 3v and 22 more places; whether labels are wrong or scans are missing needs a known page after each jump |

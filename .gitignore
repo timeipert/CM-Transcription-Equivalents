@@ -49,3 +49,7 @@ ui/.claude/
 # OS Files
 .DS_Store
 Thumbs.db
+
+# Generated at build time from the Corpus Monodicum export by scripts/refresh_data.py (see DATA.md); not committed
+ui/public/index.json
+ui/public/sources/

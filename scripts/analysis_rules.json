@@ -1,0 +1,24 @@
+{
+ "_about": "Decisions about how analyze_transcriptions.py reads the export. A rule is switched on for the sources it lists (or for every source with \"sources\": \"*\"). 'note' and 'note_de' are only for people. Changing the sources of a rule changes the folio/line numbers of occurrences, and with them the stored links of annotations to occurrences (their sysId, see ARCHITECTURE.md): check the report of scripts/refresh_data.py before committing.",
+ "rules": {
+  "rubric_page_break": {
+   "sources": [
+    "Vat 3797"
+   ],
+   "note": "In a rubric a double bar '||' is a page change, not two line changes. The original rule counted every bar, so the rubric '|| TROPHA (|| f. 374v-b)' moved the line number on by four: the first line of both documents of Vat 3797 was numbered 5 and 6 instead of 1 and 2. Switched on for Vat 3797 only, state 2026-11-03: the same rubric form '|| ... (|| f. N)' occurs in about 270 rubrics of other sources (export of 2026-08-16), and switching it on for them renumbers their lines and orphans stored links of annotations there. Decision to widen: owner of the Neume Viewer, together with the research assistant.",
+   "note_de": "In einer Rubrik ist ein Doppelstrich '||' ein Seitenwechsel, nicht zwei Zeilenwechsel. Die ursprüngliche Regel zählte jeden Strich, sodass die Rubrik '|| TROPHA (|| f. 374v-b)' die Zeilennummer um vier verschob: Die erste Zeile beider Dokumente von Vat 3797 hieß 5 und 6 statt 1 und 2. Nur für Vat 3797 eingeschaltet, Stand 2026-11-03: Dieselbe Rubrikform '|| ... (|| f. N)' steht in rund 270 Rubriken anderer Quellen (Export vom 2026-08-16); schaltet man die Regel dort ein, ändern sich deren Zeilennummern, und gespeicherte Verknüpfungen von Annotationen werden verwaist. Entscheidung über die Ausweitung: Eigentümer des Neume Viewers gemeinsam mit der wissenschaftlichen Hilfskraft."
+  },
+  "document_scope": {
+   "subcorpora": [
+    "edition"
+   ],
+   "publish": [
+    "all",
+    "meta-and-notes",
+    "none"
+   ],
+   "note": "Which documents of the export are analysed. Subcorpus 'edition' is the corpus edition (the documents of the earlier export: about 120 sources); the other subcorpora (transcription, graduale-synopticum, benedicamus, ...) are not part of the Neume Viewer. All values of 'publish' are kept, state 2026-11-03: the tropes of RoC 1741 are released but not yet published (publish 'none') and the research assistant needs them for the notation documentation; 749 documents of the edition have 'none'. The data of the site is public, so the project direction decides whether to restrict 'publish' to ['all', 'meta-and-notes'].",
+   "note_de": "Welche Dokumente des Exports analysiert werden. Subcorpus 'edition' ist die Corpus-Edition (die Dokumente des früheren Exports: rund 120 Quellen); die anderen Subcorpora (transkription, graduale-synopticum, benedicamus, ...) gehören nicht zum Neume Viewer. Alle Werte von 'publish' bleiben erhalten, Stand 2026-11-03: Die Tropen von RoC 1741 sind freigegeben, aber noch nicht publiziert (publish 'none'), und die wissenschaftliche Hilfskraft braucht sie für die Notationsdokumentation; 749 Dokumente der Edition haben 'none'. Die Daten der Seite sind öffentlich, die Projektleitung entscheidet also, ob 'publish' auf ['all', 'meta-and-notes'] beschränkt wird."
+  }
+ }
+}

@@ -1,7 +1,8 @@
 
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../scripts')))
+# In front of site-packages: `pip install ./scripts/` leaves copies of the modules there, which do not sit next to analysis_rules.json.
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../scripts')))
 
 from logic import pitch_to_midi, get_direction, get_suffix
 

@@ -1,0 +1,50 @@
+{
+ "_about": "Default pins and data types of a source (a user's own pins win), shipped as `alignments` in index.json by scripts/refresh_data.py. A pin names which canvas (0-based position in the manifest) shows which folio. 'note' and 'note_de' are only for people.",
+ "_about_de": "Voreingestellte Pins und Datentypen einer Quelle (eigene Pins der Nutzer haben Vorrang), von scripts/refresh_data.py als `alignments` in index.json ausgeliefert. Ein Pin legt fest, welcher Canvas (0-basierte Position im Manifest) welches Folio zeigt. 'note' und 'note_de' sind nur für Menschen.",
+ "alignments": {
+  "Pa 14452": {
+   "dataType": "foliated",
+   "pins": {
+    "12": "139r"
+   },
+   "note": "Every Gallica label is 'NP'; scan 12 is 139r (checked by the test scenario)."
+  },
+  "Mü 29307(2": {
+   "dataType": "foliated",
+   "pins": {
+    "4": "2r"
+   },
+   "note": "Library scan (0005) is folio 2r (research assistant's report). The manifest has 9 scans: 4v has none."
+  },
+  "Mü 5539": {
+   "dataType": "foliated",
+   "pins": {
+    "141": "69r"
+   },
+   "note": "Library scan (0142) is folio 69r on manifest bsb00042722 (research assistant's report; confirm on the image). Drop this pin if the manifest is switched to bsb00079147."
+  },
+  "Nau I": {
+   "dataType": "foliated",
+   "pins": {
+    "32": "13r"
+   },
+   "note": "Printed volume f. 13 is scan phys_Chorbuch_0025 (research assistant's table, p. 280 of the volume)."
+  },
+  "Mü 4101": {
+   "dataType": "foliated",
+   "pins": {
+    "346": "170r"
+   },
+   "note": "BSB scan counters '(0001)' name no page. Checked on the images on 2026-11-03: scan (0347), canvas 346, shows leaf 170 (red Roman numeral 'Clxx' at the top); (0343) shows 168, (0349) shows 171.",
+   "note_de": "Die BSB-Scanzähler '(0001)' benennen keine Seite. Am 2026-11-03 an den Bildern geprüft: Scan (0347), Canvas 346, zeigt Blatt 170 (rote römische Zahl 'Clxx' oben); (0343) zeigt 168, (0349) zeigt 171."
+  },
+  "Pia 65": {
+   "dataType": "foliated",
+   "pins": {
+    "117": "151v"
+   },
+   "note": "Labels are page counters '001' ... '705'. Scan '118' (canvas 117) is f. 151v (report of the research assistant on 2026-11-03; not checked on the image: the microfilm shows no legible foliation).",
+   "note_de": "Die Beschriftungen sind Seitenzähler '001' ... '705'. Scan '118' (Canvas 117) ist f. 151v (Angabe der wissenschaftlichen Hilfskraft vom 2026-11-03; nicht am Bild geprüft: der Mikrofilm zeigt keine lesbare Foliierung)."
+  }
+ }
+}

@@ -4,6 +4,8 @@ A research tool that maps notation patterns in chant transcriptions to their wri
 
 Features, storage, scripts and publishing: [GUIDE.md](GUIDE.md). How the pieces fit: [ARCHITECTURE.md](ARCHITECTURE.md).
 
+The data (patterns of every source, manifest links) is built from the Corpus Monodicum export and not stored in git: run `pip install ./scripts/ && python3 scripts/refresh_data.py` once for local data; every deploy rebuilds it. See [DATA.md](DATA.md).
+
 ```bash
 cd ui
 npm install

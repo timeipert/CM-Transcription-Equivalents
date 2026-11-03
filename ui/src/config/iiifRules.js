@@ -7,12 +7,54 @@
  * (Gallery, Editor, Image Loading) functions flawlessly with the correct labels.
  * 
  * Each key is the source identifier (e.g. "Ben 34").
- * The value is a function that takes the original IIIF label and returns either:
+ * The value is a function that takes the original IIIF label (and, as a second
+ * argument, the 0-based position of the canvas in the manifest) and returns either:
  * - A string (the corrected label)
  * - An array of strings (if one image represents multiple folios, e.g. an opening spread)
  * - The original label if no changes are needed
  */
+
+/**
+ * For a manifest that labels no page ("-" on every canvas) but whose canvases run in
+ * page order: names each canvas from its position alone.
+ *
+ * `firstFolioCanvas` is the 0-based position of the canvas that shows leaf
+ * `firstLeaf`, recto; each further canvas is the next side. Canvases before it and
+ * canvases past `lastLeaf` keep their label, which the alignment treats as "not a page".
+ */
+function pagesFromPosition({ firstFolioCanvas, firstLeaf, lastLeaf }) {
+  return (label, index) => {
+    if (typeof index !== 'number' || index < firstFolioCanvas) return label;
+    const side = index - firstFolioCanvas;
+    const leaf = firstLeaf + Math.floor(side / 2);
+    if (leaf > lastLeaf) return label;
+    return `${leaf}${side % 2 === 0 ? 'r' : 'v'}`;
+  };
+}
+
+/**
+ * Libraries whose image server refuses some size requests. The Image API's `full`
+ * size means "the original", which a server may refuse: it then answers with an HTML
+ * error page and the page shows no image. For a host listed here, `full` and `max`
+ * become the best fit inside `maxEdge` x `maxEdge` pixels, and a width above
+ * `maxEdge` is lowered to it (see `services/iiif/imageUrl.js`).
+ *
+ * Key: the host name of the image service. Checked 2026-11-03 on the service of the
+ * Lübeck Stadtbibliothek: `full/1900,` and `full/!1800,1800` return an image;
+ * `full/full`, `full/max` and `full/2000,` return an error page.
+ */
+export const iiifServerLimits = {
+  "digital-stadtbibliothek.luebeck.de": { maxEdge: 1800 }
+};
+
 export const iiifParseRules = {
+  // Darmstadt, digitisation 00006738 (colour; replaces the black-and-white Hs-868
+  // manifest): every canvas is labelled "-". Compared on the images on 2026-11-03,
+  // canvas 6 is leaf 2r (the page whose first line is the chapter list, "2" in the
+  // top right corner); the black-and-white manifest has it at canvas 1.
+  // 352 canvases: cover, flyleaves, 2r ... 172v, then the back flyleaves and cover.
+  "Dar 868": pagesFromPosition({ firstFolioCanvas: 6, firstLeaf: 2, lastLeaf: 172 }),
+
   "Ben 34": (label) => {
     // The library incorrectly labels spreads as Xv-Xr (e.g. 122v-122r)
     // But the image actually shows the opening of (X-1)v and Xr!

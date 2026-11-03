@@ -9,7 +9,29 @@ import pandas as pd
 import os
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-from logic import pitch_to_midi, get_direction, get_suffix
+from logic import pitch_to_midi, get_direction, get_suffix, count_line_breaks, document_in_scope, load_analysis_rules, rule_applies
+import monodikit.models.document as _monodikit_document
+
+
+def _tolerate_missing_editionsstatus():
+    """monodikit 0.0.10 insists on the document field `editionsstatus`, which the editor's export dropped in favour of
+    `subcorpus` and `publish`. Give it an empty default; the fields that are not known go to `Meta.unknown`."""
+    meta = _monodikit_document.Meta
+    if getattr(meta.__init__, "_tolerant", False):
+        return
+    original = meta.__init__
+
+    def init(self, *args, **kw):
+        kw.setdefault("editionsstatus", "")
+        original(self, *args, **kw)
+
+    init._tolerant = True
+    meta.__init__ = init
+
+
+_tolerate_missing_editionsstatus()
+
+ANALYSIS_RULES = load_analysis_rules()
 
 def extract_pattern(notes):
     if len(notes) < 2:
@@ -85,6 +107,11 @@ def analyze_single_source(corpus_path):
         # Filter: Exclude documents ending in 'TR' (Transcribed) or 'GR'
         if doc_id.endswith("TR") or doc_id.endswith("GS"):
              continue
+
+        # Only the documents of the corpus edition (see analysis_rules.json, rule document_scope)
+        extra = getattr(getattr(doc, "meta", None), "unknown", None) or {}
+        if not document_in_scope(ANALYSIS_RULES, extra.get("subcorpus"), extra.get("publish")):
+            continue
 
 
         # Traversal Context
@@ -216,7 +243,7 @@ def analyze_single_source(corpus_path):
                 
                 # Check for line change '|'
                 if "|" in text:
-                    line_counter += text.count("|")
+                    line_counter += count_line_breaks(text, rule_applies(ANALYSIS_RULES, "rubric_page_break", source))
                     current_context["line"] = str(line_counter)
 
             elif node_type == "nonSpaced":
@@ -386,33 +413,8 @@ def analyze_single_source(corpus_path):
         
     return results
 
-def export_json(data, output_file):
-    # COMPACT JSON: Convert defaultdict to regular dict
-    data_js = json.loads(json.dumps(data))
-    
-    sources = sorted(data_js.keys())
-    
-    # Collect all unique patterns and their stats
-    all_patterns = set()
-    pat_stats = defaultdict(lambda: {"count": 0, "length": 0})
-    
-    overall_max = 0
-    source_folios = {}
-
-    for src in sources:
-        folios = set()
-        for pat, occurrences in data_js[src].items():
-            all_patterns.add(pat)
-            count = len(occurrences)
-            pat_stats[pat]["count"] += count
-            pat_stats[pat]["length"] = len(pat)
-            if count > overall_max:
-                overall_max = count
-            for occ in occurrences:
-                folios.add(occ[1])
-        source_folios[src] = sorted(list(folios))
-    
-    # Load Glyphs
+def load_glyphs():
+    """The pattern glyphs (SVG path and viewBox) from glyphs/*.svg."""
     glyphs = {}
     glyph_files = {
         "note": os.path.join(REPO_ROOT, "glyphs/note.svg"),
@@ -422,7 +424,7 @@ def export_json(data, output_file):
         "descending": os.path.join(REPO_ROOT, "glyphs/descending.svg"),
         "strophicus": os.path.join(REPO_ROOT, "glyphs/strophicus.svg")
     }
-    
+
     for name, path in glyph_files.items():
         if os.path.exists(path):
             with open(path, "r") as f:
@@ -431,17 +433,60 @@ def export_json(data, output_file):
                 vb = "0 0 10 10"
                 m_vb = re.search(r'viewBox="([^"]+)"', content_svg)
                 if m_vb: vb = m_vb.group(1)
-                
+
                 # Extract Path d
                 m_d = re.search(r' d="([^"]+)"', content_svg)
                 d_val = ""
                 if m_d: d_val = m_d.group(1)
-                
+
                 glyphs[name] = {"viewBox": vb, "d": d_val}
         else:
              glyphs[name] = {"viewBox": "0 0 10 10", "d": "M5,5 L10,10"}
+    return glyphs
 
-    # Load Metadata (Quellendaten)
+
+def build_index(data_js, manifest_map):
+    """The object written to ui/public/index.json.
+
+    `data_js`: source -> pattern -> list of occurrences [documentId, folio, line, syllable, notes].
+    `manifest_map`: source -> {"url": ...} (see apply_manifest_overrides.apply_overrides).
+    The occurrences themselves go to ui/public/sources/<source>.json, not into the index.
+    """
+    from apply_manifest_overrides import load_alignments
+
+    sources = sorted(data_js.keys())
+
+    # Collect all unique patterns and their stats
+    pat_stats = defaultdict(lambda: {"count": 0, "length": 0})
+
+    overall_max = 0
+    source_folios = {}
+
+    for src in sources:
+        folios = set()
+        for pat, occurrences in data_js[src].items():
+            count = len(occurrences)
+            pat_stats[pat]["count"] += count
+            pat_stats[pat]["length"] = len(pat)
+            if count > overall_max:
+                overall_max = count
+            for occ in occurrences:
+                folios.add(occ[1])
+        source_folios[src] = sorted(list(folios))
+
+    return {
+        "stats": pat_stats,
+        "overallMax": overall_max,
+        "glyphs": load_glyphs(),
+        "manifests": manifest_map,
+        "alignments": load_alignments(),
+        "sourceFolios": source_folios,
+        "sources": sources
+    }
+
+
+def manifests_from_excel():
+    """Source -> {"url": ...} from the Manifest column of data/raw/Quellendaten.xlsx (untracked), if it exists."""
     manifest_map = {}
     try:
         excel_path = os.path.join(REPO_ROOT, "data/raw/Quellendaten.xlsx")
@@ -457,38 +502,37 @@ def export_json(data, output_file):
             print(f"Warning: {excel_path} not found.")
     except Exception as e:
         print(f"Warning: Could not load Quellendaten.xlsx: {e}")
+    return manifest_map
+
+
+def export_json(data, output_file):
+    # COMPACT JSON: Convert defaultdict to regular dict
+    data_js = json.loads(json.dumps(data))
+    sources = sorted(data_js.keys())
 
     # Manifest decisions made since the spreadsheet were last updated (tracked file).
-    from apply_manifest_overrides import apply_overrides, load_alignments, load_overrides
-    manifest_map = apply_overrides(manifest_map, load_overrides())
+    from apply_manifest_overrides import apply_overrides, load_manifests
+    manifest_map = apply_overrides(manifests_from_excel(), load_manifests())
 
     # Construct Final Export Object (Index without large data payload)
-    export_obj = {
-        "stats": pat_stats,
-        "overallMax": overall_max,
-        "glyphs": glyphs,
-        "manifests": manifest_map,
-        "alignments": load_alignments(),
-        "sourceFolios": source_folios,
-        "sources": sources
-    }
-    
+    export_obj = build_index(data_js, manifest_map)
+
     out_dir = os.path.dirname(output_file)
     os.makedirs(out_dir, exist_ok=True)
-    
+
     with open(output_file, "w") as f:
         json.dump(export_obj, f)
-        
+
     sources_dir = os.path.join(out_dir, "sources")
     os.makedirs(sources_dir, exist_ok=True)
-    
+
     # Replace slashes in source names to avoid subdirectories
     for src in sources:
         safe_src = src.replace("/", "_")
         src_file = os.path.join(sources_dir, f"{safe_src}.json")
         with open(src_file, "w") as f:
             json.dump(data_js[src], f)
-    
+
     print(f"Exported index JSON to {output_file} and {len(sources)} source files to {sources_dir}")
 
 
@@ -536,14 +580,15 @@ def analyze_corpus(corpus_path, cache_file):
             
     print(f"Processed {total} sources, {len(failures)} failed: {[os.path.basename(f[0]) for f in failures]}")
     
-    # Cache the results
-    print(f"Saving data to cache: {cache_file} ...")
-    try:
-        with open(cache_file, "w") as f:
-            json.dump(final_results, f)
-        print("Data cached.")
-    except Exception as e:
-        print(f"Warning: Could not save cache: {e}")
+    # Cache the results (a caller that passes no cache file wants none)
+    if cache_file:
+        print(f"Saving data to cache: {cache_file} ...")
+        try:
+            with open(cache_file, "w") as f:
+                json.dump(final_results, f)
+            print("Data cached.")
+        except Exception as e:
+            print(f"Warning: Could not save cache: {e}")
 
     return final_results
 

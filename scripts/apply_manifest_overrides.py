@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply scripts/manifest_overrides.json to ui/public/index.json.
+"""Apply the truth file scripts/manifests.json (and alignments.json) to ui/public/index.json.
 
 The Manifest column of the (untracked) Quellendaten.xlsx feeds index.json when
 analyze_transcriptions.py runs; the overrides file is the tracked place for
@@ -15,21 +15,23 @@ import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INDEX = os.path.join(REPO_ROOT, "ui", "public", "index.json")
-OVERRIDES = os.path.join(REPO_ROOT, "scripts", "manifest_overrides.json")
+MANIFESTS = os.path.join(REPO_ROOT, "scripts", "manifests.json")  # the truth file of manifest links
+ALIGNMENTS = os.path.join(REPO_ROOT, "scripts", "alignments.json")  # default pins
 
 
-def load_file(path=OVERRIDES):
+def load_file(path):
     if not os.path.exists(path):
         return {}
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
-def load_overrides(path=OVERRIDES):
+def load_manifests(path=MANIFESTS):
+    """Source -> entry of the truth file (url, from, vendored_from, replaces, notes)."""
     return load_file(path).get("manifests", {})
 
 
-def load_alignments(path=OVERRIDES):
+def load_alignments(path=ALIGNMENTS):
     """Source -> {"dataType"?, "pins"}: the alignments that ship with the app (notes dropped)."""
     out = {}
     for source, entry in load_file(path).get("alignments", {}).items():
@@ -63,7 +65,7 @@ def main():
     with open(INDEX, encoding="utf-8") as f:
         index = json.load(f)
     before = index.get("manifests", {})
-    after = apply_overrides(before, load_overrides())
+    after = apply_overrides(before, load_manifests())
     added = sorted(set(after) - set(before))
     removed = sorted(set(before) - set(after))
     changed = sorted(s for s in after if s in before and after[s] != before[s])

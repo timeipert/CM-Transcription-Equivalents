@@ -187,14 +187,15 @@ outline over the wrong image.
 
 ### Where a manuscript's manifest comes from
 
-`ui/public/index.json` (`manifests`) is built by `scripts/analyze_transcriptions.py` from the Manifest column of
-`data/raw/Quellendaten.xlsx` (untracked) and then **`scripts/manifest_overrides.json`** (tracked, with a note per
-entry), which wins. Change a manifest there; `python3 scripts/apply_manifest_overrides.py` re-applies the file to
-`index.json` without re-running the analysis. Canvas labels that name two folios (openings such as
+`ui/public/index.json` (`manifests`) is built at deploy time by `scripts/refresh_data.py` (see [DATA.md](DATA.md)) from
+**`scripts/manifests.json`**, the truth file (tracked; per source the link, where it came from, a note in English and German). The
+Corpus Monodicum export and the table "Quellendaten" (`$QUELLENDATEN_URL`) only fill a source that is missing there; the report lists
+where they disagree. Change a manifest in the truth file. A manifest whose server sends no CORS header is copied into
+`ui/public/manifests/` by `scripts/vendor_manifests.py` (entry with `vendored_from`). Canvas labels that name two folios (openings such as
 "f. 017v - 018r") are split by `splitSpreadLabel` in `config/iiifRules.js`; a source with its own rule there keeps it.
-The same file carries `alignments` (default pins for a source, shipped as `index.json` → `alignments` and merged under the user's
+`scripts/alignments.json` carries the default pins for a source (shipped as `index.json` → `alignments` and merged under the user's
 own settings by `effectiveAlignment` in `stores/settings.js`; read alignment as plain state through that function, not through a
-store action, so reactive code stays free of action side effects) and `replaces` (wrong URLs an earlier load may have saved in a
+store action, so reactive code stays free of action side effects) and the truth file's `replaces` (wrong URLs an earlier load may have saved in a
 browser, which a correction then replaces in `importFromDataManifests`).
 `node ui/scripts/coverage-report.mjs` lists the transcribed folios that have no scan.
 

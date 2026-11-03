@@ -1,0 +1,478 @@
+{
+ "_about": "The single record of which IIIF manifest (the standard link to a manuscript's digitised pages) each source uses: the truth file. scripts/refresh_data.py takes a source's link from here; the Corpus Monodicum export and the table of sources only fill a source that is missing here and are listed in the report where they disagree. Entry fields: 'url' (what the app loads; a path under ui/public for a copied manifest), 'from' (where the entry came from: spreadsheet-2026-10-28 = the Quellendaten spreadsheet at the last build that used it; export-2026-11-03 = the source record in the export; decision = made by hand, with a note), 'vendored_from' (the library's URL of a copied manifest, see scripts/vendor_manifests.py), 'replaces' (wrong URLs that earlier loads may have saved in browsers; the new URL then replaces them), 'note' and 'note_de' (English and German, only for people).",
+ "_about_de": "Die einzige Festlegung, welches IIIF-Manifest (der Standard-Link auf die digitalisierten Seiten einer Handschrift) jede Quelle benutzt: die Wahrheitsdatei. scripts/refresh_data.py nimmt den Link einer Quelle von hier; der Export von Corpus Monodicum und die Quellendatentabelle füllen nur eine Quelle auf, die hier fehlt, und werden im Bericht aufgeführt, wo sie abweichen. Felder eines Eintrags: 'url' (was die App lädt; bei einem kopierten Manifest ein Pfad unter ui/public), 'from' (Herkunft des Eintrags: spreadsheet-2026-10-28 = die Quellendaten-Tabelle beim letzten Build, der sie benutzte; export-2026-11-03 = der Quellendatensatz im Export; decision = von Hand entschieden, mit Notiz), 'vendored_from' (URL der Bibliothek bei einem kopierten Manifest, siehe scripts/vendor_manifests.py), 'replaces' (falsche URLs, die frühere Ladevorgänge in Browsern gespeichert haben können; die neue URL ersetzt sie), 'note' und 'note_de' (Englisch und Deutsch, nur für Menschen).",
+ "manifests": {
+  "Aa 13": {
+   "url": "https://iiif.diamm.net/manifests/D-AAm-Cod-13/manifest.json",
+   "from": "decision",
+   "note": "DIAMM; linked from the spreadsheet (IIIF column)"
+  },
+  "Abb 7": {
+   "url": "https://api.irht.cnrs.fr/ark:/63955/fj2uwtcwtj87/manifest.json",
+   "from": "decision",
+   "replaces": [
+    "https://api.irht.cnrs.fr/ark:/63955/fqy1dnjxro7t/manifest.json"
+   ],
+   "note": "The old URL was the '(décor)' manifest: 46 canvases showing only decorated pages. This is the full set (235 canvases)"
+  },
+  "Aut 183": {
+   "url": "https://api.irht.cnrs.fr/ark:/63955/f9jae19ino5w/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Ba 12": {
+   "url": "https://iiif.diamm.net/manifests/D-BAa-Msc-Lit-12/manifest.json",
+   "from": "decision",
+   "note": "DIAMM, found on the musmed.eu page (the 'Solesmes' scans)"
+  },
+  "Be 190": {
+   "url": "https://content.staatsbibliothek-berlin.de/dc/75044021X/manifest",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Be 40078": {
+   "url": "https://content.staatsbibliothek-berlin.de/dc/782404677/manifest",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Be 40608": {
+   "url": "https://content.staatsbibliothek-berlin.de/dc/1800117108/manifest",
+   "from": "decision",
+   "note": "SBB, from the resolver SBB00032CBE00000000 (PPN1800117108)"
+  },
+  "Be 664": {
+   "url": "https://content.staatsbibliothek-berlin.de/dc/882160672/manifest",
+   "from": "decision",
+   "note": "SBB, from the resolver SBB0001F79C00000000 (PPN882160672)"
+  },
+  "Be 792": {
+   "url": "https://content.staatsbibliothek-berlin.de/dc/68855508X/manifest",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Ben 34": {
+   "url": "https://iiif.diamm.net/manifests/I-BV-34/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Ben 37": {
+   "url": "https://iiif.diamm.net/manifests/I-BV_37/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Dar 868": {
+   "url": "https://iiifserv.ulb.tu-darmstadt.de/iiif/00006738.json",
+   "from": "decision",
+   "replaces": [
+    "https://tudigit.ulb.tu-darmstadt.de/iiif/Hs-868-manifest.json"
+   ],
+   "note": "University and State Library Darmstadt, colour digitisation 00006738 (352 canvases, every label is '-'; the pages are named from the canvas position by the rule for 'Dar 868' in ui/src/config/iiifRules.js). The earlier link to tudigit.ulb.tu-darmstadt.de/iiif/Hs-868-manifest.json is dead. The older black-and-white digitisation is https://iiifserv.ulb.tu-darmstadt.de/iiif/Hs-868.json (343 canvases, labelled 2r ... 172v).",
+   "note_de": "Universitäts- und Landesbibliothek Darmstadt, Farbdigitalisat 00006738 (352 Canvas, jede Beschriftung lautet '-'; die Seiten werden von der Regel für 'Dar 868' in ui/src/config/iiifRules.js nach der Canvas-Position benannt). Der frühere Link auf tudigit.ulb.tu-darmstadt.de/iiif/Hs-868-manifest.json ist tot. Das ältere Schwarz-Weiß-Digitalisat ist https://iiifserv.ulb.tu-darmstadt.de/iiif/Hs-868.json (343 Canvas, beschriftet 2r ... 172v)."
+  },
+  "Ei 366": {
+   "url": "https://www.e-codices.unifr.ch/metadata/iiif/sbe-0366/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Ei 610": {
+   "url": "https://www.e-codices.unifr.ch/metadata/iiif/sbe-0610/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Eng 1003": {
+   "url": "https://www.e-codices.unifr.ch/metadata/iiif/bke-1003/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Eng 102": {
+   "url": "https://www.e-codices.unifr.ch/metadata/iiif/bke-0102/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Ful 62": {
+   "url": "https://fuldig.hs-fulda.de/viewer/api/v1/records/PPN314755292/manifest/",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Ful 83": {
+   "url": "https://fuldig.hs-fulda.de/viewer/rest/iiif/manifests/PPN314992774/manifest",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "GeB 74": {
+   "url": "https://www.e-codices.unifr.ch/metadata/iiif/fmb-cb-0074/manifest.json",
+   "from": "decision",
+   "note": "e-codices: Cologny, Fondation Martin Bodmer, Cod. Bodmer 74"
+  },
+  "Gr 807": {
+   "url": "https://unipub.uni-graz.at/i3f/v20/5564576/manifest",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Ka 5": {
+   "url": "https://orka.bibliothek.uni-kassel.de/viewer/api/v1/records/1385040938929/manifest/",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Klo 1014": {
+   "url": "https://manuscripta.at/diglit/iiif/AT5000-1014/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Klo 588": {
+   "url": "https://manuscripta.at/diglit/iiif/AT5000-588/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Klo 635": {
+   "url": "https://manuscripta.at/diglit/iiif/AT5000-635/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Klo 73": {
+   "url": "https://manuscripta.at/diglit/iiif/AT5000-73/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Kön D": {
+   "url": "https://digital.dombibliothek-koeln.de/hs/i3f/v20/263341/manifest",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Lo 14": {
+   "url": "https://api.bl.uk/metadata/iiif/ark:/81055/vdc_100056015682.0x000001/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Lo 2615": {
+   "url": "https://iiif.diamm.net/manifests/GB-Lbl-Egerton_2615/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Lo 4": {
+   "url": "https://iiif.diamm.net/manifests/GB-Lbl-Royal-2B-IV/manifest.json",
+   "from": "decision",
+   "replaces": [
+    "https://bl.digirati.io/iiif/ark:/81055/vdc_100056063395.0x000001"
+   ],
+   "note": "The old manifest was BL Royal 4 E IX; Lo 4 is Royal 2 B IV"
+  },
+  "Lü 11": {
+   "url": "https://digital-stadtbibliothek.luebeck.de/viewer/api/v1/records/Mstheollat211/manifest/",
+   "from": "decision",
+   "note": "Goobi viewer API of the Lübeck Stadtbibliothek (Mstheollat211)"
+  },
+  "Ma 289": {
+   "url": "https://iiif.diamm.net/manifests/E-Mn-Ms-289/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Mel 109": {
+   "url": "manifests/Mel-109.json",
+   "from": "decision",
+   "vendored_from": "https://iiifpresentation.acdh.oeaw.ac.at/mahss/A-M109/manifest",
+   "replaces": [
+    "https://iiifpresentation.acdh.oeaw.ac.at/mahss/A-M109/manifest"
+   ],
+   "note": "The ACDH manifest server sends no CORS header (Access-Control-Allow-Origin), so a browser cannot load the manifest from another site; the image server has CORS and works. The manifest is therefore copied into ui/public/manifests/ by scripts/vendor_manifests.py and loaded from the site itself. Refresh the copy with that script when the library changes the manifest.",
+   "note_de": "Der Manifest-Server des ACDH sendet keinen CORS-Header (Access-Control-Allow-Origin), deshalb kann ein Browser das Manifest nicht von einer anderen Seite laden; der Bildserver hat CORS und funktioniert. Das Manifest wird daher von scripts/vendor_manifests.py nach ui/public/manifests/ kopiert und von der Seite selbst geladen. Die Kopie mit diesem Skript erneuern, wenn die Bibliothek das Manifest ändert."
+  },
+  "Mod 16": {
+   "url": "https://iiif.diamm.net/manifests/I-MOd-Cod-O-I-16/manifest.json",
+   "from": "decision",
+   "note": "DIAMM, found on the musmed.eu page; spreads labelled 'Nv-Mr'"
+  },
+  "Mod 7": {
+   "url": "https://iiif.diamm.net/manifests/I-MOd-Cod-O-I-7/manifest.json",
+   "from": "decision",
+   "note": "DIAMM, found on the musmed.eu page; spreads labelled 'Nv-Mr'"
+  },
+  "Mza 11": {
+   "url": "https://iiif.diamm.net/manifests/I-MZ-Ms-k-11/manifest.json",
+   "from": "decision",
+   "note": "DIAMM, found on the musmed.eu page"
+  },
+  "Mza 77": {
+   "url": "https://iiif.diamm.net/manifests/I-MZ-Ms-c-14-77/manifest.json",
+   "from": "decision",
+   "note": "DIAMM, found on the musmed.eu page"
+  },
+  "Mü 14477": {
+   "url": "https://api.digitale-sammlungen.de/iiif/presentation/v2/bsb00046480/manifest",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Mü 17019": {
+   "url": "https://api.digitale-sammlungen.de/iiif/presentation/v2/bsb00069158/manifest",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Mü 19411": {
+   "url": "https://api.digitale-sammlungen.de/iiif/presentation/v2/bsb00008249/manifest",
+   "from": "spreadsheet-2026-10-28 and export-2026-11-03"
+  },
+  "Mü 29307(2": {
+   "url": "https://api.digitale-sammlungen.de/iiif/presentation/v2/bsb00073053/manifest",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Mü 4101": {
+   "url": "https://api.digitale-sammlungen.de/iiif/presentation/v2/bsb00126185/manifest",
+   "from": "spreadsheet-2026-10-28 and export-2026-11-03"
+  },
+  "Mü 5539": {
+   "url": "https://api.digitale-sammlungen.de/iiif/presentation/v2/bsb00042722/manifest",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Mü 6419": {
+   "url": "https://api.digitale-sammlungen.de/iiif/presentation/v2/bsb00079061/manifest",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Mü 9469": {
+   "url": "https://api.digitale-sammlungen.de/iiif/presentation/v2/bsb00113939/manifest",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Mü 9508": {
+   "url": "https://api.digitale-sammlungen.de/iiif/presentation/v2/bsb00070310/manifest",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Nau I": {
+   "url": "https://archive.thulb.uni-jena.de/korax/api/iiif/presentation/v2/Korax_derivate_00002026/manifest",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Nau VIII": {
+   "url": "https://archive.thulb.uni-jena.de/korax/api/iiif/presentation/v2/Korax_derivate_00003127/manifest",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Nea 38": {
+   "url": "https://iiif.diamm.net/manifests/I-Nn-VI-G_38/manifest.json",
+   "from": "decision",
+   "note": "DIAMM, found on the musmed.eu page"
+  },
+  "Or 129": {
+   "url": "https://iiif.diamm.net/manifests/F-SO-129-107/manifest.json",
+   "from": "decision",
+   "note": "DIAMM (musmed.eu lists it as Orléans Ms 129); check that the images really are Orléans 129"
+  },
+  "Ox 213": {
+   "url": "https://iiif.bodleian.ox.ac.uk/iiif/manifest/a4120d22-b62f-4b57-861d-43c839c790a0.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Ox 27": {
+   "url": "https://iiif.bodleian.ox.ac.uk/iiif/manifest/e1e1a6f0-faca-4919-af63-df31c675bbc4.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Ox 325": {
+   "url": "https://iiif.bodleian.ox.ac.uk/iiif/manifest/510c54fa-6836-4b83-ba03-1a32157639c9.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Ox 340": {
+   "url": "https://iiif.bodleian.ox.ac.uk/iiif/manifest/88020db6-3258-4ec9-9b18-1f5b35b63149.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Ox 341": {
+   "url": "https://iiif.bodleian.ox.ac.uk/iiif/manifest/9c613c5b-386c-490c-a726-b9bf39f1ce61.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Ox 358": {
+   "url": "https://iiif.bodleian.ox.ac.uk/iiif/manifest/3891d845-aa36-46be-909b-e34a350b7f3b.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 1032": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b9081013f/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 10511": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8422971d/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 1064": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b84274480/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 1107": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b10033022b/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 1112": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b6000450z/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 1118": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8432314k/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 1119": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8432279k/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 1120": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b84323135/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 1138": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b84324583/manifest.json",
+   "from": "decision",
+   "note": "Gallica; identity (BnF Latin 1138) confirmed via the Biblissima record, manifest itself not fetched (Gallica blocked the check)"
+  },
+  "Pa 1139": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b6000946s/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 1213": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b10073518r/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 1235": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8432301z/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 1338": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8432478v/manifest.json",
+   "from": "decision",
+   "note": "Gallica; identity (BnF Latin 1338) confirmed via the Biblissima record, manifest itself not fetched (Gallica blocked the check)"
+  },
+  "Pa 1343": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b9076519x/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 14452": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b9072641v/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 14819": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b84229841/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 16309": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b10022495f/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 17328": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8426270t/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 17329": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b9068274f/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 1871": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b85624659/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 2825": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b105420770/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 3549": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b10507222x/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 3858A": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b10073295k/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 5302": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b10032805j/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 6503": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b525087535/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 776": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b84546727/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 778": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b84262695/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 833": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b84323061/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 887": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b84322963/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 891": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b9078376w/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 903": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b10506538t/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 904": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b84324657/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 909": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b84323046/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 9449": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8422992k/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa 976": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b85302173/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Pa n.a. 903": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b10033619b/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "PaA 1169": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b52000516z/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "PaA 135": {
+   "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b550057271/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "PaSG 117": {
+   "url": "https://iiif.diamm.net/manifests/F-Psg_117/manifest.json",
+   "from": "decision",
+   "note": "DIAMM, found on the musmed.eu page"
+  },
+  "Pia 65": {
+   "url": "https://iiif.diamm.net/manifests/I-PCd-Ms-65/manifest.json",
+   "from": "decision",
+   "note": "DIAMM, found on the musmed.eu page; labels are page numbers"
+  },
+  "Pro 12": {
+   "url": "https://api.irht.cnrs.fr/ark:/63955/fm2ehhsm22uk/manifest.json",
+   "from": "decision",
+   "replaces": [
+    "https://api.irht.cnrs.fr/ark:/63955/f6e4z87mubaf/manifest.json"
+   ],
+   "note": "The old URL was the '(décor)' manifest: 6 canvases. This is the full set (318 canvases)"
+  },
+  "Pst 121": {
+   "url": "https://iiif.diamm.net/manifests/I-PS-C_121/manifest.json",
+   "from": "decision",
+   "note": "DIAMM, found on the musmed.eu page"
+  },
+  "RoC 1741": {
+   "url": "https://iiif.diamm.net/manifests/I-Rc-1741_C.IV.2/manifest.json",
+   "from": "decision",
+   "note": "DIAMM, found on the musmed.eu page"
+  },
+  "RoV 52": {
+   "url": "https://iiif.diamm.net/manifests/I-Rv-C52-19a/manifest.json",
+   "from": "decision",
+   "note": "DIAMM, found on the musmed.eu page; spreads labelled 'Nv-Mr'"
+  },
+  "Sal 20": {
+   "url": "https://iiif.diamm.net/manifests/A-Ssp-a-VII-20/manifest.json",
+   "from": "decision",
+   "note": "DIAMM, found on the musmed.eu page; labels are page numbers"
+  },
+  "Sol 596": {
+   "url": "https://iiif.diamm.net/manifests/F-SO-Class_596/manifest.json",
+   "from": "decision",
+   "note": "DIAMM, found on the musmed.eu page; labels are scan counters"
+  },
+  "To 18": {
+   "url": "https://iiif.diamm.net/manifests/I-Tn-F-IV-18/manifest.json",
+   "from": "decision",
+   "note": "DIAMM, found on the musmed.eu page"
+  },
+  "Tri 2254": {
+   "url": "https://iiif.diamm.net/manifests/D-TRs-Hs-2254/manifest.json",
+   "from": "spreadsheet-2026-10-28"
+  },
+  "Vat 3797": {
+   "url": "https://digi.vatlib.it/iiif/MSS_Vat.lat.3797/manifest.json",
+   "from": "decision",
+   "note": "Vatican library standard manifest URL"
+  },
+  "Vce 56": {
+   "url": "https://iiif.diamm.net/manifests/I-VCd-Cod-56/manifest.json",
+   "from": "decision",
+   "note": "DIAMM, found on the musmed.eu page"
+  },
+  "Wü 165": {
+   "url": "https://www.franconica.online/o/iiif/2/97867/manifest",
+   "from": "decision",
+   "note": "Franconica (UB Würzburg), linked from the DOI in the spreadsheet; labels look like '3 [2r]'"
+  }
+ }
+}

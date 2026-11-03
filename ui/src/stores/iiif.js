@@ -6,6 +6,14 @@ import { parseManifest } from '../services/iiif/manifestParser';
 import { getCachedItem, setCachedItem, deleteCachedItem, clearStore } from '../utils/idb';
 import { isPlainObject } from '../utils/shape';
 
+// The parsed pages of a manifest are cached in IndexedDB under the source name. The
+// cache holds what the parser made of the manifest (labels after the source's rule,
+// image URLs after a server's size limit), so a change to the rules in
+// config/iiifRules.js or to how image URLs are written must not be answered from an
+// older entry: raise the number then. Older entries stay unused in the database.
+const PARSE_VERSION = 2;
+const cacheKey = source => `${source}#parse${PARSE_VERSION}`;
+
 export const useIiifStore = defineStore('iiif', () => {
     // State
     const links = ref({}); // source -> manifest URL (the only persisted state)
@@ -42,7 +50,7 @@ export const useIiifStore = defineStore('iiif', () => {
         links.value[source] = url;
         if (changed) {
             // Drop stale caches so the new URL fully takes effect.
-            await deleteCachedItem('manifests', source);
+            await deleteCachedItem('manifests', cacheKey(source));
             delete parsedData.value[source];
             await clearStore('images'); // region crops were keyed to the old service URL
         }
@@ -58,7 +66,7 @@ export const useIiifStore = defineStore('iiif', () => {
     async function refreshManifest(source) {
         const url = links.value[source];
         if (!url) return;
-        await deleteCachedItem('manifests', source);
+        await deleteCachedItem('manifests', cacheKey(source));
         delete parsedData.value[source];
         await clearStore('images');
         await fetchAndParseManifest(source, url, true);
@@ -79,7 +87,7 @@ export const useIiifStore = defineStore('iiif', () => {
             // Check IndexedDB cache first
             if (!forceRefresh) {
                 try {
-                    const cached = await getCachedItem('manifests', source);
+                    const cached = await getCachedItem('manifests', cacheKey(source));
                     if (cached && Array.isArray(cached) && cached.length > 0) {
                         parsedData.value[source] = cached;
                         manifestStatus.value[source] = { status: 'ok', error: null };
@@ -98,7 +106,7 @@ export const useIiifStore = defineStore('iiif', () => {
                     parsedData.value[source] = folios;
                     manifestStatus.value[source] = { status: 'ok', error: null };
                     // Cache parsed manifest data in IndexedDB for fast reloads
-                    setCachedItem('manifests', source, folios).catch(e => console.warn('Failed caching manifest', e));
+                    setCachedItem('manifests', cacheKey(source), folios).catch(e => console.warn('Failed caching manifest', e));
                 } else {
                     const msg = `No canvases found in manifest for ${source}`;
                     console.warn(msg);
@@ -133,7 +141,7 @@ export const useIiifStore = defineStore('iiif', () => {
                 links.value[source] = url;
                 delete parsedData.value[source];
                 delete manifestStatus.value[source];
-                await deleteCachedItem('manifests', source);
+                await deleteCachedItem('manifests', cacheKey(source));
                 await clearStore('images'); // region crops were keyed to the old service URL
                 continue;
             }
