@@ -1,4 +1,4 @@
-import { ref, shallowRef } from 'vue';
+import { ref, shallowRef, triggerRef } from 'vue';
 import { useIiifStore } from '../stores/iiif';
 import { useSettingsStore } from '../stores/settings';
 import { loadOverviewMetadata } from '../services/metadata/metadataProvider';
@@ -18,6 +18,10 @@ const overallMax = ref(0);
 const loading = ref(true);
 const error = ref(null);
 const loadedSources = ref(new Set());
+// Occurrence counts per source and pattern from counts.json: { source: { pattern: n } }.
+// null until loaded and when the build has no such file (see loadCounts).
+const sourceCounts = shallowRef(null);
+const countsStatus = ref('idle'); // 'idle' | 'loading' | 'ready' | 'absent'
 
 let initPromise = null;
 
@@ -65,19 +69,115 @@ async function fetchAll() {
     }
 }
 
-// Requests in flight, so callers may fire loadSource() for a whole page of
-// sources in parallel and repeated calls for one source share a single request.
+let countsPromise = null;
+
+/**
+ * Load counts.json, the small table of occurrence counts per source and pattern (about 26 KB
+ * gzipped, against 13 MB for the source files of one page of the Global Analysis matrix).
+ * It is optional: builds from before 2026-11-04 do not ship it, and a missing file ends in
+ * status 'absent' (never an error), so callers fall back to loading source files.
+ * Not part of fetchAll(): only the views that need counts alone pay for the request.
+ */
+function loadCounts() {
+    if (!countsPromise) {
+        countsStatus.value = 'loading';
+        countsPromise = fetchCounts().then((counts) => {
+            sourceCounts.value = counts;
+            countsStatus.value = counts ? 'ready' : 'absent';
+        });
+    }
+    return countsPromise;
+}
+
+async function fetchCounts() {
+    try {
+        const res = await fetch('counts.json', { cache: 'no-cache' });
+        if (!res.ok) return null;
+        // The dev server answers a missing file with index.html (HTTP 200).
+        if (!(res.headers.get('content-type') || '').includes('json')) return null;
+        const counts = await res.json();
+        return counts && typeof counts === 'object' && !Array.isArray(counts) ? counts : null;
+    } catch (e) {
+        console.warn('Could not load counts.json, falling back to the source files:', e);
+        return null;
+    }
+}
+
+// Requests in flight, so callers may fire loadSource() for many sources at once
+// and repeated calls for one source share a single request.
 const pendingLoads = new Map();
+
+// At most this many source files are fetched and parsed at the same time, so a
+// burst of requests (a page of rows scrolling into view) cannot flood the network
+// or block the main thread with parsing several megabytes at once.
+const MAX_PARALLEL_LOADS = 4;
+let activeLoads = 0;
+const loadQueue = [];
+
+function runQueued(task) {
+    return new Promise((resolve, reject) => {
+        const start = () => {
+            activeLoads++;
+            task().then(resolve, reject).finally(() => {
+                activeLoads--;
+                const next = loadQueue.shift();
+                if (next) next();
+            });
+        };
+        if (activeLoads < MAX_PARALLEL_LOADS) start();
+        else loadQueue.push(start);
+    });
+}
 
 function loadSource(sourceName) {
     if (!sourceName) return Promise.resolve();
     if (loadedSources.value.has(sourceName)) return Promise.resolve();
     let pending = pendingLoads.get(sourceName);
     if (!pending) {
-        pending = fetchSource(sourceName).finally(() => pendingLoads.delete(sourceName));
+        pending = runQueued(() => fetchSource(sourceName)).finally(() => pendingLoads.delete(sourceName));
         pendingLoads.set(sourceName, pending);
     }
     return pending;
+}
+
+/** Folio -> patterns and folio -> lines of one source, for the manager workspace. */
+function buildFolioIndexes(sourceData) {
+    const pPats = {};
+    const fLines = {};
+    for (const [pat, occs] of Object.entries(sourceData)) {
+        for (const occ of occs) {
+            const fol = occ[1];
+            const line = occ[2];
+
+            if (!pPats[fol]) pPats[fol] = [];
+            pPats[fol].push(pat);
+
+            if (!fLines[fol]) fLines[fol] = new Set();
+            fLines[fol].add(line);
+        }
+    }
+    for (const fol of Object.keys(pPats)) {
+        pPats[fol] = Array.from(new Set(pPats[fol])).sort();
+        fLines[fol] = Array.from(fLines[fol]).sort((a, b) => a - b);
+    }
+    return { pPats, fLines };
+}
+
+/**
+ * Expose a per-source value as a property that is computed on first read. The
+ * overview only needs the pattern counts, so the folio indexes (one pass over every
+ * occurrence) are built only when the manager workspace asks for them.
+ */
+function defineLazy(target, key, compute) {
+    let cache;
+    Object.defineProperty(target, key, {
+        enumerable: true,
+        configurable: true,
+        get() {
+            if (cache === undefined) cache = compute();
+            return cache;
+        },
+    });
 }
 
 async function fetchSource(sourceName) {
@@ -99,30 +199,14 @@ async function fetchSource(sourceName) {
         }
         const sourceData = await res.json();
 
-        const pPats = {};
-        const fLines = {};
-
-        for (const [pat, occs] of Object.entries(sourceData)) {
-            for (const occ of occs) {
-                const fol = occ[1];
-                const line = occ[2];
-
-                if (!pPats[fol]) pPats[fol] = [];
-                pPats[fol].push(pat);
-
-                if (!fLines[fol]) fLines[fol] = new Set();
-                fLines[fol].add(line);
-            }
-        }
-
-        for (const fol of Object.keys(pPats)) {
-            pPats[fol] = Array.from(new Set(pPats[fol])).sort();
-            fLines[fol] = Array.from(fLines[fol]).sort((a, b) => a - b);
-        }
+        let built;
+        const folioIndexes = () => (built ||= buildFolioIndexes(sourceData));
 
         rawData.value = { ...rawData.value, [sourceName]: sourceData };
-        pagePatternsIndex.value = { ...pagePatternsIndex.value, [sourceName]: pPats };
-        folioLinesIndex.value = { ...folioLinesIndex.value, [sourceName]: fLines };
+        defineLazy(pagePatternsIndex.value, sourceName, () => folioIndexes().pPats);
+        defineLazy(folioLinesIndex.value, sourceName, () => folioIndexes().fLines);
+        triggerRef(pagePatternsIndex);
+        triggerRef(folioLinesIndex);
 
         loadedSources.value.add(sourceName);
     } catch (e) {
@@ -150,6 +234,9 @@ export function useTranscriptionData() {
         loading,
         error,
         loadSource,
-        loadedSources
+        loadedSources,
+        sourceCounts,
+        countsStatus,
+        loadCounts
     };
 }

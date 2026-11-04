@@ -13,7 +13,9 @@ import { resolveSharedTransport } from '../sync/sharedDataChannel';
 
 export class LegacyStaticProvider {
     async load() {
-        const res = await fetch(`index.json?t=${Date.now()}`);
+        // Revalidate with the server (ETag) instead of a cache-busting query string:
+        // an unchanged index costs a 304, a redeployed one is picked up at once.
+        const res = await fetch('index.json', { cache: 'no-cache' });
         if (!res.ok) throw new Error('Failed to load data index');
         const json = await res.json();
         return {

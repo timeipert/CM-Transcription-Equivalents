@@ -485,6 +485,23 @@ def build_index(data_js, manifest_map):
     }
 
 
+def build_source_counts(data_js):
+    """The object written to ui/public/counts.json: source -> pattern -> number of occurrences.
+
+    The Global Analysis matrix shows only these numbers, but a source's occurrence list
+    (ui/public/sources/<source>.json) is up to 2.3 MB. This table is the small stand-in (about 26 KB
+    gzipped for 112 sources, state 2026-11-04), so the matrix renders without fetching any source file.
+    The keys are the source names and pattern codes exactly as in `data_js`.
+    """
+    return {src: {pat: len(occurrences) for pat, occurrences in sorted(patterns.items())}
+            for src, patterns in sorted(data_js.items())}
+
+
+def dump_source_counts(data_js):
+    """build_source_counts() as the compact JSON text of counts.json."""
+    return json.dumps(build_source_counts(data_js), separators=(",", ":"))
+
+
 def manifests_from_excel():
     """Source -> {"url": ...} from the Manifest column of data/raw/Quellendaten.xlsx (untracked), if it exists."""
     manifest_map = {}
@@ -522,6 +539,10 @@ def export_json(data, output_file):
 
     with open(output_file, "w") as f:
         json.dump(export_obj, f)
+
+    # Per-source pattern counts for the Global Analysis matrix (see build_source_counts).
+    with open(os.path.join(out_dir, "counts.json"), "w") as f:
+        f.write(dump_source_counts(data_js))
 
     sources_dir = os.path.join(out_dir, "sources")
     os.makedirs(sources_dir, exist_ok=True)

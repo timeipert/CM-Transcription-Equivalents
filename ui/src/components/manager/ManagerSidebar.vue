@@ -156,7 +156,8 @@ async function submitIiif() {
                 <button v-if="node.hasIiif" class="align-icon-btn" @click.stop="alignSource = src" title="Review how scan pages map to folios">⇄</button>
                 <button v-if="iiifStore.manifestStatus[src]?.status === 'error'" class="btn-xs retry-btn" @click.stop="iiifStore.ensureLoaded(src)" title="Retry loading IIIF Manifest">Retry</button>
             </div>
-            <div class="folio-list" v-show="expandedSources.has(src)">
+            <!-- v-if, not v-show: collapsed sources must not render (and re-evaluate) their page rows. -->
+            <div class="folio-list" v-if="expandedSources.has(src)">
                 <input v-if="node.pages.length > 10"
                        v-model="folioSearch[src]"
                        placeholder="Search page or folio..."

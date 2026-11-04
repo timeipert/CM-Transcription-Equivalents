@@ -18,7 +18,11 @@ import { compareFolios } from '../utils/sorting';
 import StateWrapper from '../components/StateWrapper.vue';
 
 // Use Composable
-const { rawData, patStats, glyphs, manifests, overallMax, loading, error, sourceFolios, loadSource } = useTranscriptionData();
+const { rawData, patStats, glyphs, manifests, overallMax, loading, error, sourceFolios, loadSource, sourceCounts, countsStatus, loadCounts } = useTranscriptionData();
+
+// The cells only show occurrence counts, which counts.json carries for every source and
+// pattern. Start fetching it now; the (large) source files are then needed only for the modal.
+loadCounts();
 const annotStore = useAnnotationsStore();
 const { getStandardSource } = useImageManifest();
 const router = useRouter();
@@ -285,9 +289,11 @@ watch(tableScroll, (el, oldEl) => {
     if (oldEl) {
         oldEl.removeEventListener('scroll', onTableScroll);
         resizeObserver?.disconnect();
+        rowObserver?.disconnect();
     }
     if (!el) return;
     el.addEventListener('scroll', onTableScroll, { passive: true });
+    startRowObserver(el);
     viewportWidth.value = el.clientWidth || viewportWidth.value;
     scrollLeft.value = el.scrollLeft;
     resizeObserver = new ResizeObserver(() => { viewportWidth.value = el.clientWidth || viewportWidth.value; });
@@ -297,6 +303,7 @@ watch(tableScroll, (el, oldEl) => {
 onBeforeUnmount(() => {
     if (scrollFrame) cancelAnimationFrame(scrollFrame);
     resizeObserver?.disconnect();
+    rowObserver?.disconnect();
     tableScroll.value?.removeEventListener('scroll', onTableScroll);
 });
 
@@ -316,13 +323,58 @@ const pageSources = computed(() => {
 });
 
 
-// Load the page's sources in parallel; the composable de-duplicates requests.
-watch(pageSources, (newSources) => {
-    if (!newSources) return;
-    for (const src of newSources) {
-        if (!rawData.value[src]) loadSource(src);
+// Source files are large (a page of 50 sources is about 13 MB of JSON). With counts.json
+// the cells need none of them. Only when the build has no counts.json (status 'absent', older
+// builds) does a row load its file as it comes near the viewport, its cells showing a
+// placeholder until then. The composable queues and de-duplicates the requests.
+const lazyRows = computed(() => countsStatus.value === 'absent');
+const rowEls = new Map(); // source -> its <tr>
+let rowObserver = null;
+const hasObserver = typeof IntersectionObserver !== 'undefined';
+
+function trackRow(el, src) {
+    const prev = rowEls.get(src);
+    if (prev === el) return;
+    if (prev) rowObserver?.unobserve(prev);
+    if (el) {
+        el.dataset.source = src;
+        rowEls.set(src, el);
+        rowObserver?.observe(el);
+    } else {
+        rowEls.delete(src);
     }
+}
+
+function startRowObserver(root) {
+    rowObserver?.disconnect();
+    rowObserver = null;
+    if (!hasObserver || !root || !lazyRows.value) return;
+    rowObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            rowObserver.unobserve(entry.target);
+            loadSource(entry.target.dataset.source);
+        }
+    }, { root, rootMargin: '300px 0px' });
+    for (const el of rowEls.values()) rowObserver.observe(el);
+}
+
+// The fallback is decided once counts.json has been tried: observe the rows from then on.
+watch(lazyRows, (lazy) => {
+    if (lazy) startRowObserver(tableScroll.value);
+});
+
+// Without IntersectionObserver (old browsers, test environments) load the whole page.
+watch([pageSources, lazyRows], ([newSources, lazy]) => {
+    if (hasObserver || !lazy || !newSources) return;
+    for (const src of newSources) loadSource(src);
 }, { immediate: true });
+
+function cellText(src, value) {
+    // With counts a cell is final at once, 0 included; without, wait for the source file.
+    if (countsStatus.value !== 'ready' && !rawData.value[src]) return '…';
+    return value || '-';
+}
 
 
 // Methods
@@ -352,17 +404,19 @@ function changePage(d) {
 }
 
 function getCellValue(source, pattern) {
-    const srcData = rawData.value[source];
-    if (!srcData) return 0;
+    const counts = countsStatus.value === 'ready' ? (sourceCounts.value[source] || {}) : null;
+    const srcData = counts ? null : rawData.value[source];
+    if (!counts && !srcData) return 0;
     let sum = 0;
     for (const raw of patternVariants.value[pattern] || [pattern]) {
-        if (srcData[raw]) sum += srcData[raw].length;
+        if (counts) sum += counts[raw] || 0;
+        else if (srcData[raw]) sum += srcData[raw].length;
     }
     return sum;
 }
 
 function getGroupValue(source, groupName) {
-    if (!rawData.value[source]) return 0;
+    if (countsStatus.value !== 'ready' && !rawData.value[source]) return 0;
     let sum = 0;
     for (const v of patternGroups.value[groupName]) {
         sum += getCellValue(source, v);
@@ -465,9 +519,13 @@ function sortModal(col) {
 import { useRoute } from 'vue-router';
 const route = useRoute();
 
-watch([() => route.query.openSource, () => route.query.openPattern, loading], ([openSource, openPattern, isLoading]) => {
+watch([() => route.query.openSource, () => route.query.openPattern, loading], async ([openSource, openPattern, isLoading]) => {
     if (openSource && openPattern) {
         if (!isLoading) {
+            // The cells come from counts.json (or, in older builds, from files loaded as rows
+            // scroll into view); the occurrences themselves are fetched here, when the modal opens.
+            await loadSource(openSource);
+            if (route.query.openSource !== openSource || route.query.openPattern !== openPattern) return;
             const data = rawData.value[openSource] && rawData.value[openSource][openPattern];
             if (data && data.length > 0) {
                 modalTitle.value = `Source: ${openSource} | Pattern: ${openPattern} (${data.length})`;
@@ -583,7 +641,7 @@ function isHighlighted(row) {
                 </tr>
             </thead>
             <tbody>
-                <tr v-for="src in pageSources" :key="src">
+                <tr v-for="src in pageSources" :key="src" :ref="el => trackRow(el, src)">
                     <td class="source-col">
                         {{ src }}
                         <a v-if="manifests[src]" :href="manifests[src].url" target="_blank" title="Manifest">📜</a>
@@ -595,10 +653,10 @@ function isHighlighted(row) {
                         @click="col.type==='pattern' && onCellClick(src, col.name)">
                         
                         <template v-if="col.type==='group'">
-                            {{ getGroupValue(src, col.name) || '-' }}
+                            {{ cellText(src, getGroupValue(src, col.name)) }}
                         </template>
                         <template v-else>
-                            {{ getCellValue(src, col.name) || '-' }}
+                            {{ cellText(src, getCellValue(src, col.name)) }}
                         </template>
                     </td>
                     <td v-if="rightSpacer > 0" class="spacer"></td>

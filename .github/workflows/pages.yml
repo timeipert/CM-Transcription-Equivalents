@@ -42,7 +42,7 @@ jobs:
         working-directory: ./ui
         run: npm ci
 
-      # The data (ui/public/index.json and sources/) is not in git: it is built from the Corpus Monodicum
+      # The data (ui/public/index.json, counts.json and sources/) is not in git: it is built from the Corpus Monodicum
       # export on every run, so a deploy shows the edition as it stands in the editor. The export keeps its one
       # place on files.corpus-monodicum.de; nothing is uploaded as an artifact or cached. If the download or the
       # analysis fails, the run fails and the site stays as it was. See DATA.md.
@@ -90,6 +90,7 @@ jobs:
           test -f docs/index.html
           test -f docs/CNAME
           test -f docs/index.json
+          test -f docs/counts.json
           test -d docs/sources
           test -d docs/manual
 

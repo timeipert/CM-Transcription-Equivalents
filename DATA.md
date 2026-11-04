@@ -5,17 +5,18 @@ State: 2026-11-03. For whoever maintains the Neume Viewer (this folder) or the n
 ## What it is for
 
 The Neume Viewer lists the neume patterns of every transcribed source of the Corpus Monodicum (CM, an edition of medieval monophonic
-chant). That needs two kinds of files in `ui/public/`:
+chant). That needs three kinds of files in `ui/public/`:
 
 | File | Content |
 |---|---|
 | `sources/<source>.json` | the occurrences of every pattern in one source: `{pattern: [[documentId, folio, line, syllable, notes], ...]}` |
+| `counts.json` | `{source: {pattern: number of occurrences}}`, about 26 KB gzipped (state 2026-11-04). The Global Analysis matrix reads its cells from this table and fetches a `sources/<source>.json` file (up to 2.3 MB) only when a cell is opened. Without the file (builds from before 2026-11-04) the matrix falls back to loading source files as rows scroll into view |
 | `index.json` | list of sources, pattern statistics, glyphs, manifest links (IIIF, the standard for digitised manuscript images) and default alignments |
 
-**Neither is stored in git.** The Corpus Monodicum export has one place, `https://files.corpus-monodicum.de/exportInternal.zip`
+**None of them is stored in git.** The Corpus Monodicum export has one place, `https://files.corpus-monodicum.de/exportInternal.zip`
 (all sources and documents of the Monodi editor, with the table of sources "Quellendaten" as the `meta.json` of each source; no login,
 about 230 MB). The deploy workflow (`.github/workflows/pages.yml`, runs in the mirror repository) downloads it on every run, builds
-both files with `scripts/refresh_data.py` and publishes the site. No copy of the export is committed, uploaded as an artifact or cached.
+all three with `scripts/refresh_data.py` and publishes the site. No copy of the export is committed, uploaded as an artifact or cached.
 
 ## Refreshing the data of the site
 
@@ -41,7 +42,7 @@ It takes about two minutes. `data/` is ignored by git.
 1. Downloads and unpacks the export (`data/export/`).
 2. Analyses the documents of the corpus edition (`scripts/analysis_rules.json`, rule `document_scope`: subcorpus `edition`; documents
    whose id ends in `TR` or `GS` are skipped, as before). There is no cache.
-3. Writes `ui/public/sources/` and `index.json`.
+3. Writes `ui/public/sources/`, `index.json` and `counts.json`.
 4. Compares with the **baseline**, the data deployed so far (the files already in `ui/public/`, else the live site
    https://neume.monodi.app/), and writes `data/refresh-report.md` and `data/refresh-changes.json`.
 

@@ -29,6 +29,10 @@ export const normalizeFolioName = matchName;
 // instances (or tests) never share a map.
 const pageMapCaches = new WeakMap();
 
+// Sorted folio list, its canonical-name index and identity set, per folio Set of the data.
+const foliosInfoCache = new WeakMap();
+const EMPTY_FOLIOS = { list: [], index: new Map(), ids: new Set() };
+
 const manifest = ref(new Set());
 const loaded = ref(false);
 
@@ -106,12 +110,25 @@ export function useImageManifest() {
         return source ? String(source).trim() : source;
     }
 
-    /** The transcription's folios of a source (or of its IIIF key), in order. */
-    function dataFoliosOf(source) {
+    function foliosInfoOf(source) {
         const { sourceFolios } = useTranscriptionData();
         const all = sourceFolios.value || {};
         const set = all[source] || all[resolveIiifSource(source)] || null;
-        return set ? Array.from(set).filter(Boolean).sort(compareFolios) : [];
+        if (!set) return EMPTY_FOLIOS;
+        // The sets are built once per data load and never mutated, so the sorted
+        // list can be remembered per set. The sidebar asks for it once per page row.
+        let info = foliosInfoCache.get(set);
+        if (!info) {
+            const list = Array.from(set).filter(Boolean).sort(compareFolios);
+            info = { list, index: indexFolios(list), ids: new Set(list.map(f => folioIdentity(f))) };
+            foliosInfoCache.set(set, info);
+        }
+        return info;
+    }
+
+    /** The transcription's folios of a source (or of its IIIF key), in order. Shared: do not mutate. */
+    function dataFoliosOf(source) {
+        return foliosInfoOf(source).list;
     }
 
     // --- Page maps -----------------------------------------------------------
@@ -181,7 +198,7 @@ export function useImageManifest() {
     /** The folio a page is stored under (see top of file). */
     function pageFolio(source, folio) {
         if (folio === null || folio === undefined || folio === '') return folio;
-        return canonicalFolio(folio, indexFolios(dataFoliosOf(source)));
+        return canonicalFolio(folio, foliosInfoOf(source).index);
     }
 
     /** The IIIF label of the canvas showing a folio, for display; null if none. */
@@ -246,7 +263,7 @@ export function useImageManifest() {
     function hasTranscriptionData(source, folio) {
         if (!folio) return false;
         const id = folioIdentity(folio);
-        return dataFoliosOf(source).some(f => folioIdentity(f) === id);
+        return foliosInfoOf(source).ids.has(id);
     }
 
     /** { source: [page names] } of the local scans and the parsed manifests. */

@@ -84,8 +84,28 @@ def test_source_names_are_nfc_and_slash_is_restored():
 def test_data_is_written_once_and_vanished_sources_are_removed(tmp_path):
     final = {"Aa 13": {"*": [["Aa 13-1", "1r", "1", "Ky", "C4"]]}, "WiSch 4/5": {"*": [["W-1", "2r", "1", "a", "D4"]]}}
     written, removed = rd.write_data(str(tmp_path), final, {"sources": ["Aa 13", "WiSch 4/5"]})
-    assert sorted(written) == ["Aa 13", "WiSch 4/5", "index.json"] and not removed
+    assert sorted(written) == ["Aa 13", "WiSch 4/5", "counts.json", "index.json"] and not removed
     assert (tmp_path / "sources" / "WiSch 4_5.json").exists()           # a slash in a name becomes "_"
     written, removed = rd.write_data(str(tmp_path), {"Aa 13": final["Aa 13"]}, {"sources": ["Aa 13"]})
-    assert written == ["index.json"] and removed == ["WiSch 4_5.json"]   # Aa 13 unchanged: not rewritten
+    assert sorted(written) == ["counts.json", "index.json"] and removed == ["WiSch 4_5.json"]   # Aa 13 unchanged: not rewritten
     assert json.loads((tmp_path / "index.json").read_text()) == {"sources": ["Aa 13"]}
+
+
+def test_counts_json_holds_the_number_of_occurrences_per_source_and_pattern(tmp_path):
+    final = {
+        "WiSch 4/5": {"*u": [["W-1", "2r", "1", "a", "D4"]]},
+        "Aa 13": {"*": [["Aa 13-1", "1r", "1", "Ky", "C4"], ["Aa 13-1", "1r", "2", "ri", "C4"]], "*ud": [["Aa 13-2", "1v", "1", "e", "D4"]]},
+    }
+    rd.write_data(str(tmp_path), final, {"sources": sorted(final)})
+    text = (tmp_path / "counts.json").read_text()
+    assert json.loads(text) == {"Aa 13": {"*": 2, "*ud": 1}, "WiSch 4/5": {"*u": 1}}   # keyed by the real name, slash included
+    assert " " not in text.replace("Aa 13", "").replace("WiSch 4/5", "")                  # compact: no padding
+    # Every count is the length of the matching list in sources/<source>.json, which the matrix no longer loads.
+    for source, patterns in json.loads(text).items():
+        rows = json.loads((tmp_path / "sources" / rd.file_name(source)).read_text())
+        assert patterns == {pattern: len(occurrences) for pattern, occurrences in rows.items()}
+
+
+def test_a_source_without_occurrences_gets_an_empty_row_in_counts():
+    import analyze_transcriptions as analysis
+    assert analysis.build_source_counts({"Empty 1": {}}) == {"Empty 1": {}}

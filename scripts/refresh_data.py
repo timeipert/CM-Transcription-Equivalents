@@ -2,8 +2,9 @@
 """Build the data of the Neume Viewer from the Corpus Monodicum export.
 
 What it is for: the Neume Viewer needs the neume patterns of every transcribed source
-(`ui/public/sources/<source>.json`) and an index with the source list, pattern statistics and
-manifest links (`ui/public/index.json`). Both are derived from the internal export of the Monodi
+(`ui/public/sources/<source>.json`), an index with the source list, pattern statistics and
+manifest links (`ui/public/index.json`) and a small table of occurrence counts per source and pattern
+(`ui/public/counts.json`, which lets the Global Analysis matrix skip the source files). All are derived from the internal export of the Monodi
 editor and are **not committed**: the deploy workflow runs this script before it builds the site, so
 every deploy shows the edition as it stands in the editor. Locally, run it once to get data for
 `npm run dev`.
@@ -19,7 +20,7 @@ What it does:
      it did not change.
   2. Analyses every document. There is no cache: `analyze_transcriptions.py` keeps a cache file that
      silently reuses an old analysis, which is why this script never uses it.
-  3. Writes `index.json` and `sources/` (files with unchanged content are left alone; files of sources
+  3. Writes `index.json`, `counts.json` and `sources/` (files with unchanged content are left alone; files of sources
      that are no longer in the export are removed).
   4. Compares with a baseline (the data deployed so far: by default the files already in `ui/public/`,
      else the live site) and writes `data/refresh-report.md` and `data/refresh-changes.json`: what changed
@@ -436,7 +437,7 @@ def write_if_changed(path, text):
 
 
 def write_data(public, final, index):
-    """Write sources/ and index.json; leave files with the same content alone; remove files of vanished sources."""
+    """Write sources/, index.json and counts.json; leave files with the same content alone; remove files of vanished sources."""
     sources_dir = os.path.join(public, "sources")
     wanted = {file_name(s): s for s in final}
     written = [s for name, s in wanted.items() if write_if_changed(os.path.join(sources_dir, name), json.dumps(final[s]))]
@@ -448,6 +449,9 @@ def write_data(public, final, index):
                 removed.append(name)
     if write_if_changed(os.path.join(public, "index.json"), json.dumps(index)):
         written.append("index.json")
+    # The per-source pattern counts of the Global Analysis matrix: lets it render without the source files.
+    if write_if_changed(os.path.join(public, "counts.json"), analysis.dump_source_counts(final)):
+        written.append("counts.json")
     return written, removed
 
 
