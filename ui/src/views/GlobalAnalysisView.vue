@@ -1,7 +1,8 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onBeforeUnmount, watch } from 'vue';
 import { useSettingsStore } from '../stores/settings';
 import { stripSignKeys } from '../utils/signs';
+import { estimateColumnWidth, buildColumnLayout, visibleColumnRange } from '../utils/columnWindow';
 import PatternDisplay from '../components/PatternDisplay.vue';
 import SvgPattern from '../components/SvgPattern.vue'; // Keep for group headers if needed, or refactorGroups?
 
@@ -249,6 +250,56 @@ const visibleCols = computed(() => {
 });
 
 
+// Column windowing. The matrix has thousands of columns; only the ones near the
+// viewport are rendered, the rest is stood in for by two spacer cells. Widths are
+// fixed per column (table-layout: fixed), so the visible slice needs no measuring.
+const SOURCE_COL_WIDTH = 150;
+const tableScroll = ref(null);
+const scrollLeft = ref(0);
+const viewportWidth = ref(1600);
+
+const colLayout = computed(() => buildColumnLayout(visibleCols.value.map(c => estimateColumnWidth(c.name, c.type === 'group'))));
+
+const colWindow = computed(() => visibleColumnRange(colLayout.value.offsets, scrollLeft.value, viewportWidth.value));
+
+const windowCols = computed(() => visibleCols.value.slice(colWindow.value.start, colWindow.value.end));
+const leftSpacer = computed(() => colLayout.value.offsets[colWindow.value.start]);
+const rightSpacer = computed(() => colLayout.value.total - colLayout.value.offsets[colWindow.value.end]);
+
+function colWidthStyle(col) {
+    const w = estimateColumnWidth(col.name, col.type === 'group') + 'px';
+    return { width: w, minWidth: w, maxWidth: w };
+}
+
+let scrollFrame = 0;
+function onTableScroll() {
+    if (scrollFrame) return;
+    scrollFrame = requestAnimationFrame(() => {
+        scrollFrame = 0;
+        if (tableScroll.value) scrollLeft.value = tableScroll.value.scrollLeft;
+    });
+}
+
+let resizeObserver = null;
+watch(tableScroll, (el, oldEl) => {
+    if (oldEl) {
+        oldEl.removeEventListener('scroll', onTableScroll);
+        resizeObserver?.disconnect();
+    }
+    if (!el) return;
+    el.addEventListener('scroll', onTableScroll, { passive: true });
+    viewportWidth.value = el.clientWidth || viewportWidth.value;
+    scrollLeft.value = el.scrollLeft;
+    resizeObserver = new ResizeObserver(() => { viewportWidth.value = el.clientWidth || viewportWidth.value; });
+    resizeObserver.observe(el);
+});
+
+onBeforeUnmount(() => {
+    if (scrollFrame) cancelAnimationFrame(scrollFrame);
+    resizeObserver?.disconnect();
+    tableScroll.value?.removeEventListener('scroll', onTableScroll);
+});
+
 // Row Sorting (Clustering omitted for MVP speed, using alpha for now)
 const sortedRows = computed(() => {
     const s = [...sources.value];
@@ -265,14 +316,13 @@ const pageSources = computed(() => {
 });
 
 
-watch(pageSources, async (newSources) => {
+// Load the page's sources in parallel; the composable de-duplicates requests.
+watch(pageSources, (newSources) => {
     if (!newSources) return;
     for (const src of newSources) {
-        if (!rawData.value[src]) {
-            await loadSource(src);
-        }
+        if (!rawData.value[src]) loadSource(src);
     }
-}, { immediate: true, deep: true });
+}, { immediate: true });
 
 
 // Methods
@@ -495,13 +545,15 @@ function isHighlighted(row) {
         loadingText="Loading Global Data..." 
         emptyText="No pattern statistics found in the dataset."
     >
-    <div class="table-scroll">
-        <table>
+    <div class="table-scroll" ref="tableScroll">
+        <table class="windowed" :style="{ width: (SOURCE_COL_WIDTH + colLayout.total) + 'px' }">
             <thead>
                 <tr>
                     <th class="source-col">Source</th>
-                    <th v-for="col in visibleCols" :key="col.name + col.type" 
+                    <th v-if="leftSpacer > 0" class="spacer" :style="{ width: leftSpacer + 'px' }"></th>
+                    <th v-for="col in windowCols" :key="col.name + col.type"
                         :class="{'group-header': col.type==='group', 'pattern-col': col.type==='pattern', 'expanded': col.expanded}"
+                        :style="colWidthStyle(col)"
                         @click="col.type==='group' && toggleGroup(col.name)">
                         
                         <div class="header-content">
@@ -527,15 +579,17 @@ function isHighlighted(row) {
                             <span v-if="col.type==='group'" class="arrow" :class="{'arrow-down': !col.expanded}">▶</span>
                         </div>
                     </th>
+                    <th v-if="rightSpacer > 0" class="spacer" :style="{ width: rightSpacer + 'px' }"></th>
                 </tr>
             </thead>
             <tbody>
                 <tr v-for="src in pageSources" :key="src">
                     <td class="source-col">
-                        {{ src }} 
+                        {{ src }}
                         <a v-if="manifests[src]" :href="manifests[src].url" target="_blank" title="Manifest">📜</a>
                     </td>
-                    <td v-for="col in visibleCols" :key="src + col.name + col.type"
+                    <td v-if="leftSpacer > 0" class="spacer"></td>
+                    <td v-for="col in windowCols" :key="src + col.name + col.type"
                         :class="col.type==='group' ? 'group-col' : 'pattern-col cell-clickable'"
                         :style="getCellStyle(col.type==='group' ? getGroupValue(src, col.name) : getCellValue(src, col.name))"
                         @click="col.type==='pattern' && onCellClick(src, col.name)">
@@ -547,6 +601,7 @@ function isHighlighted(row) {
                             {{ getCellValue(src, col.name) || '-' }}
                         </template>
                     </td>
+                    <td v-if="rightSpacer > 0" class="spacer"></td>
                 </tr>
             </tbody>
         </table>
@@ -712,6 +767,27 @@ th.source-col {
     z-index: 20;
     text-align: left;
     min-width: 150px;
+}
+/* Windowed matrix: fixed layout so every column width is known up front. */
+table.windowed {
+    table-layout: fixed;
+}
+table.windowed th,
+table.windowed td {
+    box-sizing: border-box;
+    overflow: hidden;
+}
+table.windowed th.source-col,
+table.windowed td.source-col {
+    width: 150px;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* Stand-ins for the columns that are not rendered. */
+.spacer {
+    padding: 0;
+    border-right: 0;
 }
 td.source-col {
     position: sticky;

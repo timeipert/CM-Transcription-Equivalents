@@ -65,10 +65,22 @@ async function fetchAll() {
     }
 }
 
-async function loadSource(sourceName) {
-    if (!sourceName) return;
-    if (loadedSources.value.has(sourceName)) return;
+// Requests in flight, so callers may fire loadSource() for a whole page of
+// sources in parallel and repeated calls for one source share a single request.
+const pendingLoads = new Map();
 
+function loadSource(sourceName) {
+    if (!sourceName) return Promise.resolve();
+    if (loadedSources.value.has(sourceName)) return Promise.resolve();
+    let pending = pendingLoads.get(sourceName);
+    if (!pending) {
+        pending = fetchSource(sourceName).finally(() => pendingLoads.delete(sourceName));
+        pendingLoads.set(sourceName, pending);
+    }
+    return pending;
+}
+
+async function fetchSource(sourceName) {
     const safeSrc = sourceName.replace(/\//g, '_');
 
     try {
