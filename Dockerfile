@@ -1,7 +1,7 @@
 # Build the site from source, then serve it with nginx.
 #
 # The data of the site (ui/public/index.json, counts.json and sources/) is not in git: the first stage builds it from the
-# Corpus Monodicum export, exactly as the deploy workflow does (see DATA.md). The image therefore holds the edition
+# Corpus Monodicum export, exactly as the deploy workflow does (see documentation/DATA.md). The image therefore holds the edition
 # as it stood at build time; rebuild the image to refresh it.
 FROM python:3.12-slim AS data
 WORKDIR /app

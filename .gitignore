@@ -50,7 +50,7 @@ ui/.claude/
 .DS_Store
 Thumbs.db
 
-# Generated at build time from the Corpus Monodicum export by scripts/refresh_data.py (see DATA.md); not committed
+# Generated at build time from the Corpus Monodicum export by scripts/refresh_data.py (see documentation/DATA.md); not committed
 ui/public/index.json
 ui/public/counts.json
 ui/public/sources/

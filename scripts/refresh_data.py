@@ -35,7 +35,7 @@ source that is missing there; where they name a different link, the report says 
 Safety: an export with fewer than 80 % of the sources of the baseline is refused as truncated, and a
 baseline that cannot be read only switches the comparison off.
 
-See `DATA.md` for the procedure and the checks.
+See `documentation/DATA.md` for the procedure and the checks.
 """
 import argparse
 import collections

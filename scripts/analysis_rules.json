@@ -1,5 +1,5 @@
 {
- "_about": "Decisions about how analyze_transcriptions.py reads the export. A rule is switched on for the sources it lists (or for every source with \"sources\": \"*\"). 'note' and 'note_de' are only for people. Changing the sources of a rule changes the folio/line numbers of occurrences, and with them the stored links of annotations to occurrences (their sysId, see ARCHITECTURE.md): check the report of scripts/refresh_data.py before committing.",
+ "_about": "Decisions about how analyze_transcriptions.py reads the export. A rule is switched on for the sources it lists (or for every source with \"sources\": \"*\"). 'note' and 'note_de' are only for people. Changing the sources of a rule changes the folio/line numbers of occurrences, and with them the stored links of annotations to occurrences (their sysId, see documentation/ARCHITECTURE.md): check the report of scripts/refresh_data.py before committing.",
  "rules": {
   "rubric_page_break": {
    "sources": [

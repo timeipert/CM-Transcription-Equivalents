@@ -1,6 +1,6 @@
 # Neume Viewer — frontend
 
-Vue 3 + Vite single-page app. See the repository's [README](../README.md) for what it does and [ARCHITECTURE.md](../ARCHITECTURE.md) for how it is built.
+Vue 3 + Vite single-page app. See the repository's [README](../README.md) for what it does and [ARCHITECTURE.md](../documentation/ARCHITECTURE.md) for how it is built.
 
 ```bash
 npm install
