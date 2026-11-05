@@ -11,4 +11,4 @@ dependencies = [
 ]
 
 [tool.setuptools]
-py-modules = ["analyze_transcriptions", "logic", "test_normalize_folio"]
+py-modules = ["analyze_transcriptions", "logic"]

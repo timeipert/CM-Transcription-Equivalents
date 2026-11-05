@@ -1,4 +1,10 @@
+import os
+import sys
 import unittest
+
+# In front of site-packages: `pip install ./scripts/` leaves copies of the modules there.
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../scripts')))
+
 from analyze_transcriptions import normalize_folio
 
 class TestNormalizeFolio(unittest.TestCase):
