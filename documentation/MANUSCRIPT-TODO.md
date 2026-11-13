@@ -40,7 +40,7 @@ test count (1141) and the build were not re-run on 2026-11-05. Two names in this
 | **Roman folio numbers** ("CVIIv") are read as folios. Be 40608 was placed by counting and was off by 2–4 scans; all 41 pages match by label | `ui/src/utils/folioAlignment.js` |
 | A **pin re-anchors the scans before it** too (before the 2026-10-15 rework, scans ahead of the pin kept claiming folios the pin contradicts, so "2v" stayed on the old scan) | same |
 | Report of folios without a scan, per manuscript | `node ui/scripts/coverage-report.mjs` |
-| **Built-in alignments**: pins for Pa 14452, Mü 29307(2, Mü 5539 and Nau I ship with the app (`alignments` in `index.json`, built from `scripts/alignments.json`); a user's own pin on the same scan wins; listed read-only under Settings → Alignment. Tested by 3 scenarios and a check that every shipped pin hits a real scan | `scripts/alignments.json`, `ui/src/stores/settings.js` |
+| **Built-in alignments**: pins for Pa 14452, Mü 29307(2, Mü 5539, Nau I and Ei 610 (pages 609 and 610 swapped, added 2026-11-13) ship with the app (`alignments` in `index.json`, built from `scripts/alignments.json`); a user's own pin on the same scan wins; listed read-only under Settings → Alignment. Tested by 3 scenarios and a check that every shipped pin hits a real scan | `scripts/alignments.json`, `ui/src/stores/settings.js` |
 | **Corrected manifests reach existing users**: a link saved in someone's browser stays (it may be their own), unless the data lists it under `replaces` (done for Abb 7, Pro 12, Lo 4) | `ui/src/stores/iiif.js` |
 
 On 2026-10-15 all 1141 tests passed and the app built. `scripts/manifests.json` is the place for manifest decisions and `scripts/alignments.json` the place for default pins (state 2026-11-03); the
@@ -71,7 +71,7 @@ Counting scans cannot know where the numbering starts; one pin fixes a whole man
 | Mü 5539 | scan `(0142)` = **69r** (on the registered manifest bsb00042722; as the assistant reports it — confirm on the image) |
 | Nau I | scan `phys_Chorbuch_0025` = **13r** (the printed volume's foliation differs from the manuscript's; see p. 280) |
 | Pa 14452 | every Gallica label is "NP"; one pin (the existing scenario: scan 12 = 139r) places all 243 pages |
-| Mü 4101, Sal 20, Pia 65, Sol 596, Ei 610 | placed by counting only; check one known page each |
+| Mü 4101, Sal 20, Pia 65, Sol 596 | placed by counting only; check one known page each |
 
 The rest need a pin set by the person who checks them (Manuscripts view → alignment review), or an entry in `scripts/alignments.json` once the value is known. State 2026-11-05: `scripts/alignments.json` also holds pins for Mü 4101 and Pia 65 (see section 6). A user cannot delete a built-in pin, only pin that scan to another folio (or to "not a page").
 

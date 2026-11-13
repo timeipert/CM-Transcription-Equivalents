@@ -45,6 +45,15 @@
    },
    "note": "Labels are page counters '001' ... '705'. Scan '118' (canvas 117) is f. 151v (report of the research assistant on 2026-11-03; not checked on the image: the microfilm shows no legible foliation).",
    "note_de": "Die Beschriftungen sind Seitenzähler '001' ... '705'. Scan '118' (Canvas 117) ist f. 151v (Angabe der wissenschaftlichen Hilfskraft vom 2026-11-03; nicht am Bild geprüft: der Mikrofilm zeigt keine lesbare Foliierung)."
+  },
+  "Ei 610": {
+   "dataType": "foliated",
+   "pins": {
+    "606": "610r",
+    "607": "609r"
+   },
+   "note": "The two pages are swapped. The library's labels follow the original page counting; the leaves carry a pencil correction that crosses the printed number out, and the printed volume (f. 609/610) and monodi+ use the corrected order. So scan '609' (canvas 606) is shown for folio 610r and scan '610' (canvas 607) for folio 609r. Direction taken from the research assistant's document of 2026-11-13 (CM Transcription f. 609r = printed volume f. 610); check on the image.",
+   "note_de": "Die beiden Seiten sind vertauscht. Die Beschriftungen der Bibliothek folgen der ursprünglichen Seitenzählung; die Blätter tragen eine Bleistiftkorrektur, die die gedruckte Zahl durchstreicht, und der gedruckte Band (f. 609/610) sowie monodi+ nutzen die korrigierte Reihenfolge. Daher zeigt Scan '609' (Canvas 606) das Folio 610r und Scan '610' (Canvas 607) das Folio 609r. Richtung aus dem Dokument der wissenschaftlichen Hilfskraft vom 2026-11-13 (CM Transcription f. 609r = gedruckter Band f. 610); am Bild prüfen."
   }
  }
 }
