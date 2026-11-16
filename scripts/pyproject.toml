@@ -5,7 +5,7 @@ description = "Scripts for preprocessing chant transcription data"
 requires-python = ">=3.11"
 dependencies = [
     "monodikit==0.0.10",
-    "pandas==3.1.0",
+    "pandas==3.1.1",
     "Pillow>=10.0.0",
     "requests>=2.31.0"
 ]
